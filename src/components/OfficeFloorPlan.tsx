@@ -54,42 +54,17 @@ const TILE_BORDER: Record<CellType, string> = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function DeskIcon() {
-  return (
-    <img
-      src="/assets/tiles/desk.svg"
-      alt=""
-      aria-hidden="true"
-      width={TILE_SIZE}
-      height={TILE_SIZE}
-      style={{ position: 'absolute', inset: 0, imageRendering: 'pixelated' }}
-    />
-  );
-}
-
-function ZoneLabel({ text, color }: { text: string; color: string }) {
-  return (
-    <span
-      style={{
-        position: 'absolute',
-        bottom: 1,
-        left: 1,
-        fontSize: 5,
-        fontFamily: 'monospace',
-        color,
-        opacity: 0.6,
-        lineHeight: 1,
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        pointerEvents: 'none',
-      }}
-    >
-      {text}
-    </span>
-  );
-}
+// Tile PNG assets — generated via HuggingFace FLUX.1-schnell
+const TILE_ASSET: Partial<Record<CellType, string>> = {
+  floor:   '/assets/tiles/server-floor.png',
+  desk:    '/assets/tiles/desk.png',
+  kitchen: '/assets/tiles/kitchen.png',
+  meeting: '/assets/tiles/meeting.png',
+};
 
 function TileCell({ type, col, row }: { type: CellType; col: number; row: number }) {
+  const assetSrc = TILE_ASSET[type];
+
   return (
     <div
       data-cell-type={type}
@@ -104,11 +79,19 @@ function TileCell({ type, col, row }: { type: CellType; col: number; row: number
         boxSizing: 'border-box',
         position: 'relative',
         imageRendering: 'pixelated',
+        overflow: 'hidden',
       }}
     >
-      {type === 'desk'    && <DeskIcon />}
-      {type === 'meeting' && <ZoneLabel text="MTG" color="#00ffff" />}
-      {type === 'kitchen' && <ZoneLabel text="KIT" color="#ff8800" />}
+      {assetSrc && (
+        <img
+          src={assetSrc}
+          alt=""
+          aria-hidden="true"
+          width={TILE_SIZE}
+          height={TILE_SIZE}
+          style={{ position: 'absolute', inset: 0, imageRendering: 'pixelated', display: 'block' }}
+        />
+      )}
     </div>
   );
 }
