@@ -1,168 +1,369 @@
 ---
-tags: [architecture, simulation, react, grid]
+tags: [architecture, simulation, react, isometric, dashboard, state-management]
 date: 2026-04-08
 status: active
 ---
 
-# Office Simulator — Architecture
+# Office Simulator — Architecture (v2 — Isometric Dashboard Pivot)
 
 Linked from: [[00-Index]]
 Design system: [[UI-Design-System]]
+Previous version archived below as § Legacy v1.
 
 ---
 
-## 1. Grid Layout — 15×15 Office Map
+## Overview
 
-Each cell = 32×32 px. Grid coords are `[col, row]` (0-indexed).
+The application is a **Management Dashboard** containing multiple simulated companies. Each company runs an isometric Habbo Hotel-style office with live agent activity. The user interacts at two levels:
 
-```
-     0  1  2  3  4  5  6  7  8  9 10 11 12 13 14
-  0  W  W  W  W  W  W  W  W  W  W  W  W  W  W  W
-  1  W  F  F  F  F  F  F  F  F  F  F  F  F  F  W
-  2  W  F  D  F  D  F  D  F  D  F  D  F  D  F  W   <- desk row
-  3  W  F  F  F  F  F  F  F  F  F  F  F  F  F  W
-  4  W  F  F  F  F  F  F  F  F  F  F  F  F  F  W
-  5  W  F  D  F  D  F  D  F  D  F  D  F  D  F  W   <- desk row
-  6  W  F  F  F  F  F  F  F  F  F  F  F  F  F  W
-  7  W  F  F  F  F  F  F  F  F  F  F  F  F  F  W
-  8  W  F  D  F  D  F  D  F  D  F  D  F  D  F  W   <- desk row
-  9  W  F  F  F  F  F  F  F  F  F  F  F  F  F  W
- 10  W  F  F  F  F  F  F  F  F  F  F  F  F  F  W
- 11  W  M  M  M  M  F  F  F  F  F  K  K  K  K  W   <- meeting / kitchen
- 12  W  M  M  M  M  F  F  F  F  F  K  K  K  K  W
- 13  W  M  M  M  M  F  F  F  F  F  K  K  K  K  W
- 14  W  W  W  W  W  W  W  W  W  W  W  W  W  W  W
-
-  W=wall  F=floor  D=desk  M=meeting  K=kitchen
-```
-
-**Named position sets:**
-
-| Zone        | Coords (col, row)                                                      |
-|-------------|------------------------------------------------------------------------|
-| Desks       | (2,2)(4,2)(6,2)(8,2)(10,2)(12,2) / row5 / row8 — 18 total            |
-| Meeting     | cols 1-4, rows 11-13 (12 cells)                                       |
-| Kitchen     | cols 10-13, rows 11-13 (12 cells)                                     |
-| Walkways    | all `F` cells not already listed above                                |
+1. **Global Dashboard** — lists all companies, shows aggregate KPIs.
+2. **Company Detail / IsometricOffice** — drills into one company; shows isometric floor plan with animated sub-agents working their delegated tasks in real time.
 
 ---
 
-## 2. React State Management
+## 1. Data Model
 
-### State Shape
+### Root State
 
 ```typescript
-interface Agent {
+interface DashboardState {
+  companies: Company[];
+  selectedCompanyId: string | null;  // null = Global Dashboard view
+}
+```
+
+### Company
+
+```typescript
+interface Company {
   id: string;
   name: string;
-  role: 'CEO' | 'Backend Dev' | 'QA';
-  col: number;         // current grid column (drives CSS left)
-  row: number;         // current grid row (drives CSS top)
-  status: AgentStatus; // 'idle' | 'working' | 'meeting' | 'break'
-  color: string;       // neon hex — fixed per agent
+  budget: number;          // USD, starts at seed value
+  budgetSpent: number;     // accumulated cost of agent actions
+  ceo: CeoAgent;
+  employees: Employee[];   // populated by CEO delegation
+  status: CompanyStatus;   // 'bootstrapping' | 'growing' | 'scaling' | 'crisis'
 }
 
-type AgentStatus = 'idle' | 'working' | 'meeting' | 'break';
+type CompanyStatus = 'bootstrapping' | 'growing' | 'scaling' | 'crisis';
 ```
 
-### Hook: `useAgentPolling()`
+### CEO Agent
 
-Location: `src/hooks/useAgentPolling.ts`
+The CEO is the **only** entity the user interacts with directly. All goals flow through the CEO.
 
-- Initializes 3 agents with fixed starting positions
-- Uses recursive `setTimeout` (3–5 s jitter) to mutate agent positions
-- On each tick: picks a new random status, selects a random valid position from the zone matching that status, returns updated agent array via `useState`
-- Exported agents array is stable reference via `useState`
+```typescript
+interface CeoAgent {
+  id: string;
+  name: string;
+  goal: string;              // user-assigned natural-language goal
+  activeTask: string | null; // what the CEO is currently doing
+  delegations: Delegation[]; // tasks handed to employees
+  isoPosition: IsoCoord;     // position on isometric grid
+  status: AgentStatus;
+}
 
-### No global store needed — single hook mounted in `App.tsx`, props drilled to children.
+interface Delegation {
+  id: string;
+  toRole: EmployeeRole;
+  task: string;
+  priority: 'low' | 'medium' | 'high';
+  progress: number;          // 0–100
+  startedAt: number;         // Date.now()
+}
+```
+
+### Employee (Sub-Agent)
+
+```typescript
+type EmployeeRole = 'PM' | 'DevOps' | 'Frontend';
+
+interface Employee {
+  id: string;
+  name: string;
+  role: EmployeeRole;
+  assignedTask: string | null;   // inherited from Delegation
+  progress: number;              // 0–100, mirrors Delegation.progress
+  status: AgentStatus;
+  isoPosition: IsoCoord;
+  color: string;                 // neon role color
+}
+
+type AgentStatus = 'idle' | 'working' | 'meeting' | 'break' | 'blocked';
+```
+
+### Isometric Coordinate
+
+```typescript
+interface IsoCoord {
+  tileX: number;   // logical grid column
+  tileY: number;   // logical grid row
+  // Screen position derived: isoToScreen(tileX, tileY) → { left, top }
+}
+```
 
 ---
 
-## 3. CSS/Tailwind Animation Strategy
+## 2. Isometric Projection
 
-### Tile Grid
+Switch from orthographic (top-down CSS Grid) to **2:1 dimetric isometric** projection.
 
-```css
-.office-grid {
-  display: grid;
-  grid-template-columns: repeat(15, 32px);
-  grid-template-rows: repeat(15, 32px);
-  width: 480px;
-  height: 480px;
-  position: relative;  /* agent positioning context */
-  image-rendering: pixelated;
+### Tile-to-screen formula
+
+```typescript
+const TILE_W = 64;   // px — isometric tile width
+const TILE_H = 32;   // px — isometric tile height (TILE_W / 2)
+
+function isoToScreen(tileX: number, tileY: number, originX: number, originY: number) {
+  return {
+    left: originX + (tileX - tileY) * (TILE_W / 2),
+    top:  originY + (tileX + tileY) * (TILE_H / 2),
+  };
 }
 ```
 
-### Agent Movement (smooth interpolation)
+- **Origin** (`originX`, `originY`): top-center of the canvas
+- Agents at depth (higher `tileY`) render on top of agents at lower `tileY` → sort by `tileX + tileY` before rendering (painter's algorithm)
 
-Agents are `position: absolute` siblings of the grid tiles, layered via `z-index: 10`.
+### Grid Size
 
-```css
-.agent-sprite {
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-              top  0.8s cubic-bezier(0.4, 0, 0.2, 1);
-  /* left = col * 32; top = row * 32 */
-}
+- **20 × 12 isometric tiles** per company office
+- Canvas: `~900 × 500 px`
+- Zones:
+
+```
+  CEO Corner:     tileX 0-3,  tileY 0-3
+  PM Zone:        tileX 4-9,  tileY 0-4
+  DevOps Zone:    tileX 10-16, tileY 0-4
+  Frontend Zone:  tileX 4-16, tileY 5-11
+  Meeting Island: tileX 8-11, tileY 5-8
+  Kitchen/Break:  tileX 0-3,  tileY 8-11
 ```
 
-When `col` / `row` state changes → React re-renders inline `style={{ left, top }}` → CSS transition handles smooth glide.
+### Tile Types
 
-### Sprite Sheet (placeholder → real asset)
-
-When `agent-1.png` is a 128×32 sprite sheet (4 walking frames):
-
-```css
-.agent-sprite {
-  background: url('/assets/sprites/agent-1.png') 0 0;
-  animation: walk-cycle 0.5s steps(4) infinite;
-}
-
-@keyframes walk-cycle {
-  to { background-position-x: -128px; }
-}
+```typescript
+type TileType = 'floor' | 'wall' | 'desk' | 'meeting-table' | 'kitchen' | 'plant' | 'void';
 ```
 
-Currently using SVG placeholder — swap `src` path when real PNG is generated.
+`void` tiles are transparent — used to shape the isometric diamond footprint.
 
 ---
 
-## 4. Component Tree
+## 3. UI Layout & Navigation
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ▣ CEO.SIM  [GLOBAL DASHBOARD]              HUD v2.0    │  ← header
+├──────────────────────┬──────────────────────────────────┤
+│                      │                                  │
+│   Company Cards      │   Selected Company Detail        │
+│   ┌──────────┐       │   ┌──────────────────────────┐   │
+│   │Acme Corp │  ───► │   │  IsometricOffice canvas  │   │
+│   │$120k     │       │   │  (animated, isometric)   │   │
+│   │3 agents  │       │   └──────────────────────────┘   │
+│   └──────────┘       │   ┌──────────────────────────┐   │
+│   ┌──────────┐       │   │  CEO Goal Input          │   │
+│   │Globex    │       │   │  Delegation Feed         │   │
+│   │$80k      │       │   │  Budget Meter            │   │
+│   └──────────┘       │   └──────────────────────────┘   │
+│   [+ Add Company]    │                                  │
+└──────────────────────┴──────────────────────────────────┘
+```
+
+### View States
+
+| `selectedCompanyId` | Rendered view                    |
+|---------------------|----------------------------------|
+| `null`              | `<GlobalDashboard />`            |
+| `string`            | `<CompanyDetail companyId={id}>` |
+
+Navigation is **stateful only** — no URL routing in v1.
+
+---
+
+## 4. State Management Strategy
+
+### Store: Zustand (recommended) or `useReducer` + Context
+
+Given multiple companies each with independent tick loops, a centralized store prevents prop-drilling and makes cross-company KPI aggregation simple.
+
+```typescript
+// src/store/dashboardStore.ts  (Zustand shape)
+
+interface DashboardStore {
+  companies: Company[];
+  selectedCompanyId: string | null;
+
+  // Actions
+  addCompany: (name: string, budget: number) => void;
+  selectCompany: (id: string | null) => void;
+  assignGoal: (companyId: string, goal: string) => void;
+  tickCompany: (companyId: string) => void;   // called by simulation engine
+}
+```
+
+**Why not prop drilling:** The hook `useAgentPolling` from v1 becomes a per-company simulation engine (`useCompanySimulation(companyId)`). Each company's tick loop writes into the store; components subscribe to only what they render.
+
+### Simulation Engine: `useCompanySimulation(companyId)`
+
+Replaces `useAgentPolling`. Per company:
+
+- Reads company state from store (goal, employees, delegations)
+- Runs recursive `setTimeout` tick (3–5 s jitter)
+- On tick: advances `Delegation.progress`, updates `Employee.status`, moves agents to zone-appropriate `IsoCoord`, burns `budgetSpent`
+- CEO delegates automatically when a goal is set: spawns `Delegation` records for PM, DevOps, Frontend with derived sub-tasks
+- Writes updates back via `tickCompany()`
+
+### CEO Delegation Flow
+
+```
+User sets goal
+     │
+     ▼
+CEO status → 'working'
+     │
+     ▼
+CEO generates Delegations (3 × EmployeeRole)
+     │
+     ├── PM:       "Define requirements for: <goal>"
+     ├── DevOps:   "Set up infra for: <goal>"
+     └── Frontend: "Build UI for: <goal>"
+     │
+     ▼
+Each Employee picks up Delegation → moves to desk → animates
+     │
+     ▼
+Progress 0 → 100 over N ticks
+     │
+     ▼
+Delegation complete → CEO status → 'idle', budget decremented
+```
+
+---
+
+## 5. Component Tree (v2)
 
 ```
 App
-└── <OfficePage>
-    ├── <HudPanel agents={agents} />       — KPI sidebar
-    └── <OfficeFloorPlan agents={agents} />
-        ├── TileCell × 225                 — static background grid
-        └── <AgentSprite /> × 3            — absolutely positioned, animated
+├── <GlobalDashboard />                        (selectedCompanyId === null)
+│   ├── <CompanyCard company={c} /> × N
+│   └── <AddCompanyButton />
+│
+└── <CompanyDetail companyId={id} />           (selectedCompanyId !== null)
+    ├── <IsometricOffice companyId={id} />
+    │   ├── <IsoTile /> × 240                  — isometric floor tiles
+    │   ├── <IsoAgent agent={ceo} />           — CEO sprite, iso projected
+    │   └── <IsoAgent agent={emp} /> × 3       — PM / DevOps / Frontend
+    │
+    ├── <CeoGoalPanel companyId={id} />        — text input → assignGoal()
+    ├── <DelegationFeed companyId={id} />      — live delegation + progress bars
+    └── <CompanyHud companyId={id} />          — budget meter, status, KPIs
 ```
 
 ---
 
-## 5. File Map
+## 6. Isometric Rendering Strategy
 
-| File                                     | Purpose                              |
-|------------------------------------------|--------------------------------------|
-| `src/hooks/useAgentPolling.ts`           | Simulation tick engine               |
-| `src/components/OfficeFloorPlan.tsx`     | Grid renderer + agent overlay        |
-| `src/components/AgentSprite.tsx`         | Single agent sprite + status badge   |
-| `src/components/HudPanel.tsx`            | KPI sidebar                          |
-| `public/assets/tiles/server-floor.svg`   | Floor tile (placeholder)             |
-| `public/assets/tiles/desk.svg`           | Desk tile (placeholder)              |
-| `public/assets/sprites/agent-1.svg`      | Agent sprite (placeholder)           |
+### Tile rendering order
+
+Tiles rendered in row-major order (`tileY` outer, `tileX` inner). This naturally produces back-to-front painter's order for the floor.
+
+Agents sorted by depth before render:
+
+```typescript
+const sorted = [...agents].sort((a, b) =>
+  (a.isoPosition.tileX + a.isoPosition.tileY) -
+  (b.isoPosition.tileX + b.isoPosition.tileY)
+);
+```
+
+### Agent sprites
+
+Each `<IsoAgent />` is `position: absolute`, positioned via `isoToScreen()`. Sprite assets needed:
+
+| Role       | Sprite file                          | Frames |
+|------------|--------------------------------------|--------|
+| CEO        | `public/assets/sprites/ceo.png`      | 4      |
+| PM         | `public/assets/sprites/pm.png`       | 4      |
+| DevOps     | `public/assets/sprites/devops.png`   | 4      |
+| Frontend   | `public/assets/sprites/frontend.png` | 4      |
+
+Each sprite is a 4-frame horizontal sheet at `256×64` (64×64 per frame, isometric scale).
+
+### Isometric tile assets
+
+| Tile         | File                                      | Size     |
+|--------------|-------------------------------------------|----------|
+| Floor        | `public/assets/iso-tiles/floor.png`       | 64×32    |
+| Desk         | `public/assets/iso-tiles/desk.png`        | 64×64    |
+| Meeting      | `public/assets/iso-tiles/meeting.png`     | 128×64   |
+| Wall segment | `public/assets/iso-tiles/wall.png`        | 64×64    |
+| Plant        | `public/assets/iso-tiles/plant.png`       | 32×48    |
+| Kitchen      | `public/assets/iso-tiles/kitchen.png`     | 64×64    |
+
+All isometric sprites: `image-rendering: pixelated`, dark sci-fi/cyberpunk palette per [[UI-Design-System]].
 
 ---
 
-## 6. TDD Test Targets
+## 7. File Map (v2)
 
-| Test                                           | File                                    |
-|------------------------------------------------|-----------------------------------------|
-| Grid renders 225 cells                         | `OfficeFloorPlan.test.tsx`              |
-| Cells have correct `data-cell-type` attrs      | `OfficeFloorPlan.test.tsx`              |
-| Agent count equals 3                           | `OfficeFloorPlan.test.tsx`              |
-| `useAgentPolling` initializes with 3 agents    | `useAgentPolling.test.ts`               |
-| Status change triggers col/row update          | `useAgentPolling.test.ts`               |
+| File                                        | Purpose                                        |
+|---------------------------------------------|------------------------------------------------|
+| `src/store/dashboardStore.ts`               | Zustand root store (companies, navigation)     |
+| `src/hooks/useCompanySimulation.ts`         | Per-company tick engine + CEO delegation logic |
+| `src/components/GlobalDashboard.tsx`        | Company card grid, add company CTA             |
+| `src/components/CompanyCard.tsx`            | Single company summary card                    |
+| `src/components/CompanyDetail.tsx`          | Detail shell: iso office + panels              |
+| `src/components/IsometricOffice.tsx`        | Canvas + iso tile grid + agent overlay         |
+| `src/components/IsoTile.tsx`                | Single isometric tile                          |
+| `src/components/IsoAgent.tsx`               | Iso-projected sprite, walk-cycle animation     |
+| `src/components/CeoGoalPanel.tsx`           | Goal text input, submit → assignGoal()         |
+| `src/components/DelegationFeed.tsx`         | Live delegation list + progress bars           |
+| `src/components/CompanyHud.tsx`             | Budget meter, company status, KPI row          |
+| `src/utils/isoProjection.ts`                | `isoToScreen()`, `screenToIso()`, sort helpers |
+| `public/assets/iso-tiles/`                  | Isometric floor/desk/wall tile PNGs            |
+| `public/assets/sprites/`                    | Role-specific 4-frame sprite sheets            |
+
+---
+
+## 8. TDD Test Targets (v2)
+
+| Test                                                   | File                                  |
+|--------------------------------------------------------|---------------------------------------|
+| `isoToScreen` correct pixel output for known inputs    | `isoProjection.test.ts`               |
+| Painter-sort orders agents by depth                    | `isoProjection.test.ts`               |
+| `addCompany` creates company with CEO + empty staff    | `dashboardStore.test.ts`              |
+| `assignGoal` creates 3 Delegations (one per role)      | `dashboardStore.test.ts`              |
+| `tickCompany` advances delegation progress             | `dashboardStore.test.ts`              |
+| Budget decrements as delegations complete              | `dashboardStore.test.ts`              |
+| `GlobalDashboard` renders one card per company         | `GlobalDashboard.test.tsx`            |
+| `CompanyDetail` mounts on company select               | `CompanyDetail.test.tsx`              |
+| `IsometricOffice` renders CEO + 3 employee agents      | `IsometricOffice.test.tsx`            |
+| `CeoGoalPanel` submit calls `assignGoal` in store      | `CeoGoalPanel.test.tsx`               |
+
+---
+
+## 9. Migration from v1
+
+| v1 artifact                    | v2 fate                                               |
+|--------------------------------|-------------------------------------------------------|
+| `useAgentPolling.ts`           | Replaced by `useCompanySimulation.ts`                 |
+| `OfficeFloorPlan.tsx`          | Replaced by `IsometricOffice.tsx`                     |
+| `AgentSprite.tsx`              | Replaced by `IsoAgent.tsx`                            |
+| `HudPanel.tsx`                 | Replaced by `CompanyHud.tsx`                          |
+| `App.tsx` (flat layout)        | Replaced by `GlobalDashboard` / `CompanyDetail` shell |
+| Top-down 15×15 CSS Grid        | Replaced by 20×12 isometric projection                |
+| PNG tiles (32×32)              | Replaced by isometric PNGs (64×32 floor, 64×64 objs) |
+| Existing tests (15 passing)    | Archived; new suite targets v2 components             |
+
+---
+
+## § Legacy v1 Notes
+
+The v1 flat top-down grid (15×15, orthographic) is on `master` as of commit `1bfff5e`. The v2 isometric build will be developed on `feature/isometric-dashboard`.
+
+Key v1 decisions not carried forward:
+- Single `useAgentPolling` hook (no company concept)
+- CSS Grid for tile layout (replaced by absolute iso projection)
+- 3 hard-coded agents (replaced by dynamic CEO + delegated team)

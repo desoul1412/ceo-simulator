@@ -11,10 +11,14 @@
             "id": "f78b7aaeb6607877",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "brain/raw/asset-TODO.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "asset-TODO"
             }
           }
         ]
@@ -90,6 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "brain/raw/asset-TODO.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -99,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for asset-TODO"
             }
           },
           {
@@ -108,11 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "brain/raw/asset-TODO.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from asset-TODO"
             }
           },
           {
@@ -150,12 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "brain/raw/asset-TODO.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of asset-TODO"
             }
           }
         ]
@@ -176,25 +183,31 @@
       "bases:Create new base": false
     }
   },
-  "active": "d63f0038585e3ae9",
+  "active": "f78b7aaeb6607877",
   "lastOpenFiles": [
+    "logs/server.log",
+    "logs",
+    "assets",
+    "public/assets/sprites/iso-worker-1.png",
+    "public/assets/tiles/iso-desk.png",
+    "public/assets/tiles/iso-floor.png",
+    "node_modules/@eslint-community/eslint-utils/node_modules/eslint-visitor-keys/package.json",
+    "node_modules/@typescript-eslint/typescript-estree/node_modules/brace-expansion/package.json",
+    "node_modules/@typescript-eslint/eslint-plugin/node_modules/ignore/package.json",
+    "node_modules/@eslint/eslintrc/node_modules/globals/package.json",
+    "node_modules/@typescript-eslint/typescript-estree/node_modules/balanced-match/package.json",
+    "node_modules/@typescript-eslint/visitor-keys/node_modules/eslint-visitor-keys/package.json",
+    "node_modules/@typescript-eslint/typescript-estree/package.json",
+    "node_modules/@typescript-eslint/utils/package.json",
+    "brain/00-Index.md",
+    "brain/raw/asset-TODO.md",
     "public/assets/sprites/agent-1.png",
     "public/assets/tiles/indicator.png",
     "public/assets/tiles/meeting.png",
     "public/assets/tiles/kitchen.png",
     "public/assets/tiles/desk.png",
     "public/assets/tiles/server-floor.png",
-    "vitest.config.ts",
-    "src/components/OfficeFloorPlan.test.tsx",
-    "src/hooks/useAgentPolling.test.ts",
-    "src/test-setup.ts",
-    "node_modules/jsdom/LICENSE.txt",
     "node_modules/jsdom/README.md",
-    "node_modules/jsdom/package.json",
-    "node_modules/@testing-library/dom/types/wait-for.d.ts",
-    "node_modules/@testing-library/dom/types/wait-for-element-to-be-removed.d.ts",
-    "node_modules/@testing-library/dom/types/suggestions.d.ts",
-    "node_modules/@testing-library/dom/types/screen.d.ts",
     "node_modules/aria-query/README.md",
     "node_modules/aria-query/CHANGELOG.md",
     "node_modules/@testing-library/dom/README.md",
@@ -217,12 +230,6 @@
     "node_modules/undici/docs/docs/best-practices/mocking-request.md",
     "node_modules/undici/docs/docs/best-practices/crawling.md",
     "node_modules/undici/docs/docs/best-practices/client-certificate.md",
-    "node_modules/undici/docs/docs/api/WebSocket.md",
-    "node_modules/undici/docs/docs/api/Util.md",
-    "public/assets/sprites/agent-1.svg",
-    "public/assets/tiles/desk.svg",
-    "public/assets/tiles/server-floor.svg",
-    "src/assets/vite.svg",
-    "src/assets/react.svg"
+    "public/assets/sprites/agent-1.svg"
   ]
 }
