@@ -33,3 +33,4 @@ server/.env
 .claude/settings.json
 
 .vercel
+.claude/settings.local.json
