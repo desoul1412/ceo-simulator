@@ -111,14 +111,16 @@ body {
   justify-content: center;
 }
 
-/* ── Isometric viewport ─────────────────────────────────────────────────── */
-.iso-viewport {
-  /* Ensure enough room for the transformed grid */
-  padding: 60px 20px;
+/* ── Pixel font ─────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'PixelSans';
+  src: url('/fonts/FSPixelSansUnicode-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
 }
 
-/* CRT Scanline overlay — applied to iso office container */
-.iso-viewport::after {
+/* ── CRT Scanline overlay ────────────────────────────────────���───────────── */
+.crt-scanlines::after {
   content: '';
   position: fixed;
   inset: 0;
