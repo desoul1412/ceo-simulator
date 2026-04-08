@@ -6,8 +6,26 @@ export function CompanyDashboard() {
   const companies = useDashboardStore(s => s.companies);
   const selectedId = useDashboardStore(s => s.selectedCompanyId);
   const selectCompany = useDashboardStore(s => s.selectCompany);
+  const loading = useDashboardStore(s => s.loading);
+  const synced = useDashboardStore(s => s.synced);
+  const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
 
   const selectedCompany = companies.find(c => c.id === selectedId) ?? null;
+
+  if (loading) {
+    return (
+      <div className="sim-root" style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'monospace', color: '#00ffff', fontSize: 14,
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>▣</div>
+          <div>CONNECTING TO MAINFRAME...</div>
+          <div style={{ fontSize: 10, color: '#2a3a50', marginTop: 6 }}>Loading company data from Supabase</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="sim-root">
@@ -19,9 +37,26 @@ export function CompanyDashboard() {
             ? `${selectedCompany.name.toUpperCase()} — OFFICE VIEW`
             : 'GLOBAL DASHBOARD — ALL COMPANIES'}
         </span>
-        <span className="sim-header__badge">
-          {companies.length} {companies.length === 1 ? 'COMPANY' : 'COMPANIES'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {orchestratorConnected && (
+            <span style={{
+              fontSize: 8, fontFamily: 'monospace', textTransform: 'uppercase',
+              color: '#c084fc', letterSpacing: '0.1em',
+            }}>
+              ◆ CLAUDE
+            </span>
+          )}
+          <span style={{
+            fontSize: 8, fontFamily: 'monospace', textTransform: 'uppercase',
+            color: synced ? '#00ff88' : '#ff8800',
+            letterSpacing: '0.1em',
+          }}>
+            {synced ? '● ONLINE' : '● OFFLINE'}
+          </span>
+          <span className="sim-header__badge">
+            {companies.length} {companies.length === 1 ? 'COMPANY' : 'COMPANIES'}
+          </span>
+        </div>
       </header>
 
       {/* Body */}

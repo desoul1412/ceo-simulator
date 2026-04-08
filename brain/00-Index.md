@@ -7,17 +7,22 @@ status: active
 # CEO Simulator — Master Index
 
 ## Architecture
+- [[Factory-Operations-Manual]] — **Zero-Human Software Factory** — SOPs, failure modes, token optimization, execution pipeline
+- [[Paperclip-Gap-Analysis]] — **Feature audit** — 14 Paperclip features vs current state, prioritized roadmap
 - [[UI-Design-System]] — Pixel Art / HUD design tokens, color system, component rules
 - [[Office-Simulator-Architecture]] — **v3 Paperclip + Pixel Agents hybrid** — Canvas 2D office, BFS pathfinding, Paperclip management UI, goal hierarchy, agent CRUD
 
-## Management Pages (v3 — Paperclip-inspired)
-- [ ] `<Dashboard />` — pixel office canvas + goal panel + activity feed + budget HUD
-- [ ] `<AgentsPage />` — hire/fire agents, configure skills/permissions
-- [ ] `<AgentDetail />` — individual agent config, budget, activity log
-- [ ] `<GoalsPage />` — goal tree with cascading delegation
-- [ ] `<CostsPage />` — per-agent, per-goal budget analytics
-- [ ] `<OrgChartPage />` — visual CEO → reports hierarchy
-- [ ] `<SettingsPage />` — company config, office layout editor
+## Navigation (React Router — 13 routes)
+- [x] `<MasterDashboard />` `/` — company grid with mini pixel canvases
+- [x] `<CompanyView />` `/company/:id` — pixel office + goal panel + feeds
+- [x] `<AgentsPage />` `/company/:id/agents` — agent card grid + hire button
+- [x] `<AgentDetail />` `/company/:id/agents/:id` — individual agent config (shell)
+- [x] `<GoalsPage />` `/company/:id/goals` — goal tree + delegation progress
+- [x] `<DocumentsPage />` `/company/:id/documents` — brain/ vault browser (shell)
+- [x] `<CostsPage />` `/company/:id/costs` — budget analytics
+- [x] `<OrgChartPage />` `/company/:id/org-chart` — CEO → reports hierarchy
+- [x] `<SettingsPage />` `/settings` — General, Skills, MCP, Rules tabs
+- [x] `<NavBar />` — top navigation with context-aware company tabs
 
 ## Canvas Engine (v3 — Pixel Agents-inspired)
 - [ ] `<PixelOfficeCanvas />` — Canvas 2D game loop, tile renderer, sprite animator
@@ -25,8 +30,19 @@ status: active
 - [ ] `canvasRenderer.ts` — tile/furniture/character/speech-bubble draw functions
 - [ ] `spriteAnimator.ts` — frame selection from sprite sheets
 
+## Backend (Supabase + Vercel)
+- [x] Supabase schema: `companies`, `agents`, `goals`, `delegations`, `activity_log`
+- [x] `src/lib/supabase.ts` — Client with offline fallback
+- [x] `src/lib/api.ts` — CRUD: fetchCompanies, createCompany, assignGoal, tickCompany, sendHeartbeat
+- [x] `src/hooks/useRealtimeSync.ts` — Realtime agent/company updates
+- [x] `vercel.json` — SPA deployment config
+- [x] Vercel deployment — **LIVE** at `https://ceo-simulator-iota.vercel.app`
+- [x] Agent heartbeat system (alive/stale/dead) + canvas pulse visuals
+- [x] `src/components/ActivityFeed.tsx` — Realtime activity log panel
+- [ ] Auth (user accounts + per-user companies)
+
 ## State (v3)
-- [x] `src/store/dashboardStore.ts` — Zustand (needs expansion for agent CRUD, goal trees, office layout)
+- [x] `src/store/dashboardStore.ts` — Zustand + Supabase sync (optimistic local + background persist)
 - [ ] `src/hooks/useCompanySimulation.ts` — Canvas game loop + business tick engine
 
 ## Legacy v1 (archived on master @ `1bfff5e`)

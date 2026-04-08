@@ -1,0 +1,197 @@
+import { useNavigate } from 'react-router-dom';
+import { useDashboardStore } from '../store/dashboardStore';
+import { PixelOfficeCanvas } from './PixelOfficeCanvas';
+import type { Company } from '../store/dashboardStore';
+
+function CompanyTile({ company }: { company: Company }) {
+  const navigate = useNavigate();
+  const activeAgents = company.employees.filter(e => e.status === 'working' || e.status === 'meeting').length;
+  const remaining = company.budget - company.budgetSpent;
+  const budgetColor = remaining / company.budget > 0.3 ? '#00ff88' : remaining / company.budget > 0.1 ? '#ff8800' : '#ff2244';
+
+  return (
+    <div
+      onClick={() => navigate(`/company/${company.id}`)}
+      style={{
+        background: '#0d1117',
+        border: '1px solid var(--hud-border)',
+        cursor: 'pointer',
+        transition: 'border-color 0.2s',
+        overflow: 'hidden',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = '#00ffff40')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--hud-border)')}
+    >
+      {/* Mini canvas */}
+      <div style={{
+        height: 220,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#05080f',
+        borderBottom: '1px solid var(--hud-border)',
+      }}>
+        <div style={{ transform: 'scale(0.5)', transformOrigin: 'center center' }}>
+          <PixelOfficeCanvas company={company} />
+        </div>
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: '12px 14px' }}>
+        <div style={{
+          fontSize: 'var(--font-md)', color: 'var(--hud-text-h)',
+          textTransform: 'uppercase', letterSpacing: '0.05em',
+          marginBottom: 8,
+        }}>
+          {company.name}
+        </div>
+
+        <div style={{ display: 'flex', gap: 14, fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)' }}>
+          <span>
+            <span style={{ color: '#00ff88' }}>●</span> {activeAgents} active
+          </span>
+          <span>
+            {company.employees.length} agents
+          </span>
+          <span style={{ color: budgetColor }}>
+            ${(remaining / 1000).toFixed(0)}k
+          </span>
+        </div>
+
+        {company.ceoGoal ? (
+          <div style={{
+            marginTop: 6, fontSize: 9, color: 'var(--neon-cyan)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            ▸ {company.ceoGoal}
+          </div>
+        ) : (
+          <div style={{ marginTop: 6, fontSize: 9, color: '#2a3a50', fontStyle: 'italic' }}>
+            No active goal
+          </div>
+        )}
+
+        {/* Status badge */}
+        <div style={{
+          marginTop: 8, display: 'inline-block',
+          padding: '2px 8px', fontSize: 8,
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          background: company.status === 'scaling' ? '#00ff8818' :
+                      company.status === 'growing' ? '#00ffff18' :
+                      company.status === 'crisis' ? '#ff224418' : '#1b2030',
+          color: company.status === 'scaling' ? '#00ff88' :
+                 company.status === 'growing' ? '#00ffff' :
+                 company.status === 'crisis' ? '#ff2244' : '#4a5568',
+          border: `1px solid ${
+            company.status === 'scaling' ? '#00ff8830' :
+            company.status === 'growing' ? '#00ffff30' :
+            company.status === 'crisis' ? '#ff224430' : '#1b2030'
+          }`,
+        }}>
+          {company.status}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewCompanyTile() {
+  const addCompany = useDashboardStore(s => s.addCompany);
+  const navigate = useNavigate();
+
+  const handleCreate = () => {
+    const name = prompt('Company name:');
+    if (!name?.trim()) return;
+    const budgetStr = prompt('Initial budget ($):', '100000');
+    const budget = parseInt(budgetStr || '100000', 10) || 100000;
+    addCompany(name.trim(), budget);
+    // Navigate after a tick to let the store update
+    setTimeout(() => {
+      const companies = useDashboardStore.getState().companies;
+      const newest = companies[companies.length - 1];
+      if (newest) navigate(`/company/${newest.id}`);
+    }, 500);
+  };
+
+  return (
+    <div
+      onClick={handleCreate}
+      style={{
+        background: '#0d1117',
+        border: '1px dashed #1b2030',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 280,
+        transition: 'border-color 0.2s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = '#00ffff40')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = '#1b2030')}
+    >
+      <div style={{ fontSize: 28, color: '#1b2030', marginBottom: 8 }}>+</div>
+      <div style={{
+        fontSize: 10, color: '#2a3a50',
+        textTransform: 'uppercase', letterSpacing: '0.1em',
+      }}>
+        New Company
+      </div>
+    </div>
+  );
+}
+
+export function MasterDashboard() {
+  const companies = useDashboardStore(s => s.companies);
+  const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
+
+  const totalAgents = companies.reduce((s, c) => s + c.employees.length, 0);
+  const activeAgents = companies.reduce((s, c) => s + c.employees.filter(e => e.status === 'working' || e.status === 'meeting').length, 0);
+  const totalSpent = companies.reduce((s, c) => s + c.budgetSpent, 0);
+
+  return (
+    <div style={{ padding: 'var(--pad)', height: '100%', overflow: 'auto' }}>
+      {/* Stats bar */}
+      <div style={{
+        display: 'flex', gap: 28, marginBottom: 'var(--pad)',
+        padding: '10px var(--pad)',
+        background: '#090d14',
+        border: '1px solid var(--hud-border)',
+        fontSize: 'var(--font-sm)', fontFamily: 'var(--font-hud)',
+        flexWrap: 'wrap',
+      }}>
+        <div>
+          <span style={{ color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Companies</span>
+          <span style={{ color: 'var(--hud-text-h)' }}>{companies.length}</span>
+        </div>
+        <div>
+          <span style={{ color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Agents</span>
+          <span style={{ color: '#00ff88' }}>{activeAgents}</span>
+          <span style={{ color: '#4a5568' }}>/{totalAgents}</span>
+        </div>
+        <div>
+          <span style={{ color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Spent</span>
+          <span style={{ color: '#ff8800' }}>${(totalSpent / 1000).toFixed(1)}k</span>
+        </div>
+        {orchestratorConnected && (
+          <div style={{ marginLeft: 'auto', color: '#c084fc' }}>
+            ◆ CLAUDE ORCHESTRATOR ACTIVE
+          </div>
+        )}
+      </div>
+
+      {/* Company grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+        gap: 'var(--gap)',
+      }}>
+        {companies.map(co => (
+          <CompanyTile key={co.id} company={co} />
+        ))}
+        <NewCompanyTile />
+      </div>
+    </div>
+  );
+}

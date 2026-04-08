@@ -9,7 +9,12 @@ interface CeoGoalPanelProps {
 export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
   const [input, setInput] = useState('');
   const assignGoal = useDashboardStore(s => s.assignGoal);
+  const processingGoal = useDashboardStore(s => s.processingGoal);
+  const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
   const ceo = company.employees.find(e => e.role === 'CEO');
+
+  const isThinking = processingGoal === company.id;
+  const goalActive = !!company.ceoGoal;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,14 +33,56 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
     }}>
       {/* Header */}
       <div style={{
-        fontSize: 9, color: '#4a5568', textTransform: 'uppercase',
-        letterSpacing: '0.1em', marginBottom: 6,
+        display: 'flex', alignItems: 'center', gap: 6,
+        fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase',
+        letterSpacing: '0.1em', marginBottom: 8,
       }}>
-        CEO Directive — {ceo?.name ?? 'Unknown'}
+        <span>CEO Directive — {ceo?.name ?? 'Unknown'}</span>
+        {orchestratorConnected && (
+          <span style={{
+            fontSize: 7, color: '#00ff88', marginLeft: 'auto',
+            display: 'flex', alignItems: 'center', gap: 3,
+          }}>
+            <span style={{
+              width: 4, height: 4, borderRadius: '50%',
+              background: '#00ff88', display: 'inline-block',
+              boxShadow: '0 0 4px #00ff88',
+            }} />
+            CLAUDE
+          </span>
+        )}
       </div>
 
+      {/* Thinking state */}
+      {isThinking && (
+        <div style={{
+          padding: '8px 10px',
+          background: '#00ffff08',
+          border: '1px solid #00ffff20',
+          fontSize: 10,
+          color: '#00ffff',
+          lineHeight: 1.4,
+          marginBottom: 6,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <span className="thinking-dots" style={{
+            display: 'inline-block',
+            animation: 'pulse 1.5s infinite',
+          }}>
+            ◆
+          </span>
+          <span>
+            {orchestratorConnected
+              ? 'CEO is thinking via Claude...'
+              : 'CEO is analyzing the goal...'}
+          </span>
+        </div>
+      )}
+
       {/* Current goal */}
-      {company.ceoGoal ? (
+      {!isThinking && goalActive && (
         <div style={{
           padding: '6px 8px',
           background: '#00ffff08',
@@ -47,7 +94,9 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
         }}>
           ▸ {company.ceoGoal}
         </div>
-      ) : (
+      )}
+
+      {!isThinking && !goalActive && (
         <div style={{
           fontSize: 10, color: '#2a3a50', marginBottom: 6,
           fontStyle: 'italic',
@@ -62,8 +111,11 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Assign a goal to the CEO..."
-          disabled={!!company.ceoGoal}
+          placeholder={orchestratorConnected
+            ? 'Assign a goal (CEO will use Claude)...'
+            : 'Assign a goal to the CEO...'
+          }
+          disabled={goalActive || isThinking}
           style={{
             flex: 1,
             padding: '5px 8px',
@@ -77,20 +129,20 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
         />
         <button
           type="submit"
-          disabled={!!company.ceoGoal || !input.trim()}
+          disabled={goalActive || isThinking || !input.trim()}
           style={{
             padding: '5px 12px',
-            background: company.ceoGoal ? '#1b2030' : '#00ffff18',
-            border: `1px solid ${company.ceoGoal ? '#1b2030' : '#00ffff40'}`,
-            color: company.ceoGoal ? '#2a3a50' : '#00ffff',
+            background: (goalActive || isThinking) ? '#1b2030' : '#00ffff18',
+            border: `1px solid ${(goalActive || isThinking) ? '#1b2030' : '#00ffff40'}`,
+            color: (goalActive || isThinking) ? '#2a3a50' : '#00ffff',
             fontFamily: 'monospace',
             fontSize: 10,
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            cursor: company.ceoGoal ? 'not-allowed' : 'pointer',
+            cursor: (goalActive || isThinking) ? 'not-allowed' : 'pointer',
           }}
         >
-          ASSIGN
+          {isThinking ? '...' : 'ASSIGN'}
         </button>
       </form>
     </div>

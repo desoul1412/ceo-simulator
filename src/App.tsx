@@ -1,5 +1,6 @@
-import { CompanyDashboard } from './components/CompanyDashboard';
+import { RouterProvider } from 'react-router-dom';
+import { router } from './router';
 
 export default function App() {
-  return <CompanyDashboard />;
+  return <RouterProvider router={router} />;
 }

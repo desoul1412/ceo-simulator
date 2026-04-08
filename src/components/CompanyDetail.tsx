@@ -1,8 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import { PixelOfficeCanvas } from './PixelOfficeCanvas';
 import { CeoGoalPanel } from './CeoGoalPanel';
 import { DelegationFeed } from './DelegationFeed';
+import { ActivityFeed } from './ActivityFeed';
+import { ApprovalPanel } from './ApprovalPanel';
+import { sendHeartbeat, checkStaleAgents } from '../lib/api';
+import * as api from '../lib/api';
+import { processQueue, fetchQueueStatus } from '../lib/orchestratorApi';
 import type { Company } from '../store/dashboardStore';
 
 interface CompanyDetailProps {
@@ -11,100 +16,141 @@ interface CompanyDetailProps {
 
 export function CompanyDetail({ company }: CompanyDetailProps) {
   const tickCompany = useDashboardStore(s => s.tickCompany);
-  const selectCompany = useDashboardStore(s => s.selectCompany);
+  const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
+  const [queueInfo, setQueueInfo] = useState({ pending: 0, processing: 0 });
 
-  // Simulation tick — 3–5 s jitter per cycle
+  // Mock tick (offline only)
   useEffect(() => {
-    if (!company.ceoGoal) return;
-
+    if (!company.ceoGoal || orchestratorConnected) return;
     let timerId: ReturnType<typeof setTimeout>;
     function scheduleNext() {
-      const delay = 3000 + Math.random() * 2000;
-      timerId = setTimeout(() => {
-        tickCompany(company.id);
-        scheduleNext();
-      }, delay);
+      timerId = setTimeout(() => { tickCompany(company.id); scheduleNext(); }, 3000 + Math.random() * 2000);
     }
     scheduleNext();
     return () => clearTimeout(timerId);
-  }, [company.id, company.ceoGoal, tickCompany]);
+  }, [company.id, company.ceoGoal, tickCompany, orchestratorConnected]);
+
+  // Real mode: poll task queue
+  useEffect(() => {
+    if (!orchestratorConnected || !company.ceoGoal) return;
+    const interval = setInterval(async () => {
+      const status = await fetchQueueStatus(company.id).catch(() => null);
+      if (!status) return;
+      setQueueInfo({ pending: status.pending, processing: status.processing });
+      if (status.pending > 0 && !status.isProcessing) await processQueue().catch(() => {});
+      const companies = await api.fetchCompanies().catch(() => []);
+      const updated = companies.find((c: any) => c.id === company.id);
+      if (updated) {
+        const store = useDashboardStore.getState();
+        useDashboardStore.setState({
+          companies: store.companies.map(co =>
+            co.id === company.id ? {
+              ...co,
+              employees: (updated as any).agents.map((a: any) => ({
+                id: a.id, name: a.name, role: a.role, status: a.status,
+                col: a.tileCol, row: a.tileRow, color: a.color,
+                assignedTask: a.assignedTask, progress: a.progress,
+              })),
+              delegations: (updated as any).delegations.map((d: any) => ({
+                id: d.id, toRole: d.toRole, task: d.task, progress: d.progress,
+              })),
+              budgetSpent: (updated as any).budgetSpent,
+              status: (updated as any).status,
+              ceoGoal: (updated as any).ceoGoal,
+            } : co
+          ),
+        });
+      }
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [orchestratorConnected, company.id, company.ceoGoal]);
+
+  // Heartbeat ping
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const ids = company.employees.filter(e => e.status === 'working' || e.status === 'meeting').map(e => e.id);
+      sendHeartbeat(ids).catch(() => {});
+      checkStaleAgents().catch(() => {});
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [company.employees]);
 
   const remaining = company.budget - company.budgetSpent;
   const budgetPct = Math.max(0, Math.round((remaining / company.budget) * 100));
+  const barColor = budgetPct > 30 ? 'var(--neon-green)' : budgetPct > 10 ? 'var(--neon-orange)' : 'var(--neon-red)';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minWidth: 0 }}>
-      {/* Title bar */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', minWidth: 0 }}>
+      {/* Status bar */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '8px 12px',
+        display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+        padding: '8px var(--pad)',
         background: '#090d14',
-        border: '1px solid #1b2030',
-        fontFamily: 'monospace',
+        border: '1px solid var(--hud-border)',
+        fontSize: 'var(--font-sm)',
+        flexShrink: 0,
       }}>
-        <button
-          onClick={() => selectCompany(null)}
-          style={{
-            padding: '3px 8px', background: '#1b2030',
-            border: '1px solid #2a3a50', color: '#6a7a90',
-            fontFamily: 'monospace', fontSize: 10, cursor: 'pointer',
-            textTransform: 'uppercase',
-          }}
-        >
-          ← BACK
-        </button>
-        <span style={{
-          fontSize: 14, color: '#e0eaf4',
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-        }}>
-          {company.name}
-        </span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          {/* Budget */}
-          <div>
-            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              BUDGET
-            </div>
-            <div style={{
-              fontSize: 13,
-              color: budgetPct > 30 ? '#00ff88' : budgetPct > 10 ? '#ff8800' : '#ff2244',
-              textShadow: `0 0 6px ${budgetPct > 30 ? '#00ff88' : '#ff8800'}`,
-            }}>
-              ${(remaining / 1000).toFixed(1)}k
-            </div>
-          </div>
-          {/* Status */}
-          <div>
-            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              STATUS
-            </div>
-            <div style={{ fontSize: 13, color: '#00ffff', textTransform: 'uppercase' }}>
-              {company.status}
-            </div>
-          </div>
+        <div>
+          <span style={{ color: 'var(--hud-text-dim)', letterSpacing: '0.1em', marginRight: 8 }}>BUDGET</span>
+          <span style={{ color: barColor, textShadow: `0 0 4px ${barColor}`, fontSize: 'var(--font-md)' }}>
+            ${(remaining / 1000).toFixed(1)}k
+          </span>
         </div>
+        <div>
+          <span style={{ color: 'var(--hud-text-dim)', letterSpacing: '0.1em', marginRight: 8 }}>STATUS</span>
+          <span style={{ color: 'var(--neon-cyan)', textTransform: 'uppercase' }}>{company.status}</span>
+        </div>
+        <div>
+          <span style={{ color: 'var(--hud-text-dim)', letterSpacing: '0.1em', marginRight: 8 }}>AGENTS</span>
+          <span style={{ color: 'var(--neon-green)' }}>
+            {company.employees.filter(e => e.status === 'working' || e.status === 'meeting').length}
+          </span>
+          <span style={{ color: 'var(--hud-text-dim)' }}>/{company.employees.length}</span>
+        </div>
+        {orchestratorConnected && (queueInfo.pending > 0 || queueInfo.processing > 0) && (
+          <div>
+            <span style={{ color: 'var(--hud-text-dim)', letterSpacing: '0.1em', marginRight: 8 }}>QUEUE</span>
+            <span style={{ color: 'var(--neon-purple)' }}>
+              {queueInfo.processing > 0 ? `▶ ${queueInfo.processing}` : ''} {queueInfo.pending > 0 ? `◇ ${queueInfo.pending}` : ''}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Main layout: pixel office + side panels */}
-      <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
-        {/* Canvas pixel office */}
+      {/* Main: canvas + side panels */}
+      <div style={{
+        display: 'flex', gap: 'var(--gap)', flex: 1, minHeight: 0,
+        flexDirection: 'row',
+      }}>
+        {/* Canvas — fills all available space */}
         <div style={{
           flex: 1,
           background: '#05080f',
-          border: '1px solid #1b2030',
-          overflow: 'auto',
+          border: '1px solid var(--hud-border)',
+          overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 8,
+          minWidth: 0,
         }}>
           <PixelOfficeCanvas company={company} />
         </div>
 
-        {/* Side panels */}
-        <div style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+        {/* Side panels — fixed width on desktop, full width on mobile */}
+        <div style={{
+          width: 'var(--panel-w)',
+          maxWidth: 380,
+          display: 'flex', flexDirection: 'column',
+          gap: 8, flexShrink: 0,
+          overflow: 'hidden',
+          minHeight: 0,
+        }}>
           <CeoGoalPanel company={company} />
-          <DelegationFeed company={company} />
+          <ApprovalPanel company={company} />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
+            <DelegationFeed company={company} />
+            <ActivityFeed company={company} />
+          </div>
         </div>
       </div>
     </div>

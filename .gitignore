@@ -23,5 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
+# Secrets
+.env
+.env.local
+.env.*.local
+server/.env
+
 # Claude Code project settings (contains API keys)
 .claude/settings.json
+
+.vercel

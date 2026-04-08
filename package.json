@@ -9,15 +9,24 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "server": "tsx server/index.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\""
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.96",
+    "@supabase/supabase-js": "^2.102.1",
     "@tailwindcss/vite": "^4.2.2",
     "autoprefixer": "^10.4.27",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
     "postcss": "^8.5.9",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-router-dom": "^7.14.0",
     "tailwindcss": "^4.2.2",
+    "tsx": "^4.21.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
@@ -25,6 +34,8 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

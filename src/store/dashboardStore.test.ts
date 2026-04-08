@@ -1,10 +1,23 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Mock supabase to force offline mode in tests
+vi.mock('../lib/supabase', () => ({
+  supabase: null,
+  isOnline: () => false,
+}));
+
 import { useDashboardStore } from './dashboardStore';
 
 describe('dashboardStore', () => {
-  beforeEach(() => {
-    // Reset store to initial state
-    useDashboardStore.setState(useDashboardStore.getInitialState());
+  beforeEach(async () => {
+    // Reset data fields (keep actions intact via shallow merge)
+    useDashboardStore.setState({
+      companies: [],
+      selectedCompanyId: null,
+      loading: true,
+      synced: false,
+    });
+    await useDashboardStore.getState().loadFromBackend();
   });
 
   it('initializes with 2 mock companies', () => {
@@ -101,7 +114,7 @@ describe('dashboardStore', () => {
     expect(updated.budgetSpent).toBe(0);
   });
 
-  it('addCompany creates a new company with correct defaults', () => {
+  it('addCompany creates a new company locally when offline', () => {
     const { addCompany } = useDashboardStore.getState();
     addCompany('NovaTech', 50_000);
 

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { ROLE_DESKS, IDLE_POSITIONS, MEETING_POSITIONS, KITCHEN_POSITIONS } from '../utils/isoProjection';
+import * as api from '../lib/api';
+import { isOnline } from '../lib/supabase';
+import { isOrchestratorOnline, assignGoalToOrchestrator } from '../lib/orchestratorApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,7 +43,13 @@ export interface Company {
 export interface DashboardStore {
   companies: Company[];
   selectedCompanyId: string | null;
+  loading: boolean;
+  synced: boolean;
+  orchestratorConnected: boolean;
+  processingGoal: string | null; // companyId currently processing
 
+  // Actions
+  loadFromBackend: () => Promise<void>;
   addCompany: (name: string, budget: number) => void;
   selectCompany: (id: string | null) => void;
   assignGoal: (companyId: string, goal: string) => void;
@@ -94,8 +103,6 @@ function deriveTask(role: EmployeeRole, goal: string): string {
   }
 }
 
-// ── Mock companies ────────────────────────────────────────────────────────────
-
 function createCompanyState(name: string, budget: number): Company {
   const id = uid('co');
   return {
@@ -115,33 +122,48 @@ function createCompanyState(name: string, budget: number): Company {
   };
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+// ── API → Local state mapper ─────────────────────────────────────────────────
 
-export const useDashboardStore = create<DashboardStore>((set) => ({
-  companies: [
-    createCompanyState('Acme Corp', 120_000),
-    createCompanyState('Globex Inc', 80_000),
-  ],
-  selectedCompanyId: null,
+function apiCompanyToLocal(ac: api.ApiCompany): Company {
+  return {
+    id: ac.id,
+    name: ac.name,
+    budget: ac.budget,
+    budgetSpent: ac.budgetSpent,
+    status: ac.status as CompanyStatus,
+    ceoGoal: ac.ceoGoal,
+    employees: ac.agents.map(a => ({
+      id: a.id,
+      name: a.name,
+      role: a.role as EmployeeRole,
+      status: a.status as AgentStatus,
+      col: a.tileCol,
+      row: a.tileRow,
+      color: a.color,
+      assignedTask: a.assignedTask,
+      progress: a.progress,
+    })),
+    delegations: ac.delegations.map(d => ({
+      id: d.id,
+      toRole: d.toRole as EmployeeRole,
+      task: d.task,
+      progress: d.progress,
+    })),
+  };
+}
 
-  addCompany: (name, budget) => set((state) => ({
-    companies: [...state.companies, createCompanyState(name, budget)],
-  })),
+// ── Fallback mock goal assignment (when orchestrator is offline) ──────────────
 
-  selectCompany: (id) => set({ selectedCompanyId: id }),
-
-  assignGoal: (companyId, goal) => set((state) => ({
+function fallbackAssignGoal(companyId: string, goal: string) {
+  useDashboardStore.setState((state) => ({
     companies: state.companies.map(co => {
       if (co.id !== companyId) return co;
-
-      // CEO takes the goal; delegates to PM, DevOps, Frontend
       const delegations: Delegation[] = (['PM', 'DevOps', 'Frontend'] as EmployeeRole[]).map(role => ({
         id: uid('del'),
         toRole: role,
         task: deriveTask(role, goal),
         progress: 0,
       }));
-
       const employees = co.employees.map(emp => {
         if (emp.role === 'CEO') {
           return { ...emp, status: 'working' as AgentStatus, assignedTask: `Oversee: ${goal}`, progress: 0 };
@@ -149,92 +171,243 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
         const del = delegations.find(d => d.toRole === emp.role);
         if (del) {
           const desk = ROLE_DESKS[emp.role];
-          return {
-            ...emp,
-            status: 'working' as AgentStatus,
-            assignedTask: del.task,
-            progress: 0,
-            col: desk.col,
-            row: desk.row,
-          };
+          return { ...emp, status: 'working' as AgentStatus, assignedTask: del.task, progress: 0, col: desk.col, row: desk.row };
         }
         return emp;
       });
-
-      return {
-        ...co,
-        ceoGoal: goal,
-        delegations,
-        employees,
-        status: 'growing' as CompanyStatus,
-      };
+      return { ...co, ceoGoal: goal, delegations, employees, status: 'growing' as CompanyStatus };
     }),
-  })),
+  }));
+}
 
-  tickCompany: (companyId) => set((state) => ({
-    companies: state.companies.map(co => {
-      if (co.id !== companyId) return co;
-      if (!co.ceoGoal) return co;
+// ── Store ─────────────────────────────────────────────────────────────────────
 
-      const progressIncrement = 8 + Math.floor(Math.random() * 12); // 8–20 per tick
-      let allDone = true;
+export const useDashboardStore = create<DashboardStore>((set) => ({
+  companies: [],
+  selectedCompanyId: null,
+  loading: true,
+  synced: false,
+  orchestratorConnected: false,
+  processingGoal: null,
 
-      const delegations = co.delegations.map(d => {
-        const newProgress = Math.min(100, d.progress + progressIncrement);
-        if (newProgress < 100) allDone = false;
-        return { ...d, progress: newProgress };
+  // ── Load from Supabase (or fallback to local mock data) ──────────────────
+
+  loadFromBackend: async () => {
+    // Check orchestrator connection
+    const orchOnline = await isOrchestratorOnline().catch(() => false);
+    set({ orchestratorConnected: orchOnline });
+
+    if (!isOnline()) {
+      // Offline fallback: use mock data
+      set({
+        companies: [
+          createCompanyState('Acme Corp', 120_000),
+          createCompanyState('Globex Inc', 80_000),
+        ],
+        loading: false,
+        synced: false,
       });
+      return;
+    }
 
-      const employees = co.employees.map(emp => {
-        const del = delegations.find(d => d.toRole === emp.role);
+    try {
+      set({ loading: true });
+      const apiCompanies = await api.fetchCompanies();
 
-        if (emp.role === 'CEO') {
-          // CEO goes to meeting area mid-project
-          const ceoPos = allDone
-            ? ROLE_DESKS.CEO
-            : pickRandom(MEETING_POSITIONS);
-          return {
-            ...emp,
-            status: (allDone ? 'idle' : 'meeting') as AgentStatus,
-            col: ceoPos.col,
-            row: ceoPos.row,
-            progress: allDone ? 100 : Math.round(delegations.reduce((s, d) => s + d.progress, 0) / delegations.length),
-            assignedTask: allDone ? null : emp.assignedTask,
-          };
-        }
+      if (apiCompanies.length === 0) {
+        // First run: seed two demo companies
+        const acme = await api.createCompany('Acme Corp', 120_000);
+        const globex = await api.createCompany('Globex Inc', 80_000);
+        set({
+          companies: [apiCompanyToLocal(acme), apiCompanyToLocal(globex)],
+          loading: false,
+          synced: true,
+        });
+      } else {
+        set({
+          companies: apiCompanies.map(apiCompanyToLocal),
+          loading: false,
+          synced: true,
+        });
+      }
+    } catch (err) {
+      console.error('[store] Failed to load from backend, falling back to local:', err);
+      set({
+        companies: [
+          createCompanyState('Acme Corp', 120_000),
+          createCompanyState('Globex Inc', 80_000),
+        ],
+        loading: false,
+        synced: false,
+      });
+    }
+  },
 
-        if (del) {
-          if (del.progress >= 100) {
-            // Task complete → go on break
-            const breakPos = pickRandom(KITCHEN_POSITIONS);
-            return { ...emp, status: 'break' as AgentStatus, progress: 100, col: breakPos.col, row: breakPos.row, assignedTask: null };
+  addCompany: (name, budget) => {
+    if (isOnline()) {
+      // Async create on backend, then update local state
+      api.createCompany(name, budget).then(ac => {
+        set(state => ({
+          companies: [...state.companies, apiCompanyToLocal(ac)],
+        }));
+      }).catch(err => {
+        console.error('[store] Failed to create company on backend:', err);
+        // Fallback to local
+        set(state => ({
+          companies: [...state.companies, createCompanyState(name, budget)],
+        }));
+      });
+    } else {
+      set(state => ({
+        companies: [...state.companies, createCompanyState(name, budget)],
+      }));
+    }
+  },
+
+  selectCompany: (id) => set({ selectedCompanyId: id }),
+
+  assignGoal: (companyId, goal) => {
+    const { orchestratorConnected } = useDashboardStore.getState();
+
+    // Set CEO to "thinking" state immediately
+    set((state) => ({
+      processingGoal: companyId,
+      companies: state.companies.map(co => {
+        if (co.id !== companyId) return co;
+        const employees = co.employees.map(emp => {
+          if (emp.role === 'CEO') {
+            return { ...emp, status: 'working' as AgentStatus, assignedTask: `Thinking about: ${goal}`, progress: 0 };
           }
-          // Still working → stay at desk
-          return { ...emp, progress: del.progress };
-        }
+          return emp;
+        });
+        return { ...co, ceoGoal: goal, employees, status: 'growing' as CompanyStatus };
+      }),
+    }));
 
-        // No task → idle wander
-        if (Math.random() < 0.3) {
-          const pos = pickRandom(IDLE_POSITIONS);
-          return { ...emp, status: 'idle' as AgentStatus, col: pos.col, row: pos.row };
+    if (orchestratorConnected) {
+      // REAL MODE: CEO agent calls Claude via Agent SDK
+      assignGoalToOrchestrator(companyId, goal).then(_result => {
+        // Reload company data from Supabase (orchestrator updated the DB)
+        if (isOnline()) {
+          api.fetchCompanies().then(apiCompanies => {
+            const target = apiCompanies.find(c => c.id === companyId);
+            if (target) {
+              set(state => ({
+                processingGoal: null,
+                companies: state.companies.map(co => {
+                  if (co.id !== companyId) return co;
+                  return apiCompanyToLocal(target);
+                }),
+              }));
+            }
+          });
         }
-        return emp;
+      }).catch(err => {
+        console.error('[store] Orchestrator goal assignment failed:', err);
+        set({ processingGoal: null });
+        // Fallback to mock delegation
+        fallbackAssignGoal(companyId, goal);
       });
+    } else {
+      // MOCK MODE: local simulation (existing behavior)
+      set({ processingGoal: null });
+      fallbackAssignGoal(companyId, goal);
 
-      const costPerTick = 150;
-      const newBudgetSpent = co.budgetSpent + costPerTick;
+      // Sync to Supabase if online
+      if (isOnline()) {
+        api.assignGoal(companyId, goal).then(result => {
+          set(state => ({
+            companies: state.companies.map(co => {
+              if (co.id !== companyId) return co;
+              return {
+                ...co,
+                employees: result.agents.map(a => ({
+                  id: a.id,
+                  name: a.name,
+                  role: a.role as EmployeeRole,
+                  status: a.status as AgentStatus,
+                  col: a.tileCol,
+                  row: a.tileRow,
+                  color: a.color,
+                  assignedTask: a.assignedTask,
+                  progress: a.progress,
+                })),
+                delegations: result.delegations.map(d => ({
+                  id: d.id,
+                  toRole: d.toRole as EmployeeRole,
+                  task: d.task,
+                  progress: d.progress,
+                })),
+              };
+            }),
+          }));
+        }).catch(err => {
+          console.error('[store] Failed to sync goal to backend:', err);
+        });
+      }
+    }
+  },
 
-      return {
-        ...co,
-        delegations,
-        employees,
-        budgetSpent: newBudgetSpent,
-        ...(allDone ? {
-          ceoGoal: null,
-          delegations: [],
-          status: 'scaling' as CompanyStatus,
-        } : {}),
-      };
-    }),
-  })),
+  tickCompany: (companyId) => {
+    // Optimistic local tick (keeps canvas responsive)
+    set((state) => ({
+      companies: state.companies.map(co => {
+        if (co.id !== companyId) return co;
+        if (!co.ceoGoal) return co;
+
+        const progressIncrement = 8 + Math.floor(Math.random() * 12);
+        let allDone = true;
+
+        const delegations = co.delegations.map(d => {
+          const newProgress = Math.min(100, d.progress + progressIncrement);
+          if (newProgress < 100) allDone = false;
+          return { ...d, progress: newProgress };
+        });
+
+        const employees = co.employees.map(emp => {
+          const del = delegations.find(d => d.toRole === emp.role);
+          if (emp.role === 'CEO') {
+            const ceoPos = allDone ? ROLE_DESKS.CEO : pickRandom(MEETING_POSITIONS);
+            return {
+              ...emp,
+              status: (allDone ? 'idle' : 'meeting') as AgentStatus,
+              col: ceoPos.col, row: ceoPos.row,
+              progress: allDone ? 100 : Math.round(delegations.reduce((s, d) => s + d.progress, 0) / delegations.length),
+              assignedTask: allDone ? null : emp.assignedTask,
+            };
+          }
+          if (del) {
+            if (del.progress >= 100) {
+              const breakPos = pickRandom(KITCHEN_POSITIONS);
+              return { ...emp, status: 'break' as AgentStatus, progress: 100, col: breakPos.col, row: breakPos.row, assignedTask: null };
+            }
+            return { ...emp, progress: del.progress };
+          }
+          if (Math.random() < 0.3) {
+            const pos = pickRandom(IDLE_POSITIONS);
+            return { ...emp, status: 'idle' as AgentStatus, col: pos.col, row: pos.row };
+          }
+          return emp;
+        });
+
+        const costPerTick = 150;
+        const newBudgetSpent = co.budgetSpent + costPerTick;
+
+        return {
+          ...co,
+          delegations,
+          employees,
+          budgetSpent: newBudgetSpent,
+          ...(allDone ? { ceoGoal: null, delegations: [], status: 'scaling' as CompanyStatus } : {}),
+        };
+      }),
+    }));
+
+    // Background sync to Supabase (non-blocking, no UI wait)
+    if (isOnline()) {
+      api.tickCompany(companyId).catch(err => {
+        console.error('[store] Tick sync failed:', err);
+      });
+    }
+  },
 }));

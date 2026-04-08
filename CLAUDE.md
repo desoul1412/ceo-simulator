@@ -20,9 +20,19 @@ Do not hallucinate.
 ## 4. EXECUTION
 - Enforce the loop: Read Docs -> Context7 API Check -> Git Worktree -> Subagent Execution -> TDD -> Post-Flight Doc Update.
 - Use git worktrees for feature branches. Keep `main` clean.
+- **TDD CIRCUIT BREAKER:** If a test fails 3 times in a row, HALT EXECUTION immediately. Document the failure in `changelog.md` and ask the CEO for intervention. Do not burn tokens in an infinite retry loop.
+- **MCP FALLBACK:** If an MCP server (Tavily, Context7, game-assets) times out or fails, DO NOT hallucinate the result. Gracefully fall back, write a `TODO-MCP-Failure.md` log in `brain/raw/`, and notify the user.
 
 ## 5. STACK
 - React 19 + TypeScript + Vite
 - Tailwind CSS v4 (`@tailwindcss/vite` plugin)
+- Supabase (PostgreSQL + Realtime + RLS) — project: `paperclip` (qdhengvarelfdtmycnti)
+- Vercel (SPA deployment) — config in `vercel.json`
 - Brain/docs at `./brain/` (Obsidian vault)
 - Sprites/tiles at `public/assets/`
+
+## 6. OPERATIONS MANUAL
+- Full SOPs documented in `[[Factory-Operations-Manual]]`
+- This dashboard is the real control plane for a Zero-Human Software Factory
+- Companies in Supabase = real projects. Agent statuses = real task states.
+- See `brain/wiki/Factory-Operations-Manual.md` for SOPs, failure modes, token optimization

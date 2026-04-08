@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { loadAllAssets, type LoadedAssets } from '../engine/assetLoader';
 import {
   renderFrame,
@@ -70,6 +70,8 @@ interface AgentState {
   label: string;
   labelColor: string;
   speechBubble: string | null;
+  heartbeat: 'alive' | 'stale' | 'dead';
+  lastHeartbeatTime: number;
 }
 
 function pickRandom<T>(arr: T[]): T {
@@ -141,6 +143,8 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
           label: emp.role,
           labelColor: emp.color,
           speechBubble: null,
+          heartbeat: 'alive',
+          lastHeartbeatTime: performance.now(),
         };
         map.set(emp.id, agent);
       }
@@ -166,6 +170,19 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
           targetPos = pickRandom(IDLE_POSITIONS);
           agent.speechBubble = null;
           break;
+      }
+
+      // Update heartbeat based on status
+      const now = performance.now();
+      if (emp.status === 'working' || emp.status === 'meeting') {
+        agent.heartbeat = 'alive';
+        agent.lastHeartbeatTime = now;
+      } else if (emp.status === 'break') {
+        agent.heartbeat = (now - agent.lastHeartbeatTime > 15000) ? 'stale' : 'alive';
+      } else {
+        // idle
+        agent.heartbeat = (now - agent.lastHeartbeatTime > 30000) ? 'dead'
+          : (now - agent.lastHeartbeatTime > 10000) ? 'stale' : 'alive';
       }
 
       // If target changed, compute new path
@@ -272,6 +289,7 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
           label: agent.label,
           labelColor: agent.labelColor,
           speechBubble: agent.speechBubble,
+          heartbeat: agent.heartbeat,
         });
       }
 
@@ -285,11 +303,36 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
     return () => cancelAnimationFrame(rafId);
   }, [assets, layout, tileColors, syncAgents]);
 
+  // Dynamic scaling: measure container and scale canvas to fit
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      setContainerSize({ w: width, h: height });
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const scale = useMemo(() => {
+    if (!layout || containerSize.w === 0) return SCALE;
+    const nw = layout.cols * TILE_SIZE;
+    const nh = layout.rows * TILE_SIZE;
+    const sx = containerSize.w / nw;
+    const sy = containerSize.h / nh;
+    return Math.max(1, Math.floor(Math.min(sx, sy)));
+  }, [layout, containerSize]);
+
   if (!layout) {
     return (
-      <div style={{
+      <div ref={containerRef} style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: 300, color: '#2a3a50', fontFamily: 'monospace', fontSize: 12,
+        width: '100%', height: '100%',
+        color: '#2a3a50', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)',
       }}>
         Loading office...
       </div>
@@ -300,16 +343,22 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
   const nativeH = layout.rows * TILE_SIZE;
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={nativeW}
-      height={nativeH}
-      style={{
-        width: nativeW * SCALE,
-        height: nativeH * SCALE,
-        imageRendering: 'pixelated',
-        display: 'block',
-      }}
-    />
+    <div ref={containerRef} style={{
+      width: '100%', height: '100%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden',
+    }}>
+      <canvas
+        ref={canvasRef}
+        width={nativeW}
+        height={nativeH}
+        style={{
+          width: nativeW * scale,
+          height: nativeH * scale,
+          imageRendering: 'pixelated',
+          display: 'block',
+        }}
+      />
+    </div>
   );
 }
