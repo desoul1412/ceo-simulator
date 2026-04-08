@@ -8,20 +8,26 @@ status: active
 
 ## Architecture
 - [[UI-Design-System]] — Pixel Art / HUD design tokens, color system, component rules
-- [[Office-Simulator-Architecture]] — **v2 isometric dashboard** — data model, projection math, state management, component tree, TDD targets, v1 migration notes
+- [[Office-Simulator-Architecture]] — **v3 Paperclip + Pixel Agents hybrid** — Canvas 2D office, BFS pathfinding, Paperclip management UI, goal hierarchy, agent CRUD
 
-## Views (v2)
-- [ ] `<GlobalDashboard />` — company card grid, add company CTA
-- [ ] `<CompanyDetail />` — iso office + CEO panel + delegation feed + HUD
-- [ ] `<IsometricOffice />` — 20×12 iso tile grid + IsoAgent overlay
-- [ ] `<CeoGoalPanel />` — user goal input → CEO delegation
-- [ ] `<DelegationFeed />` — live task progress per employee
-- [ ] `<CompanyHud />` — budget meter, KPIs
+## Management Pages (v3 — Paperclip-inspired)
+- [ ] `<Dashboard />` — pixel office canvas + goal panel + activity feed + budget HUD
+- [ ] `<AgentsPage />` — hire/fire agents, configure skills/permissions
+- [ ] `<AgentDetail />` — individual agent config, budget, activity log
+- [ ] `<GoalsPage />` — goal tree with cascading delegation
+- [ ] `<CostsPage />` — per-agent, per-goal budget analytics
+- [ ] `<OrgChartPage />` — visual CEO → reports hierarchy
+- [ ] `<SettingsPage />` — company config, office layout editor
 
-## State (v2)
-- [ ] `src/store/dashboardStore.ts` — Zustand root store
-- [ ] `src/hooks/useCompanySimulation.ts` — per-company tick + CEO delegation engine
-- [ ] `src/utils/isoProjection.ts` — `isoToScreen()`, painter-sort
+## Canvas Engine (v3 — Pixel Agents-inspired)
+- [ ] `<PixelOfficeCanvas />` — Canvas 2D game loop, tile renderer, sprite animator
+- [ ] `pathfinding.ts` — BFS on walkable tile grid
+- [ ] `canvasRenderer.ts` — tile/furniture/character/speech-bubble draw functions
+- [ ] `spriteAnimator.ts` — frame selection from sprite sheets
+
+## State (v3)
+- [x] `src/store/dashboardStore.ts` — Zustand (needs expansion for agent CRUD, goal trees, office layout)
+- [ ] `src/hooks/useCompanySimulation.ts` — Canvas game loop + business tick engine
 
 ## Legacy v1 (archived on master @ `1bfff5e`)
 - [x] `<OfficeFloorPlan />` — 15×15 top-down CSS Grid

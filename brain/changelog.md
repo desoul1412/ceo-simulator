@@ -50,6 +50,65 @@ status: active
 
 ---
 
+## 2026-04-08 — Architecture v3: Paperclip + Pixel Agents Hybrid
+
+### Decision
+Pivoted from CSS 3D isometric to **Canvas 2D pixel art** (Pixel Agents style) embedded in a **Paperclip-style management dashboard**. The v2 CSS isometric approach was technically functional but visually wrong for the target aesthetic.
+
+### References researched
+- [Paperclip](https://github.com/paperclipai/paperclip) — React 19 + Vite + Tailwind + Express + PostgreSQL. 45+ pages, 24+ API routes. Companies, agents, goals (cascading delegation), budgets, org charts, approvals, activity feeds.
+- [Pixel Agents](https://github.com/pablodelucca/pixel-agents) — VS Code extension. Canvas 2D game loop, BFS pathfinding, 32×48px sprite sheets, speech bubbles, activity-driven animations, persistent office layouts.
+
+### Key changes in `Office-Simulator-Architecture.md` (v2 → v3)
+1. **Rendering**: CSS 3D transforms → Canvas 2D with `requestAnimationFrame` game loop
+2. **View**: Isometric 2.5D → top-down pixel art (matches Pixel Agents style)
+3. **Pathfinding**: random teleport → BFS on walkable tile grid
+4. **Sprites**: CSS div characters → sprite sheet animation (32×48px, 32 frames)
+5. **Management UI**: minimal sidebar → full Paperclip parity (agents, goals, costs, org chart, settings pages via React Router)
+6. **Data model**: expanded with Agent CRUD, Goal hierarchy (parent→child), OfficeLayout (tiles + furniture + seats), ActivityLog
+7. **Speech bubbles**: agents show what they're working on above their heads
+8. **Office layout**: configurable tile grid with placeable furniture (desks, plants, whiteboards, server racks)
+
+### v2 components to replace
+- `IsometricOffice` → `PixelOfficeCanvas` (Canvas 2D)
+- `IsometricCharacter` → Canvas sprite renderer
+- `CompanyDashboard` → `NavBar` + `Sidebar` + React Router
+- `CompanyDetail` → `Dashboard` route (canvas + panels)
+
+---
+
+## 2026-04-08 — Isometric 2.5D Dashboard Build (Step 3)
+
+Built via `feature/isometric-dashboard` worktree → merged to master.
+
+### Engine (CSS 3D Isometric)
+- `transform: rotateX(60deg) rotateZ(-45deg)` on grid wrapper → 2.5D illusion
+- Reverse transforms on `IsometricCharacter` sprites → face camera
+- 8×6 tile grid with 7 zone types (CEO/PM/DevOps/Frontend desks, meeting, kitchen, floor)
+- `isoProjection.ts`: tile definitions, `sortByDepth()` painter's algorithm, role desks
+
+### State Management (Zustand)
+- `dashboardStore.ts`: root store with `Company[]`, `selectedCompanyId`
+- Actions: `addCompany`, `selectCompany`, `assignGoal`, `tickCompany`
+- CEO delegation flow: goal → 3 `Delegation` records → employee status changes → budget burn
+- 2 mock companies: Acme Corp ($120k), Globex Inc ($80k)
+- Per-company tick: recursive setTimeout 3–5s jitter in `CompanyDetail`
+
+### Components
+- `CompanyDashboard` → sidebar company list + main content area
+- `CompanyCard` → status badge, budget, active count, current goal preview
+- `CompanyDetail` → iso office + title bar (budget/status) + side panels
+- `IsometricOffice` → CSS Grid + 3D transform wrapper + zone tiles + agent sprites
+- `IsometricCharacter` → CSS pixel-art body with role color, reverse-transform billboard
+- `CeoGoalPanel` → text input → `assignGoal()`, disabled while goal active
+- `DelegationFeed` → per-delegation progress bars, role colors, task text
+
+### Tests
+- 32/32 passing: v1 legacy (15) + v2 iso projection (7) + store (10)
+- Coverage: grid generation, depth sort, company CRUD, goal delegation, tick progress, budget
+
+---
+
 ## 2026-04-08 — game-asset-mcp Repair & Registration
 
 - Identified root cause: package name `@mubarakhalketbi/game-asset-mcp` doesn't exist on npm; repo is GitHub-only
