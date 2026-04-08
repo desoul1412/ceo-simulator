@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
-import { IsometricOffice } from './IsometricOffice';
+import { PixelOfficeCanvas } from './PixelOfficeCanvas';
 import { CeoGoalPanel } from './CeoGoalPanel';
 import { DelegationFeed } from './DelegationFeed';
 import type { Company } from '../store/dashboardStore';
@@ -85,19 +85,20 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
         </div>
       </div>
 
-      {/* Main layout: iso office + side panels */}
+      {/* Main layout: pixel office + side panels */}
       <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
-        {/* Isometric office */}
+        {/* Canvas pixel office */}
         <div style={{
           flex: 1,
           background: '#05080f',
           border: '1px solid #1b2030',
-          overflow: 'hidden',
+          overflow: 'auto',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          padding: 8,
         }}>
-          <IsometricOffice company={company} />
+          <PixelOfficeCanvas company={company} />
         </div>
 
         {/* Side panels */}
