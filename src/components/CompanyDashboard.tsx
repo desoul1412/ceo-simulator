@@ -1,0 +1,71 @@
+import { useDashboardStore } from '../store/dashboardStore';
+import { CompanyCard } from './CompanyCard';
+import { CompanyDetail } from './CompanyDetail';
+
+export function CompanyDashboard() {
+  const companies = useDashboardStore(s => s.companies);
+  const selectedId = useDashboardStore(s => s.selectedCompanyId);
+  const selectCompany = useDashboardStore(s => s.selectCompany);
+
+  const selectedCompany = companies.find(c => c.id === selectedId) ?? null;
+
+  return (
+    <div className="sim-root">
+      {/* Header */}
+      <header className="sim-header">
+        <span className="sim-header__logo">▣ CEO.SIM</span>
+        <span className="sim-header__sub">
+          {selectedCompany
+            ? `${selectedCompany.name.toUpperCase()} — OFFICE VIEW`
+            : 'GLOBAL DASHBOARD — ALL COMPANIES'}
+        </span>
+        <span className="sim-header__badge">
+          {companies.length} {companies.length === 1 ? 'COMPANY' : 'COMPANIES'}
+        </span>
+      </header>
+
+      {/* Body */}
+      <div className="sim-body">
+        {/* Sidebar — company list (always visible) */}
+        <aside className="sim-sidebar">
+          <div style={{
+            padding: '8px 10px',
+            fontSize: 9, fontFamily: 'monospace',
+            color: '#4a5568', textTransform: 'uppercase',
+            letterSpacing: '0.1em', borderBottom: '1px solid #1b2030',
+          }}>
+            Companies
+          </div>
+          <div style={{ padding: 6, overflowY: 'auto', flex: 1 }}>
+            {companies.map(co => (
+              <CompanyCard
+                key={co.id}
+                company={co}
+                isSelected={co.id === selectedId}
+                onSelect={() => selectCompany(co.id)}
+              />
+            ))}
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="sim-content">
+          {selectedCompany ? (
+            <CompanyDetail company={selectedCompany} />
+          ) : (
+            <div className="sim-placeholder">
+              <div style={{ fontSize: 20, color: '#1b2030', marginBottom: 8 }}>▣</div>
+              <div style={{
+                fontSize: 12, color: '#2a3a50',
+                fontFamily: 'monospace', textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+              }}>
+                Select a company to view its office
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}

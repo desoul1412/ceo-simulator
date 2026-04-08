@@ -5,21 +5,14 @@
   --hud-bg:      #05080f;
   --hud-surface: #0d1117;
   --hud-border:  #1b2030;
-  --hud-wall:    #0a0c10;
-  --hud-desk:    #111c3a;
-  --hud-meeting: #0a1318;
-  --hud-kitchen: #13120a;
-
   --neon-cyan:   #00ffff;
   --neon-green:  #00ff88;
   --neon-orange: #ff8800;
   --neon-red:    #ff2244;
-
   --hud-text:    #a0b4c8;
   --hud-text-h:  #e0eaf4;
-  --scanline:    rgba(0, 0, 0, 0.12);
-
-  --font-hud: "Share Tech Mono", "Courier New", monospace;
+  --scanline:    rgba(0, 0, 0, 0.08);
+  --font-hud:    "Share Tech Mono", "Courier New", ui-monospace, monospace;
 }
 
 /* ── Reset ───────────────────────────────────────────────────────────────── */
@@ -58,6 +51,7 @@ body {
   background: #090d14;
   border-bottom: 1px solid var(--hud-border);
   flex-shrink: 0;
+  font-family: var(--font-hud);
 }
 .sim-header__logo {
   font-size: 14px;
@@ -73,30 +67,60 @@ body {
   letter-spacing: 0.1em;
   flex: 1;
 }
-.sim-header__time {
-  font-size: 11px;
+.sim-header__badge {
+  font-size: 9px;
   color: var(--neon-green);
   letter-spacing: 0.1em;
   text-shadow: 0 0 6px var(--neon-green);
+  text-transform: uppercase;
 }
 
-/* Main content area */
-.sim-main {
+/* ── Dashboard body ──────────────────────────────────────────────────────── */
+.sim-body {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 16px;
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* ── CRT Scanline overlay ────────────────────────────────────────────────── */
-.crt-overlay {
-  position: relative;
+/* Sidebar */
+.sim-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--hud-surface);
+  border-right: 1px solid var(--hud-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.crt-overlay::after {
+
+/* Main content */
+.sim-content {
+  flex: 1;
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+}
+
+/* Empty state placeholder */
+.sim-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Isometric viewport ─────────────────────────────────────────────────── */
+.iso-viewport {
+  /* Ensure enough room for the transformed grid */
+  padding: 60px 20px;
+}
+
+/* CRT Scanline overlay — applied to iso office container */
+.iso-viewport::after {
   content: '';
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: repeating-linear-gradient(
     to bottom,
@@ -106,5 +130,5 @@ body {
     var(--scanline) 2px
   );
   pointer-events: none;
-  z-index: 50;
+  z-index: 999;
 }
