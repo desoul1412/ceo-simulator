@@ -5,6 +5,7 @@ import { HireAgentDialog, type HireConfig } from './HireAgentDialog';
 import { hireAgent } from '../lib/orchestratorApi';
 import * as api from '../lib/api';
 import { isOnline } from '../lib/supabase';
+import { getRoleDisplayName } from '../lib/agentDisplay';
 
 const STATUS_COLORS: Record<string, string> = {
   working: '#00ff88',
@@ -69,13 +70,13 @@ export function AgentsPage() {
         marginBottom: 12,
       }}>
         <div style={{
-          fontSize: 9, color: '#4a5568', textTransform: 'uppercase',
+          fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase',
           letterSpacing: '0.1em',
         }}>
           {company.name} — Agents ({company.employees.length})
         </div>
         {orchestratorConnected && (
-          <span style={{ fontSize: 8, color: '#c084fc' }}>◆ Claude-powered hiring</span>
+          <span style={{ fontSize: 'var(--font-xs)', color: '#c084fc' }}>◆ Claude-powered hiring</span>
         )}
       </div>
 
@@ -104,14 +105,16 @@ export function AgentsPage() {
                 background: emp.color,
                 boxShadow: `0 0 6px ${emp.color}`,
               }} />
-              <span style={{ fontSize: 12, color: 'var(--hud-text-h)' }}>{emp.name}</span>
+              <span style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)' }}>
+                {getRoleDisplayName(emp.role, emp.id, company.employees)}
+              </span>
             </div>
 
-            <div style={{ fontSize: 10, color: emp.color, textTransform: 'uppercase', marginBottom: 4 }}>
+            <div style={{ fontSize: 'var(--font-xs)', color: emp.color, textTransform: 'uppercase', marginBottom: 4 }}>
               {emp.role}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-xs)' }}>
               <span style={{
                 width: 5, height: 5, borderRadius: '50%',
                 background: STATUS_COLORS[emp.status] ?? '#4a5568',
@@ -124,7 +127,7 @@ export function AgentsPage() {
 
             {emp.assignedTask && (
               <div style={{
-                marginTop: 6, fontSize: 9, color: '#6a7a90',
+                marginTop: 6, fontSize: 'var(--font-xs)', color: '#6a7a90',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {emp.assignedTask}
@@ -132,7 +135,7 @@ export function AgentsPage() {
             )}
 
             <div style={{
-              marginTop: 8, fontSize: 8, color: '#2a3a50',
+              marginTop: 8, fontSize: 'var(--font-xs)', color: '#2a3a50',
             }}>
               Progress: {emp.progress}%
             </div>
@@ -159,7 +162,7 @@ export function AgentsPage() {
           onMouseLeave={e => (e.currentTarget.style.borderColor = '#1b2030')}
         >
           <div style={{ fontSize: 20, color: '#1b2030', marginBottom: 4 }}>+</div>
-          <div style={{ fontSize: 9, color: '#2a3a50', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', textTransform: 'uppercase' }}>
             {hiring ? 'Hiring...' : 'Hire Agent'}
           </div>
         </div>

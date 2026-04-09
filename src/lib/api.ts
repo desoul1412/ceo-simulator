@@ -125,6 +125,29 @@ export async function fetchCompanies(): Promise<ApiCompany[]> {
   }));
 }
 
+export async function deleteCompany(companyId: string): Promise<void> {
+  if (!isOnline()) throw new Error('Offline');
+  // Delete in dependency order
+  await db().from('ticket_comments').delete().in('ticket_id',
+    (await db().from('tickets').select('id').eq('company_id', companyId)).data?.map((t: any) => t.id) ?? []
+  );
+  await db().from('tickets').delete().eq('company_id', companyId);
+  await db().from('audit_log').delete().eq('company_id', companyId);
+  await db().from('token_usage').delete().in('agent_id',
+    (await db().from('agents').select('id').eq('company_id', companyId)).data?.map((a: any) => a.id) ?? []
+  );
+  await db().from('agent_sessions').delete().in('agent_id',
+    (await db().from('agents').select('id').eq('company_id', companyId)).data?.map((a: any) => a.id) ?? []
+  );
+  await db().from('task_queue').delete().eq('company_id', companyId);
+  await db().from('activity_log').delete().eq('company_id', companyId);
+  await db().from('delegations').delete().eq('company_id', companyId);
+  await db().from('goals').delete().eq('company_id', companyId);
+  await db().from('configs').delete().eq('scope_id', companyId);
+  await db().from('agents').delete().eq('company_id', companyId);
+  await db().from('companies').delete().eq('id', companyId);
+}
+
 export async function createCompany(name: string, budget: number): Promise<ApiCompany> {
   if (!isOnline()) throw new Error('Offline');
 
@@ -136,12 +159,9 @@ export async function createCompany(name: string, budget: number): Promise<ApiCo
   if (error) throw error;
   const co = data as CompanyRow;
 
-  // Seed default agents (CEO, PM, DevOps, Frontend)
+  // Seed only CEO agent — user hires additional agents manually
   const ROLE_DEFAULTS = [
-    { role: 'CEO',      name: 'Ada Chen',   color: '#00ffff', sprite: 0, col: 3, row: 13 },
-    { role: 'PM',       name: 'Sam Patel',  color: '#c084fc', sprite: 1, col: 7, row: 13 },
-    { role: 'DevOps',   name: 'Kai Müller', color: '#00ff88', sprite: 2, col: 5, row: 17 },
-    { role: 'Frontend', name: 'Mia Torres', color: '#ff8800', sprite: 3, col: 5, row: 19 },
+    { role: 'CEO',      name: 'Ada Chen',   color: '#00ffff', sprite: 0, col: 4, row: 3 },
   ];
 
   const agentInserts = ROLE_DEFAULTS.map(r => ({
@@ -178,7 +198,7 @@ export async function createCompany(name: string, budget: number): Promise<ApiCo
   await db().from('activity_log').insert({
     company_id: co.id,
     type: 'status-change',
-    message: `Company "${name}" founded with $${(budget / 1000).toFixed(0)}k budget`,
+    message: `Company "${name}" founded — CEO agent deployed`,
   } as any);
 
   return {
@@ -260,10 +280,12 @@ export async function assignGoal(companyId: string, goal: string): Promise<{
 
   // Update agent statuses to working
   const ROLE_SEATS: Record<string, { col: number; row: number }> = {
-    CEO:      { col: 3, row: 13 },
-    PM:       { col: 7, row: 13 },
-    DevOps:   { col: 5, row: 17 },
-    Frontend: { col: 5, row: 19 },
+    CEO:      { col: 4, row: 3 },
+    PM:       { col: 18, row: 3 },
+    DevOps:   { col: 4, row: 14 },
+    Frontend: { col: 9, row: 3 },
+    Backend:  { col: 24, row: 3 },
+    QA:       { col: 9, row: 14 },
   };
 
   await Promise.all(
@@ -343,11 +365,11 @@ export async function tickCompany(companyId: string): Promise<{
   const agents = (agentsData ?? []) as AgentRow[];
 
   const BREAK_POS = [
-    { col: 15, row: 14 },
-    { col: 15, row: 15 },
-    { col: 14, row: 15 },
+    { col: 21, row: 14 },
+    { col: 21, row: 16 },
+    { col: 19, row: 15 },
   ];
-  const MEETING_POS = { col: 5, row: 16 };
+  const MEETING_POS = { col: 7, row: 6 };
 
   for (const agent of agents) {
     const del = updatedDels.find(d => d.toRole === agent.role);

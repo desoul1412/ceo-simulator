@@ -15,14 +15,15 @@
   --hud-text-dim:#4a5568;
   --scanline:    rgba(0, 0, 0, 0.08);
   --font-hud:    "Share Tech Mono", "Courier New", ui-monospace, monospace;
+  --font-pixel:  "PixelSans", "Share Tech Mono", ui-monospace, monospace;
 
   /* Dynamic sizing */
   --nav-h: 42px;
   --panel-w: 300px;
-  --font-xs: 10px;
-  --font-sm: 12px;
-  --font-md: 14px;
-  --font-lg: 18px;
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 20px;
   --gap: 12px;
   --pad: 16px;
 }
@@ -75,9 +76,9 @@ html, body, #root {
   :root {
     --nav-h: 38px;
     --panel-w: 100%;
-    --font-xs: 10px;
-    --font-sm: 11px;
-    --font-md: 13px;
+    --font-xs: 11px;
+    --font-sm: 13px;
+    --font-md: 15px;
     --gap: 8px;
     --pad: 10px;
   }
@@ -86,20 +87,20 @@ html, body, #root {
 @media (min-width: 1440px) {
   :root {
     --panel-w: 340px;
-    --font-xs: 11px;
-    --font-sm: 13px;
-    --font-md: 15px;
-    --font-lg: 20px;
+    --font-xs: 13px;
+    --font-sm: 15px;
+    --font-md: 17px;
+    --font-lg: 22px;
   }
 }
 
 @media (min-width: 1920px) {
   :root {
-    --panel-w: 380px;
-    --font-xs: 12px;
-    --font-sm: 14px;
-    --font-md: 16px;
-    --font-lg: 22px;
+    --panel-w: 400px;
+    --font-xs: 14px;
+    --font-sm: 16px;
+    --font-md: 18px;
+    --font-lg: 24px;
   }
 }
 

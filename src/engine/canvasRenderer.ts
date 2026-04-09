@@ -43,6 +43,7 @@ export interface CharacterRenderState {
   label: string;          // role name shown above
   labelColor: string;     // role neon color
   speechBubble: string | null;
+  heartbeat: 'alive' | 'stale' | 'dead';
 }
 
 // ── HSB Color Application ────────────────────────────────────────────────────
@@ -184,14 +185,39 @@ export function renderCharacter(
   // Role label above head
   if (char.label) {
     ctx.save();
-    ctx.font = '4px monospace';
+    ctx.font = 'bold 6px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = char.labelColor;
     ctx.shadowColor = char.labelColor;
-    ctx.shadowBlur = 2;
-    ctx.fillText(char.label, drawX + CHAR_FRAME_W / 2, drawY - 2);
+    ctx.shadowBlur = 3;
+    ctx.fillText(char.label, drawX + CHAR_FRAME_W / 2, drawY - 3);
     ctx.restore();
   }
+
+  // Status indicator (working = green pulse dot, idle = grey dot)
+  const indicatorX = drawX + CHAR_FRAME_W / 2 + 6;
+  const indicatorY = drawY - 1;
+  ctx.save();
+  if (char.heartbeat === 'alive' && char.isWalking) {
+    ctx.fillStyle = '#00ff88';
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = 3;
+  } else if (char.heartbeat === 'stale') {
+    ctx.fillStyle = '#ff8800';
+    ctx.shadowColor = '#ff8800';
+    ctx.shadowBlur = 2;
+  } else if (char.heartbeat === 'dead') {
+    ctx.fillStyle = '#ff2244';
+    ctx.shadowColor = '#ff2244';
+    ctx.shadowBlur = 2;
+  } else {
+    ctx.fillStyle = '#4a5568';
+    ctx.shadowBlur = 0;
+  }
+  ctx.beginPath();
+  ctx.arc(indicatorX, indicatorY, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 export function renderSpeechBubble(
@@ -204,27 +230,34 @@ export function renderSpeechBubble(
   const drawY = Math.round(char.pixelY - (CHAR_FRAME_H - TILE_SIZE));
 
   ctx.save();
-  ctx.font = '3px monospace';
-  const text = char.speechBubble.length > 20
-    ? char.speechBubble.slice(0, 18) + '..'
+  // Reset any inherited shadow from label rendering
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
+  ctx.font = '7px monospace';
+  const text = char.speechBubble.length > 16
+    ? char.speechBubble.slice(0, 14) + '..'
     : char.speechBubble;
   const metrics = ctx.measureText(text);
-  const bw = metrics.width + 4;
-  const bh = 7;
-  const bx = drawX + CHAR_FRAME_W / 2 - bw / 2;
-  const by = drawY - bh - 4;
+  // Use integer coords for crisp pixel rendering
+  const bw = Math.ceil(metrics.width) + 8;
+  const bh = 11;
+  const bx = Math.round(drawX + CHAR_FRAME_W / 2 - bw / 2);
+  const by = Math.round(drawY - bh - 6);
 
-  // Bubble background
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+  // Bubble background — solid, no transparency
+  ctx.fillStyle = '#050810';
   ctx.fillRect(bx, by, bw, bh);
   ctx.strokeStyle = '#00ffff';
-  ctx.lineWidth = 0.5;
-  ctx.strokeRect(bx, by, bw, bh);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
 
-  // Text
+  // Text — no shadow, crisp
   ctx.fillStyle = '#e0eaf4';
   ctx.textAlign = 'center';
-  ctx.fillText(text, drawX + CHAR_FRAME_W / 2, by + 5);
+  ctx.fillText(text, Math.round(drawX + CHAR_FRAME_W / 2), by + 8);
   ctx.restore();
 }
 

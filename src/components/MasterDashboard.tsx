@@ -2,12 +2,15 @@ import { useNavigate } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
 import { PixelOfficeCanvas } from './PixelOfficeCanvas';
 import type { Company } from '../store/dashboardStore';
+import * as api from '../lib/api';
+import { isOnline } from '../lib/supabase';
 
 function CompanyTile({ company }: { company: Company }) {
   const navigate = useNavigate();
   const activeAgents = company.employees.filter(e => e.status === 'working' || e.status === 'meeting').length;
-  const remaining = company.budget - company.budgetSpent;
-  const budgetColor = remaining / company.budget > 0.3 ? '#00ff88' : remaining / company.budget > 0.1 ? '#ff8800' : '#ff2244';
+  const DAILY_CAP = 3.3;
+  const dailyPct = Math.min(100, Math.round((company.budgetSpent / DAILY_CAP) * 100));
+  const budgetColor = dailyPct < 50 ? '#00ff88' : dailyPct < 80 ? '#ff8800' : '#ff2244';
 
   return (
     <div
@@ -55,19 +58,19 @@ function CompanyTile({ company }: { company: Company }) {
             {company.employees.length} agents
           </span>
           <span style={{ color: budgetColor }}>
-            ${(remaining / 1000).toFixed(0)}k
+            {dailyPct}%
           </span>
         </div>
 
         {company.ceoGoal ? (
           <div style={{
-            marginTop: 6, fontSize: 9, color: 'var(--neon-cyan)',
+            marginTop: 6, fontSize: 'var(--font-xs)', color: 'var(--neon-cyan)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             ▸ {company.ceoGoal}
           </div>
         ) : (
-          <div style={{ marginTop: 6, fontSize: 9, color: '#2a3a50', fontStyle: 'italic' }}>
+          <div style={{ marginTop: 6, fontSize: 'var(--font-xs)', color: '#2a3a50', fontStyle: 'italic' }}>
             No active goal
           </div>
         )}
@@ -75,7 +78,7 @@ function CompanyTile({ company }: { company: Company }) {
         {/* Status badge */}
         <div style={{
           marginTop: 8, display: 'inline-block',
-          padding: '2px 8px', fontSize: 8,
+          padding: '2px 8px', fontSize: 'var(--font-xs)',
           textTransform: 'uppercase', letterSpacing: '0.1em',
           background: company.status === 'scaling' ? '#00ff8818' :
                       company.status === 'growing' ? '#00ffff18' :
@@ -91,6 +94,35 @@ function CompanyTile({ company }: { company: Company }) {
         }}>
           {company.status}
         </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!confirm(`Delete "${company.name}"? This removes all agents, goals, and data.`)) return;
+            if (isOnline()) {
+              api.deleteCompany(company.id).then(() => {
+                useDashboardStore.setState(state => ({
+                  companies: state.companies.filter(c => c.id !== company.id),
+                }));
+              }).catch(err => console.error('[delete] Failed:', err));
+            } else {
+              useDashboardStore.setState(state => ({
+                companies: state.companies.filter(c => c.id !== company.id),
+              }));
+            }
+          }}
+          style={{
+            marginTop: 10, width: '100%', padding: '4px',
+            background: 'none', border: '1px solid #ff224430',
+            color: '#ff224480', fontFamily: 'var(--font-hud)',
+            fontSize: 'var(--font-xs)', cursor: 'pointer',
+            textTransform: 'uppercase',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#ff2244'; e.currentTarget.style.borderColor = '#ff224460'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#ff224480'; e.currentTarget.style.borderColor = '#ff224430'; }}
+        >
+          Delete
+        </button>
       </div>
     </div>
   );
@@ -103,9 +135,7 @@ function NewCompanyTile() {
   const handleCreate = () => {
     const name = prompt('Company name:');
     if (!name?.trim()) return;
-    const budgetStr = prompt('Initial budget ($):', '100000');
-    const budget = parseInt(budgetStr || '100000', 10) || 100000;
-    addCompany(name.trim(), budget);
+    addCompany(name.trim(), 100000); // Budget is internal tracking, UI shows % of session limits
     // Navigate after a tick to let the store update
     setTimeout(() => {
       const companies = useDashboardStore.getState().companies;
@@ -133,7 +163,7 @@ function NewCompanyTile() {
     >
       <div style={{ fontSize: 28, color: '#1b2030', marginBottom: 8 }}>+</div>
       <div style={{
-        fontSize: 10, color: '#2a3a50',
+        fontSize: 'var(--font-sm)', color: '#2a3a50',
         textTransform: 'uppercase', letterSpacing: '0.1em',
       }}>
         New Company
@@ -148,7 +178,9 @@ export function MasterDashboard() {
 
   const totalAgents = companies.reduce((s, c) => s + c.employees.length, 0);
   const activeAgents = companies.reduce((s, c) => s + c.employees.filter(e => e.status === 'working' || e.status === 'meeting').length, 0);
-  const totalSpent = companies.reduce((s, c) => s + c.budgetSpent, 0);
+  const WEEKLY_CAP = 23;
+  const totalSpentUsd = companies.reduce((s, c) => s + c.budgetSpent, 0);
+  const weeklyPct = Math.min(100, Math.round((totalSpentUsd / WEEKLY_CAP) * 100));
 
   return (
     <div style={{ padding: 'var(--pad)', height: '100%', overflow: 'auto' }}>
@@ -171,8 +203,8 @@ export function MasterDashboard() {
           <span style={{ color: '#4a5568' }}>/{totalAgents}</span>
         </div>
         <div>
-          <span style={{ color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Spent</span>
-          <span style={{ color: '#ff8800' }}>${(totalSpent / 1000).toFixed(1)}k</span>
+          <span style={{ color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Weekly</span>
+          <span style={{ color: weeklyPct < 50 ? '#00ff88' : weeklyPct < 80 ? '#ff8800' : '#ff2244' }}>{weeklyPct}%</span>
         </div>
         {orchestratorConnected && (
           <div style={{ marginLeft: 'auto', color: '#c084fc' }}>

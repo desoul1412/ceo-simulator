@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import { PixelOfficeCanvas } from './PixelOfficeCanvas';
-import { CeoGoalPanel } from './CeoGoalPanel';
+import { CeoPlanFlow } from './CeoPlanFlow';
 import { DelegationFeed } from './DelegationFeed';
 import { ActivityFeed } from './ActivityFeed';
 import { ApprovalPanel } from './ApprovalPanel';
@@ -24,7 +24,7 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
     if (!company.ceoGoal || orchestratorConnected) return;
     let timerId: ReturnType<typeof setTimeout>;
     function scheduleNext() {
-      timerId = setTimeout(() => { tickCompany(company.id); scheduleNext(); }, 3000 + Math.random() * 2000);
+      timerId = setTimeout(() => { tickCompany(company.id); scheduleNext(); }, 8000 + Math.random() * 4000);
     }
     scheduleNext();
     return () => clearTimeout(timerId);
@@ -75,9 +75,14 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
     return () => clearInterval(interval);
   }, [company.employees]);
 
-  const remaining = company.budget - company.budgetSpent;
-  const budgetPct = Math.max(0, Math.round((remaining / company.budget) * 100));
-  const barColor = budgetPct > 30 ? 'var(--neon-green)' : budgetPct > 10 ? 'var(--neon-orange)' : 'var(--neon-red)';
+  // Usage as % of Claude plan limits (configurable — $100/mo ≈ $3.3/day, $23/week)
+  const DAILY_CAP_USD = 3.3;
+  const WEEKLY_CAP_USD = 23;
+  const spent = company.budgetSpent;
+  const dailyPct = Math.min(100, Math.round((spent / DAILY_CAP_USD) * 100));
+  const weeklyPct = Math.min(100, Math.round((spent / WEEKLY_CAP_USD) * 100));
+  const usagePct = Math.max(dailyPct, weeklyPct);
+  const barColor = usagePct < 50 ? 'var(--neon-green)' : usagePct < 80 ? 'var(--neon-orange)' : 'var(--neon-red)';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', minWidth: 0 }}>
@@ -91,10 +96,16 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
         flexShrink: 0,
       }}>
         <div>
-          <span style={{ color: 'var(--hud-text-dim)', letterSpacing: '0.1em', marginRight: 8 }}>BUDGET</span>
+          <span style={{ color: 'var(--hud-text-dim)', letterSpacing: '0.1em', marginRight: 8 }}>USAGE</span>
           <span style={{ color: barColor, textShadow: `0 0 4px ${barColor}`, fontSize: 'var(--font-md)' }}>
-            ${(remaining / 1000).toFixed(1)}k
+            {dailyPct}%
           </span>
+          <span style={{ color: 'var(--hud-text-dim)', fontSize: 'var(--font-xs)', marginLeft: 4 }}>daily</span>
+          <span style={{ color: 'var(--hud-text-dim)', margin: '0 6px' }}>/</span>
+          <span style={{ color: barColor, fontSize: 'var(--font-md)' }}>
+            {weeklyPct}%
+          </span>
+          <span style={{ color: 'var(--hud-text-dim)', fontSize: 'var(--font-xs)', marginLeft: 4 }}>weekly</span>
         </div>
         <div>
           <span style={{ color: 'var(--hud-text-dim)', letterSpacing: '0.1em', marginRight: 8 }}>STATUS</span>
@@ -145,7 +156,7 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
           overflow: 'hidden',
           minHeight: 0,
         }}>
-          <CeoGoalPanel company={company} />
+          <CeoPlanFlow company={company} />
           <ApprovalPanel company={company} />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
             <DelegationFeed company={company} />

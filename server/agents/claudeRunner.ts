@@ -27,7 +27,7 @@ const ROLE_TOOLS: Record<string, string[]> = {
  * Supports session resume for persistent agent state across heartbeats.
  */
 export async function executeClaudeAgent(ctx: AgentContext): Promise<AgentRunResult> {
-  const basePrompt = ctx.systemPrompt || ROLE_PROMPTS[ctx.role] ?? `You are a ${ctx.role}.`;
+  const basePrompt = ctx.systemPrompt || (ROLE_PROMPTS[ctx.role] ?? `You are a ${ctx.role}.`);
   const tools = ROLE_TOOLS[ctx.role] ?? ROLE_TOOLS.Frontend;
 
   // Inject memory context

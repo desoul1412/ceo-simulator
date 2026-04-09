@@ -68,7 +68,7 @@ function IsoTile({ zone, col, row }: { zone: ZoneType; col: number; row: number 
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 7, fontFamily: 'monospace', color: '#00ffff30',
+          fontSize: 'var(--font-xs)', fontFamily: 'monospace', color: '#00ffff30',
           textTransform: 'uppercase', letterSpacing: '0.1em',
         }}>
           MTG
@@ -78,7 +78,7 @@ function IsoTile({ zone, col, row }: { zone: ZoneType; col: number; row: number 
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 7, fontFamily: 'monospace', color: '#ff880030',
+          fontSize: 'var(--font-xs)', fontFamily: 'monospace', color: '#ff880030',
           textTransform: 'uppercase', letterSpacing: '0.1em',
         }}>
           BREAK

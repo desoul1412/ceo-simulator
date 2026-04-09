@@ -32,13 +32,13 @@ export function ProjectSettings() {
         padding: '10px 0',
       }}>
         <div style={{
-          fontSize: 9, color: '#4a5568', textTransform: 'uppercase',
+          fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase',
           padding: '0 12px', marginBottom: 4, letterSpacing: '0.1em',
         }}>
           {company.name}
         </div>
         <div style={{
-          fontSize: 8, color: '#2a3a50', padding: '0 12px', marginBottom: 8,
+          fontSize: 'var(--font-xs)', color: '#2a3a50', padding: '0 12px', marginBottom: 8,
         }}>
           Project-level overrides
         </div>
@@ -51,7 +51,7 @@ export function ProjectSettings() {
               padding: '6px 12px', background: tab === t.id ? '#1b203060' : 'transparent',
               border: 'none', borderLeft: tab === t.id ? '2px solid var(--neon-cyan)' : '2px solid transparent',
               color: tab === t.id ? 'var(--neon-cyan)' : '#6a7a90',
-              fontFamily: 'var(--font-hud)', fontSize: 10,
+              fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)',
               textAlign: 'left', cursor: 'pointer',
               textTransform: 'uppercase', letterSpacing: '0.05em',
             }}
@@ -71,7 +71,7 @@ export function ProjectSettings() {
               padding: '6px 12px', background: 'transparent',
               border: 'none', borderLeft: '2px solid transparent',
               color: '#4a5568',
-              fontFamily: 'var(--font-hud)', fontSize: 9,
+              fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
               textAlign: 'left', cursor: 'pointer',
             }}
           >

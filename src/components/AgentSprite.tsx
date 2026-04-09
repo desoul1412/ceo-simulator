@@ -81,7 +81,7 @@ export function AgentSprite({ agent }: AgentSpriteProps) {
           position: 'absolute',
           bottom: -2,
           right: -2,
-          fontSize: 8,
+          fontSize: 'var(--font-xs)',
           lineHeight: 1,
           color: dot.color,
           textShadow: `0 0 4px ${dot.color}`,

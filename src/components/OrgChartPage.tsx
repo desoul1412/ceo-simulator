@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
+import { getRoleDisplayName } from '../lib/agentDisplay';
 
 export function OrgChartPage() {
   const { companyId } = useParams();
@@ -17,7 +18,7 @@ export function OrgChartPage() {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
       <div style={{
-        fontSize: 9, color: '#4a5568', textTransform: 'uppercase',
+        fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase',
         letterSpacing: '0.1em', marginBottom: 20, alignSelf: 'flex-start',
       }}>
         {company.name} — Org Chart
@@ -31,8 +32,8 @@ export function OrgChartPage() {
           boxShadow: `0 0 12px ${ceo.color}30`,
           marginBottom: 8,
         }}>
-          <div style={{ fontSize: 12, color: ceo.color, textTransform: 'uppercase' }}>{ceo.role}</div>
-          <div style={{ fontSize: 11, color: 'var(--hud-text-h)', marginTop: 2 }}>{ceo.name}</div>
+          <div style={{ fontSize: 'var(--font-sm)', color: ceo.color, textTransform: 'uppercase' }}>{ceo.role}</div>
+          <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)', marginTop: 2 }}>{ceo.name}</div>
         </div>
       )}
 
@@ -60,10 +61,10 @@ export function OrgChartPage() {
               padding: '10px 16px', textAlign: 'center',
               minWidth: 120,
             }}>
-              <div style={{ fontSize: 10, color: emp.color, textTransform: 'uppercase' }}>{emp.role}</div>
-              <div style={{ fontSize: 10, color: 'var(--hud-text-h)', marginTop: 2 }}>{emp.name}</div>
+              <div style={{ fontSize: 'var(--font-sm)', color: emp.color, textTransform: 'uppercase' }}>{emp.role}</div>
+              <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)', marginTop: 2 }}>{getRoleDisplayName(emp.role, emp.id, company.employees)}</div>
               <div style={{
-                fontSize: 8, marginTop: 4,
+                fontSize: 'var(--font-xs)', marginTop: 4,
                 color: emp.status === 'working' ? '#00ff88' : '#4a5568',
                 textTransform: 'uppercase',
               }}>

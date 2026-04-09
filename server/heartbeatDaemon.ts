@@ -25,6 +25,15 @@ export function startHeartbeatDaemon(cwd: string, intervalMs = 30_000) {
         .in('status', ['bootstrapping', 'growing', 'scaling']);
 
       for (const co of (companies ?? []) as any[]) {
+        // Check if there are any approved tickets BEFORE calling processNextTicket
+        const { count } = await supabase
+          .from('tickets')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', co.id)
+          .eq('status', 'approved');
+
+        if ((count ?? 0) === 0) continue; // skip — no approved tickets to process
+
         const result = await processNextTicket(co.id, cwd);
         if (result.processed) {
           console.log(`[heartbeat] Processed ticket ${result.ticketId} for company ${co.id}`);
@@ -32,14 +41,16 @@ export function startHeartbeatDaemon(cwd: string, intervalMs = 30_000) {
       }
 
       // Check and mark stale agents
-      await supabase.rpc('check_stale_agents').catch(() => {});
+      try { await supabase.rpc('check_stale_agents'); } catch {}
 
       // Log heartbeat pulse
-      await supabase.from('audit_log').insert({
-        company_id: null as any, // system-level
-        event_type: 'heartbeat',
-        message: `Daemon pulse — checked ${(companies ?? []).length} companies`,
-      }).catch(() => {}); // non-critical
+      try {
+        await supabase.from('audit_log').insert({
+          company_id: null as any, // system-level
+          event_type: 'heartbeat',
+          message: `Daemon pulse — checked ${(companies ?? []).length} companies`,
+        });
+      } catch {} // non-critical
 
     } catch (err: any) {
       console.error('[heartbeat] Daemon error:', err.message);

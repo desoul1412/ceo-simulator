@@ -40,7 +40,7 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
         <span>CEO Directive — {ceo?.name ?? 'Unknown'}</span>
         {orchestratorConnected && (
           <span style={{
-            fontSize: 7, color: '#00ff88', marginLeft: 'auto',
+            fontSize: 'var(--font-xs)', color: '#00ff88', marginLeft: 'auto',
             display: 'flex', alignItems: 'center', gap: 3,
           }}>
             <span style={{
@@ -59,7 +59,7 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
           padding: '8px 10px',
           background: '#00ffff08',
           border: '1px solid #00ffff20',
-          fontSize: 10,
+          fontSize: 'var(--font-sm)',
           color: '#00ffff',
           lineHeight: 1.4,
           marginBottom: 6,
@@ -87,7 +87,7 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
           padding: '6px 8px',
           background: '#00ffff08',
           border: '1px solid #00ffff20',
-          fontSize: 11,
+          fontSize: 'var(--font-sm)',
           color: '#00ffff',
           lineHeight: 1.4,
           marginBottom: 6,
@@ -98,7 +98,7 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
 
       {!isThinking && !goalActive && (
         <div style={{
-          fontSize: 10, color: '#2a3a50', marginBottom: 6,
+          fontSize: 'var(--font-sm)', color: '#2a3a50', marginBottom: 6,
           fontStyle: 'italic',
         }}>
           No active goal — team idle
@@ -123,7 +123,7 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
             border: '1px solid #1b2030',
             color: '#e0eaf4',
             fontFamily: 'monospace',
-            fontSize: 11,
+            fontSize: 'var(--font-sm)',
             outline: 'none',
           }}
         />
@@ -136,7 +136,7 @@ export function CeoGoalPanel({ company }: CeoGoalPanelProps) {
             border: `1px solid ${(goalActive || isThinking) ? '#1b2030' : '#00ffff40'}`,
             color: (goalActive || isThinking) ? '#2a3a50' : '#00ffff',
             fontFamily: 'monospace',
-            fontSize: 10,
+            fontSize: 'var(--font-sm)',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
             cursor: (goalActive || isThinking) ? 'not-allowed' : 'pointer',

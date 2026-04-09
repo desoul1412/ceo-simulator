@@ -11,7 +11,7 @@ export function GoalsPage() {
   return (
     <div style={{ padding: 16, fontFamily: 'var(--font-hud)' }}>
       <div style={{
-        fontSize: 9, color: '#4a5568', textTransform: 'uppercase',
+        fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase',
         letterSpacing: '0.1em', marginBottom: 12,
       }}>
         {company.name} — Goals
@@ -23,14 +23,14 @@ export function GoalsPage() {
           background: '#0d1117', border: '1px solid var(--neon-cyan)30',
           padding: '14px 16px', marginBottom: 12,
         }}>
-          <div style={{ fontSize: 9, color: 'var(--neon-cyan)', textTransform: 'uppercase', marginBottom: 6 }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--neon-cyan)', textTransform: 'uppercase', marginBottom: 6 }}>
             Active Goal
           </div>
-          <div style={{ fontSize: 13, color: 'var(--hud-text-h)', marginBottom: 8 }}>
+          <div style={{ fontSize: 'var(--font-md)', color: 'var(--hud-text-h)', marginBottom: 8 }}>
             {company.ceoGoal}
           </div>
           {company.delegations.length > 0 && (
-            <div style={{ fontSize: 9, color: '#4a5568' }}>
+            <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568' }}>
               {company.delegations.length} delegations — avg progress: {
                 Math.round(company.delegations.reduce((s, d) => s + d.progress, 0) / company.delegations.length)
               }%
@@ -41,7 +41,7 @@ export function GoalsPage() {
         <div style={{
           background: '#0d1117', border: '1px solid var(--hud-border)',
           padding: '20px 16px', textAlign: 'center',
-          fontSize: 10, color: '#2a3a50', fontStyle: 'italic',
+          fontSize: 'var(--font-sm)', color: '#2a3a50', fontStyle: 'italic',
         }}>
           No active goal — assign one from the Office view
         </div>
@@ -53,7 +53,7 @@ export function GoalsPage() {
           background: '#0d1117', border: '1px solid var(--hud-border)',
           padding: '14px 16px',
         }}>
-          <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 10 }}>
             Delegation Tree
           </div>
           {company.delegations.map(del => {
@@ -67,7 +67,7 @@ export function GoalsPage() {
               }}>
                 <div style={{ width: 6, height: 6, background: color, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: 'var(--hud-text-h)' }}>
+                  <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)' }}>
                     {del.toRole}: {del.task}
                   </div>
                   <div style={{
@@ -80,7 +80,7 @@ export function GoalsPage() {
                     }} />
                   </div>
                 </div>
-                <span style={{ fontSize: 9, color: '#4a5568', flexShrink: 0 }}>
+                <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568', flexShrink: 0 }}>
                   {del.progress}%
                 </span>
               </div>

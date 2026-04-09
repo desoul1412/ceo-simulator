@@ -21,7 +21,7 @@ export function DelegationFeed({ company }: DelegationFeedProps) {
         background: '#0d1117',
         border: '1px solid #1b2030',
         fontFamily: 'monospace',
-        fontSize: 10,
+        fontSize: 'var(--font-sm)',
         color: '#2a3a50',
         fontStyle: 'italic',
       }}>
@@ -38,7 +38,7 @@ export function DelegationFeed({ company }: DelegationFeedProps) {
       fontFamily: 'monospace',
     }}>
       <div style={{
-        fontSize: 9, color: '#4a5568', textTransform: 'uppercase',
+        fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase',
         letterSpacing: '0.1em', marginBottom: 8,
       }}>
         Delegation Feed
@@ -63,19 +63,19 @@ export function DelegationFeed({ company }: DelegationFeedProps) {
                 flexShrink: 0,
               }} />
               <span style={{
-                fontSize: 9, color: done ? '#4a5568' : color,
+                fontSize: 'var(--font-xs)', color: done ? '#4a5568' : color,
                 textTransform: 'uppercase', letterSpacing: '0.05em',
               }}>
                 {del.toRole}
               </span>
-              <span style={{ fontSize: 9, color: '#3a4a60', marginLeft: 'auto' }}>
+              <span style={{ fontSize: 'var(--font-xs)', color: '#3a4a60', marginLeft: 'auto' }}>
                 {emp?.name}
               </span>
             </div>
 
             {/* Task text */}
             <div style={{
-              fontSize: 10, color: done ? '#2a3a50' : '#8090a8',
+              fontSize: 'var(--font-sm)', color: done ? '#2a3a50' : '#8090a8',
               lineHeight: 1.3, marginBottom: 4,
               textDecoration: done ? 'line-through' : 'none',
             }}>

@@ -77,7 +77,7 @@ export function ApprovalPanel({ company }: ApprovalPanelProps) {
         borderBottom: '1px solid var(--hud-border)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           Tickets {pendingTickets.length > 0 && (
             <span style={{ color: '#ff8800' }}>({pendingTickets.length} pending)</span>
           )}
@@ -87,7 +87,7 @@ export function ApprovalPanel({ company }: ApprovalPanelProps) {
             onClick={handleApproveAll}
             disabled={loading}
             style={{
-              padding: '2px 8px', fontSize: 8,
+              padding: '2px 8px', fontSize: 'var(--font-xs)',
               background: '#00ff8818', border: '1px solid #00ff8840',
               color: '#00ff88', cursor: 'pointer', fontFamily: 'var(--font-hud)',
               textTransform: 'uppercase',
@@ -112,14 +112,14 @@ export function ApprovalPanel({ company }: ApprovalPanelProps) {
                   background: '#ff8800', boxShadow: '0 0 4px #ff8800',
                   flexShrink: 0,
                 }} />
-                <span style={{ fontSize: 9, color: '#ff8800', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: 'var(--font-xs)', color: '#ff8800', textTransform: 'uppercase' }}>
                   {agent?.role ?? '?'}
                 </span>
-                <span style={{ fontSize: 8, color: '#4a5568', marginLeft: 'auto' }}>
+                <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568', marginLeft: 'auto' }}>
                   AWAITING APPROVAL
                 </span>
               </div>
-              <div style={{ fontSize: 9, color: '#8090a8', marginBottom: 4, lineHeight: 1.3 }}>
+              <div style={{ fontSize: 'var(--font-xs)', color: '#8090a8', marginBottom: 4, lineHeight: 1.3 }}>
                 {ticket.title}
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
@@ -127,7 +127,7 @@ export function ApprovalPanel({ company }: ApprovalPanelProps) {
                   onClick={() => handleApprove(ticket.id)}
                   disabled={loading}
                   style={{
-                    padding: '2px 10px', fontSize: 8,
+                    padding: '2px 10px', fontSize: 'var(--font-xs)',
                     background: '#00ff8818', border: '1px solid #00ff8840',
                     color: '#00ff88', cursor: 'pointer', fontFamily: 'var(--font-hud)',
                   }}
@@ -138,7 +138,7 @@ export function ApprovalPanel({ company }: ApprovalPanelProps) {
                   onClick={() => handleReject(ticket.id)}
                   disabled={loading}
                   style={{
-                    padding: '2px 10px', fontSize: 8,
+                    padding: '2px 10px', fontSize: 'var(--font-xs)',
                     background: '#ff224418', border: '1px solid #ff224440',
                     color: '#ff2244', cursor: 'pointer', fontFamily: 'var(--font-hud)',
                   }}
@@ -163,11 +163,11 @@ export function ApprovalPanel({ company }: ApprovalPanelProps) {
                 background: ticket.status === 'in_progress' ? '#00ff88' : '#c084fc',
                 flexShrink: 0,
               }} />
-              <span style={{ fontSize: 8, color: agent?.color ?? '#4a5568' }}>{agent?.role}</span>
-              <span style={{ fontSize: 8, color: '#6a7a90', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 'var(--font-xs)', color: agent?.color ?? '#4a5568' }}>{agent?.role}</span>
+              <span style={{ fontSize: 'var(--font-xs)', color: '#6a7a90', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {ticket.title}
               </span>
-              <span style={{ fontSize: 7, color: '#2a3a50', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', textTransform: 'uppercase' }}>
                 {ticket.status.replace('_', ' ')}
               </span>
             </div>
@@ -182,10 +182,10 @@ export function ApprovalPanel({ company }: ApprovalPanelProps) {
             opacity: 0.5,
           }}>
             <span style={{ width: 5, height: 5, background: '#4a5568', flexShrink: 0 }} />
-            <span style={{ fontSize: 8, color: '#4a5568', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through' }}>
+            <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through' }}>
               {ticket.title}
             </span>
-            <span style={{ fontSize: 7, color: '#2a3a50' }}>done</span>
+            <span style={{ fontSize: 'var(--font-xs)', color: '#2a3a50' }}>done</span>
           </div>
         ))}
       </div>

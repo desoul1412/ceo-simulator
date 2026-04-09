@@ -65,18 +65,30 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-const ROLE_COLORS: Record<EmployeeRole, string> = {
+const ROLE_COLORS: Record<string, string> = {
   CEO:      '#00ffff',
   PM:       '#c084fc',
   DevOps:   '#00ff88',
   Frontend: '#ff8800',
+  Backend:  '#3b82f6',
+  QA:       '#ef4444',
+  Marketer: '#f59e0b',
+  'Content Writer': '#a78bfa',
+  Sales:    '#06b6d4',
+  Operations: '#6b7280',
 };
 
-const ROLE_NAMES: Record<EmployeeRole, string[]> = {
-  CEO:      ['Ada Chen', 'Leo Voss', 'Nia Okafor'],
-  PM:       ['Sam Patel', 'Rin Tanaka', 'Alex Duval'],
-  DevOps:   ['Kai Müller', 'Zara Osei', 'Jin Zhao'],
-  Frontend: ['Mia Torres', 'Dev Sharma', 'Luka Pavlov'],
+const ROLE_NAMES: Record<string, string[]> = {
+  CEO:      ['CEO'],
+  PM:       ['PM'],
+  DevOps:   ['DevOps'],
+  Frontend: ['Frontend'],
+  Backend:  ['Backend'],
+  QA:       ['QA'],
+  Marketer: ['Marketer'],
+  'Content Writer': ['Content Writer'],
+  Sales:    ['Sales'],
+  Operations: ['Operations'],
 };
 
 function makeEmployee(role: EmployeeRole): Employee {
@@ -94,12 +106,19 @@ function makeEmployee(role: EmployeeRole): Employee {
   };
 }
 
-function deriveTask(role: EmployeeRole, goal: string): string {
+function deriveTask(role: string, goal: string): string {
+  const short = goal.length > 40 ? goal.slice(0, 37) + '...' : goal;
   switch (role) {
-    case 'PM':       return `Define requirements for: ${goal}`;
-    case 'DevOps':   return `Set up infra for: ${goal}`;
-    case 'Frontend': return `Build UI for: ${goal}`;
-    default:         return `Oversee: ${goal}`;
+    case 'PM':             return `Gather requirements, define acceptance criteria and data schemas for: ${short}`;
+    case 'DevOps':         return `Set up CI/CD pipeline, configure deployment, ensure infra readiness for: ${short}`;
+    case 'Frontend':       return `Build UI components and pages following design system for: ${short}`;
+    case 'Backend':        return `Build API endpoints and database schema with RLS for: ${short}`;
+    case 'QA':             return `Write test plan, validate acceptance criteria, run regression suite for: ${short}`;
+    case 'Marketer':       return `Create go-to-market strategy, plan launch and user acquisition for: ${short}`;
+    case 'Content Writer': return `Write documentation, landing page copy, and blog content for: ${short}`;
+    case 'Sales':          return `Define pricing strategy, design conversion funnel for: ${short}`;
+    case 'Operations':     return `Set up SOPs, budget tracking, and compliance docs for: ${short}`;
+    default:               return `Oversee: ${short}`;
   }
 }
 
@@ -158,19 +177,22 @@ function fallbackAssignGoal(companyId: string, goal: string) {
   useDashboardStore.setState((state) => ({
     companies: state.companies.map(co => {
       if (co.id !== companyId) return co;
-      const delegations: Delegation[] = (['PM', 'DevOps', 'Frontend'] as EmployeeRole[]).map(role => ({
+      // Create delegations for all non-CEO agents
+      const workerRoles = co.employees.filter(e => e.role !== 'CEO').map(e => e.role);
+      const delegations: Delegation[] = workerRoles.map(role => ({
         id: uid('del'),
-        toRole: role,
+        toRole: role as EmployeeRole,
         task: deriveTask(role, goal),
         progress: 0,
       }));
       const employees = co.employees.map(emp => {
         if (emp.role === 'CEO') {
-          return { ...emp, status: 'working' as AgentStatus, assignedTask: `Oversee: ${goal}`, progress: 0 };
+          const meetPos = pickRandom(MEETING_POSITIONS);
+          return { ...emp, status: 'meeting' as AgentStatus, assignedTask: `Overseeing: ${goal}`, progress: 0, col: meetPos.col, row: meetPos.row };
         }
         const del = delegations.find(d => d.toRole === emp.role);
         if (del) {
-          const desk = ROLE_DESKS[emp.role];
+          const desk = ROLE_DESKS[emp.role] ?? { col: emp.col, row: emp.row };
           return { ...emp, status: 'working' as AgentStatus, assignedTask: del.task, progress: 0, col: desk.col, row: desk.row };
         }
         return emp;
@@ -198,48 +220,22 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
     set({ orchestratorConnected: orchOnline });
 
     if (!isOnline()) {
-      // Offline fallback: use mock data
-      set({
-        companies: [
-          createCompanyState('Acme Corp', 120_000),
-          createCompanyState('Globex Inc', 80_000),
-        ],
-        loading: false,
-        synced: false,
-      });
+      // Offline: start empty, user creates companies manually
+      set({ companies: [], loading: false, synced: false });
       return;
     }
 
     try {
       set({ loading: true });
       const apiCompanies = await api.fetchCompanies();
-
-      if (apiCompanies.length === 0) {
-        // First run: seed two demo companies
-        const acme = await api.createCompany('Acme Corp', 120_000);
-        const globex = await api.createCompany('Globex Inc', 80_000);
-        set({
-          companies: [apiCompanyToLocal(acme), apiCompanyToLocal(globex)],
-          loading: false,
-          synced: true,
-        });
-      } else {
-        set({
-          companies: apiCompanies.map(apiCompanyToLocal),
-          loading: false,
-          synced: true,
-        });
-      }
-    } catch (err) {
-      console.error('[store] Failed to load from backend, falling back to local:', err);
       set({
-        companies: [
-          createCompanyState('Acme Corp', 120_000),
-          createCompanyState('Globex Inc', 80_000),
-        ],
+        companies: apiCompanies.map(apiCompanyToLocal),
         loading: false,
-        synced: false,
+        synced: true,
       });
+    } catch (err) {
+      console.error('[store] Failed to load from backend:', err);
+      set({ companies: [], loading: false, synced: false });
     }
   },
 
@@ -355,7 +351,7 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
         if (co.id !== companyId) return co;
         if (!co.ceoGoal) return co;
 
-        const progressIncrement = 8 + Math.floor(Math.random() * 12);
+        const progressIncrement = 2 + Math.floor(Math.random() * 5);
         let allDone = true;
 
         const delegations = co.delegations.map(d => {

@@ -8,28 +8,51 @@ import { useDashboardStore } from '../store/dashboardStore';
 // ── Type-specific templates ──────────────────────────────────────────────────
 
 const SKILL_TEMPLATES = [
-  { key: 'react', value: { name: 'React Development', description: 'Build React components with TypeScript', tools: ['Read', 'Edit', 'Write', 'Bash'], autoAssignToRoles: ['Frontend'] } },
-  { key: 'typescript', value: { name: 'TypeScript', description: 'Strong typing and type-safe code', tools: ['Read', 'Edit'], autoAssignToRoles: ['Frontend', 'Backend'] } },
-  { key: 'api-design', value: { name: 'API Design', description: 'REST/GraphQL endpoint architecture', tools: ['Read', 'Edit', 'Write', 'Bash'], autoAssignToRoles: ['Backend'] } },
-  { key: 'tdd', value: { name: 'TDD', description: 'Test-driven development with vitest', tools: ['Read', 'Edit', 'Bash'], autoAssignToRoles: ['Frontend', 'Backend', 'QA'] } },
-  { key: 'documentation', value: { name: 'Documentation', description: 'Write specs and docs in Obsidian markdown', tools: ['Read', 'Write'], autoAssignToRoles: ['PM'] } },
-  { key: 'devops', value: { name: 'DevOps/CI', description: 'CI/CD pipelines, Docker, deployment', tools: ['Read', 'Edit', 'Bash'], autoAssignToRoles: ['DevOps'] } },
-  { key: 'database', value: { name: 'Database', description: 'SQL, Supabase, schema design, migrations', tools: ['Read', 'Edit', 'Bash'], autoAssignToRoles: ['Backend'] } },
-  { key: 'css-tailwind', value: { name: 'CSS/Tailwind', description: 'Styling with Tailwind v4 CSS-first', tools: ['Read', 'Edit'], autoAssignToRoles: ['Frontend', 'Designer'] } },
+  // Shared skills
+  { key: 'quality-engineering', value: { name: 'Quality Engineering', description: 'TDD + test strategy + completion gates (RED-GREEN-REFACTOR)', autoAssignToRoles: ['Frontend', 'Backend', 'DevOps', 'QA'] } },
+  { key: 'systematic-debugging', value: { name: 'Systematic Debugging', description: 'Root cause analysis before fixes — 4-phase investigation', autoAssignToRoles: ['Frontend', 'Backend', 'DevOps', 'QA'] } },
+  { key: 'tavily-research', value: { name: 'Tavily Research', description: 'Web search, extract, crawl, deep research with citations', autoAssignToRoles: ['CEO', 'PM', 'Marketer', 'Sales', 'Content Writer'] } },
+  { key: 'context7-docs', value: { name: 'Context7 Docs', description: 'Up-to-date library documentation — prevents API hallucination', autoAssignToRoles: ['Frontend', 'Backend', 'DevOps', 'PM'] } },
+  { key: 'git-worktree', value: { name: 'Git Worktree Isolation', description: 'Isolated branches for safe feature development', autoAssignToRoles: ['Frontend', 'Backend', 'DevOps'] } },
+  // Role-specific
+  { key: 'strategic-delegation', value: { name: 'Strategic Delegation', description: 'Break CEO goals into subtasks for 9 agent roles', autoAssignToRoles: ['CEO'] } },
+  { key: 'business-reasoning', value: { name: 'Business Reasoning', description: 'DECIDE framework + ADRs + stakeholder communication', autoAssignToRoles: ['CEO', 'PM'] } },
+  { key: 'discovery', value: { name: 'Discovery', description: 'Requirements gathering + brainstorming + design exploration', autoAssignToRoles: ['PM', 'CEO'] } },
+  { key: 'project-planning', value: { name: 'Project Planning', description: '8-phase planning from intake to handoff', autoAssignToRoles: ['PM'] } },
+  { key: 'writing-plans', value: { name: 'Writing Plans', description: 'Bite-sized TDD implementation plans with exact code', autoAssignToRoles: ['PM'] } },
+  { key: 'ui-ux-pro-max', value: { name: 'UI/UX Pro Max', description: '67 styles, 161 palettes, 57 fonts, design system generation', autoAssignToRoles: ['Frontend'] } },
+  { key: 'react-development', value: { name: 'React Development', description: 'React 19 + TypeScript + hooks patterns', autoAssignToRoles: ['Frontend'] } },
+  { key: 'css-tailwind', value: { name: 'CSS/Tailwind', description: 'Tailwind v4 CSS-first config and design tokens', autoAssignToRoles: ['Frontend'] } },
+  { key: 'api-design', value: { name: 'API Design', description: 'RESTful patterns, error handling, Supabase integration', autoAssignToRoles: ['Backend'] } },
+  { key: 'database', value: { name: 'Database', description: 'PostgreSQL schemas, migrations, RLS, Supabase', autoAssignToRoles: ['Backend', 'DevOps'] } },
+  { key: 'devops-ci', value: { name: 'DevOps CI/CD', description: 'CI/CD pipelines, Vercel deployment, monitoring', autoAssignToRoles: ['DevOps'] } },
+  { key: 'product-launch', value: { name: 'Product Launch', description: 'Go-to-market strategy, launch timeline, channels', autoAssignToRoles: ['Marketer'] } },
+  { key: 'seo-growth', value: { name: 'SEO Growth', description: 'Keyword research, technical SEO, content optimization', autoAssignToRoles: ['Marketer', 'Content Writer'] } },
+  { key: 'analytics-metrics', value: { name: 'Analytics & Metrics', description: 'KPI dashboards, funnel analysis, attribution', autoAssignToRoles: ['Marketer', 'Sales', 'Operations'] } },
+  { key: 'copywriting', value: { name: 'Copywriting', description: 'AIDA/PAS frameworks, landing pages, CTAs', autoAssignToRoles: ['Content Writer'] } },
+  { key: 'pricing-conversion', value: { name: 'Pricing & Conversion', description: 'Value-based pricing, tiering, funnel design', autoAssignToRoles: ['Sales'] } },
+  { key: 'customer-success', value: { name: 'Customer Success', description: 'Onboarding, retention, churn prevention, feedback', autoAssignToRoles: ['Sales'] } },
+  { key: 'process-finance', value: { name: 'Process & Finance', description: 'SOPs, budget tracking, automation, capacity planning', autoAssignToRoles: ['Operations'] } },
+  { key: 'compliance', value: { name: 'Compliance', description: 'ToS, privacy policy, GDPR/CCPA, data handling', autoAssignToRoles: ['Operations'] } },
 ];
 
 const MCP_TEMPLATES = [
-  { key: 'tavily', value: { name: 'Tavily', command: 'npx', args: ['-y', 'tavily-mcp'], description: 'Web search for market research', autoAssignToRoles: ['CEO', 'PM'] } },
-  { key: 'context7', value: { name: 'Context7', command: 'npx', args: ['-y', '@anthropic-ai/context7-mcp'], description: 'Live API documentation lookup', autoAssignToRoles: ['Frontend', 'Backend', 'DevOps'] } },
-  { key: 'supabase', value: { name: 'Supabase', command: 'npx', args: ['-y', 'supabase-mcp'], description: 'Database operations and schema management', autoAssignToRoles: ['Backend'] } },
+  { key: 'tavily', value: { name: 'Tavily', command: 'tvly', args: [], description: 'Web search, extract, crawl, deep research for market data', autoAssignToRoles: ['CEO', 'PM', 'Marketer', 'Sales', 'Content Writer', 'Backend', 'DevOps'] } },
+  { key: 'context7', value: { name: 'Context7', command: 'npx', args: ['-y', '@upstash/context7-mcp@latest'], description: 'Up-to-date library docs — prevents API hallucination', autoAssignToRoles: ['Frontend', 'Backend', 'DevOps', 'PM'] } },
+  { key: 'supabase', value: { name: 'Supabase', command: 'supabase', args: ['mcp'], description: 'Database operations, migrations, branches, edge functions', autoAssignToRoles: ['Backend', 'DevOps', 'Operations', 'Sales'] } },
 ];
 
 const RULE_TEMPLATES = [
-  { key: 'tdd-breaker', value: { name: 'TDD Circuit Breaker', directive: 'If a test fails 3 times in a row, HALT EXECUTION. Document failure in changelog.md and ask CEO for intervention.', category: 'safety' } },
-  { key: 'mcp-fallback', value: { name: 'MCP Fallback', directive: 'If an MCP server times out or fails, DO NOT hallucinate the result. Gracefully fall back, write a TODO-MCP-Failure.md log, and notify the user.', category: 'safety' } },
-  { key: 'pre-flight', value: { name: 'Pre-Flight Docs', directive: 'Read brain/00-Index.md before coding. If a feature lacks a spec document in /wiki/, write it first.', category: 'process' } },
-  { key: 'post-flight', value: { name: 'Post-Flight Update', directive: 'Upon completion, update the spec file and append actions to brain/changelog.md.', category: 'process' } },
-  { key: 'no-hallucinate', value: { name: 'No Hallucination', directive: 'Use Tavily for market data. Use Context7 for API/framework syntax. Never fabricate facts.', category: 'quality' } },
+  { key: 'tdd-breaker', value: { name: 'TDD Circuit Breaker', directive: 'If a test fails 3 times in a row, HALT EXECUTION. Document in changelog.md and escalate to CEO.', category: 'safety' } },
+  { key: 'mcp-fallback', value: { name: 'MCP Fallback', directive: 'If an MCP server fails, DO NOT hallucinate. Log to brain/raw/TODO-MCP-Failure.md and notify user.', category: 'safety' } },
+  { key: 'pre-flight', value: { name: 'Pre-Flight Docs', directive: 'Read brain/00-Index.md before coding. Write spec first if feature lacks one.', category: 'process' } },
+  { key: 'post-flight', value: { name: 'Post-Flight Update', directive: 'After completion, update spec files and append to brain/changelog.md.', category: 'process' } },
+  { key: 'no-hallucinate', value: { name: 'No Hallucination', directive: 'Use Tavily for market data. Use Context7 for API syntax. Never fabricate facts.', category: 'quality' } },
+  { key: 'context7-first', value: { name: 'Context7 First', directive: 'Check library docs via Context7 before writing any framework code. Do not assume API syntax.', category: 'quality' } },
+  { key: 'data-first', value: { name: 'Data-First Design', directive: 'Define data contracts and schemas before designing architecture. Schema drives everything.', category: 'process' } },
+  { key: 'no-secrets', value: { name: 'No Secrets in Code', directive: 'All credentials via environment variables. Never commit .env files or API keys.', category: 'security' } },
+  { key: 'git-worktree', value: { name: 'Git Worktree Isolation', directive: 'Work in isolated git worktree branches: agent/{role}-{feature}. Never work directly on main.', category: 'process' } },
+  { key: 'budget-awareness', value: { name: 'Budget Awareness', directive: 'Estimate token cost per subtask. Prefer focused tasks over open-ended ones. Track spend.', category: 'efficiency' } },
 ];
 
 const TEMPLATES: Record<string, { key: string; value: any }[]> = {
@@ -115,10 +138,46 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
     await loadConfigs();
   };
 
+  // When orchestrator is offline, show templates as read-only reference
   if (!orchestratorConnected) {
+    const scopeLabel = scope === 'global' ? 'Global' : scope === 'company' ? 'Project' : 'Agent';
     return (
-      <div style={{ fontSize: 9, color: '#2a3a50', fontStyle: 'italic', padding: 8 }}>
-        Start the orchestrator (npm run server) to manage {TYPE_LABELS[type]?.toLowerCase()}.
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)' }}>
+            {scopeLabel} {TYPE_LABELS[type]}
+          </div>
+          <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568' }}>
+            Start orchestrator to edit
+          </span>
+        </div>
+        <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', marginBottom: 12 }}>
+          Available templates ({templates.length}):
+        </div>
+        {templates.map(t => (
+          <div key={t.key} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            padding: '6px 0', borderBottom: '1px solid #0a0e14',
+          }}>
+            <div style={{
+              width: 14, height: 14, marginTop: 1, flexShrink: 0,
+              border: `1px solid ${color}40`, background: `${color}10`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 'var(--font-xs)', color,
+            }}>~</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)' }}>{t.value.name}</div>
+              <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', marginTop: 2 }}>
+                {(t.value.description || t.value.directive || '').slice(0, 120)}
+              </div>
+              {t.value.autoAssignToRoles?.length > 0 && (
+                <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 2 }}>
+                  Agents: {t.value.autoAssignToRoles.join(', ')}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -131,13 +190,13 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: 10,
       }}>
-        <div style={{ fontSize: 12, color: 'var(--hud-text-h)' }}>
+        <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)' }}>
           {scopeLabel} {TYPE_LABELS[type]}
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
           style={{
-            padding: '3px 10px', fontSize: 9,
+            padding: '3px 10px', fontSize: 'var(--font-xs)',
             background: `${color}18`, border: `1px solid ${color}40`,
             color, cursor: 'pointer', fontFamily: 'var(--font-hud)',
             textTransform: 'uppercase',
@@ -147,7 +206,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
         </button>
       </div>
 
-      <div style={{ fontSize: 9, color: '#4a5568', marginBottom: 12 }}>
+      <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', marginBottom: 12 }}>
         {scope === 'global' && 'Defaults inherited by all projects and agents.'}
         {scope === 'company' && 'Overrides global defaults for this project.'}
         {scope === 'agent' && 'Overrides project + global for this agent only.'}
@@ -160,7 +219,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
           padding: '10px 12px', marginBottom: 10,
         }}>
           {/* Templates */}
-          <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 6 }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 6 }}>
             Quick Add from Templates
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
@@ -172,7 +231,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
                   onClick={() => handleAddFromTemplate(t)}
                   disabled={exists}
                   style={{
-                    padding: '3px 8px', fontSize: 8,
+                    padding: '3px 8px', fontSize: 'var(--font-xs)',
                     background: exists ? '#1b2030' : `${color}10`,
                     border: `1px solid ${exists ? '#1b2030' : color + '40'}`,
                     color: exists ? '#2a3a50' : color,
@@ -187,7 +246,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
           </div>
 
           {/* Custom */}
-          <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
             Or Add Custom
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -197,7 +256,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
               onChange={e => setNewKey(e.target.value)}
               placeholder="Name"
               style={{
-                flex: 1, padding: '4px 6px', fontSize: 9,
+                flex: 1, padding: '4px 6px', fontSize: 'var(--font-xs)',
                 background: '#0d1117', border: '1px solid #1b2030',
                 color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)',
               }}
@@ -208,7 +267,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
               onChange={e => setNewValue(e.target.value)}
               placeholder={type === 'rule' ? 'Directive text' : type === 'mcp_server' ? 'Command' : 'Description'}
               style={{
-                flex: 2, padding: '4px 6px', fontSize: 9,
+                flex: 2, padding: '4px 6px', fontSize: 'var(--font-xs)',
                 background: '#0d1117', border: '1px solid #1b2030',
                 color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)',
               }}
@@ -216,7 +275,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
             <button
               onClick={handleAddCustom}
               style={{
-                padding: '4px 10px', fontSize: 9,
+                padding: '4px 10px', fontSize: 'var(--font-xs)',
                 background: `${color}18`, border: `1px solid ${color}40`,
                 color, cursor: 'pointer', fontFamily: 'var(--font-hud)',
               }}
@@ -227,12 +286,38 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
         </div>
       )}
 
-      {/* Config list */}
+      {/* Config list — show saved configs, or templates as defaults when empty */}
       {loading ? (
-        <div style={{ fontSize: 9, color: '#2a3a50' }}>Loading...</div>
+        <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50' }}>Loading...</div>
       ) : configs.length === 0 ? (
-        <div style={{ fontSize: 9, color: '#2a3a50', fontStyle: 'italic', padding: '8px 0' }}>
-          No {TYPE_LABELS[type]?.toLowerCase()} configured at this level. Click "+ Add" to create one.
+        <div>
+          <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', marginBottom: 8 }}>
+            Available {TYPE_LABELS[type]?.toLowerCase()} ({templates.length}):
+          </div>
+          {templates.map(t => (
+            <div key={t.key} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              padding: '6px 0', borderBottom: '1px solid #0a0e14',
+            }}>
+              <div style={{
+                width: 14, height: 14, marginTop: 1, flexShrink: 0,
+                border: `1px solid ${color}40`, background: `${color}10`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 'var(--font-xs)', color,
+              }}>{'\u2713'}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)' }}>{t.value.name}</div>
+                <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', marginTop: 2 }}>
+                  {(t.value.description || t.value.directive || '').slice(0, 150)}
+                </div>
+                {t.value.autoAssignToRoles?.length > 0 && (
+                  <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 2 }}>
+                    Agents: {t.value.autoAssignToRoles.join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         configs.map(config => {
@@ -253,7 +338,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
                   border: `1px solid ${config.enabled ? color : '#2a3a50'}`,
                   background: config.enabled ? `${color}20` : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 8, color, cursor: 'pointer',
+                  fontSize: 'var(--font-xs)', color, cursor: 'pointer',
                 }}
               >
                 {config.enabled ? '✓' : ''}
@@ -262,20 +347,20 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
               {/* Content */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: 10, color: config.enabled ? 'var(--hud-text-h)' : '#4a5568',
+                  fontSize: 'var(--font-sm)', color: config.enabled ? 'var(--hud-text-h)' : '#4a5568',
                 }}>
                   {displayName}
                 </div>
                 {displayDesc && (
                   <div style={{
-                    fontSize: 8, color: '#4a5568', marginTop: 2,
+                    fontSize: 'var(--font-xs)', color: '#4a5568', marginTop: 2,
                     overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
                     {displayDesc.slice(0, 120)}
                   </div>
                 )}
                 {type === 'skill' && v.autoAssignToRoles?.length > 0 && (
-                  <div style={{ fontSize: 7, color: '#2a3a50', marginTop: 2 }}>
+                  <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 2 }}>
                     Auto-assign: {v.autoAssignToRoles.join(', ')}
                   </div>
                 )}
@@ -286,7 +371,7 @@ export function ConfigManager({ type, scope, scopeId }: ConfigManagerProps) {
                 onClick={() => handleDelete(config.id)}
                 style={{
                   background: 'none', border: 'none', color: '#2a3a50',
-                  cursor: 'pointer', fontSize: 10, fontFamily: 'var(--font-hud)',
+                  cursor: 'pointer', fontSize: 'var(--font-sm)', fontFamily: 'var(--font-hud)',
                   padding: '0 4px',
                 }}
                 title="Remove"

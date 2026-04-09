@@ -41,10 +41,10 @@ export function ActivityFeed({ company }: ActivityFeedProps) {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load initial activity
-  useEffect(() => {
+  // Load initial activity + periodic refresh
+  const loadActivity = () => {
     if (!isOnline()) return;
-    fetchActivityLog(company.id, 15).then(rows => {
+    fetchActivityLog(company.id, 25).then(rows => {
       setEntries(rows.map(r => ({
         id: r.id,
         type: r.type,
@@ -53,6 +53,12 @@ export function ActivityFeed({ company }: ActivityFeedProps) {
         agent_id: r.agent_id,
       })));
     }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadActivity();
+    const interval = setInterval(loadActivity, 10_000);
+    return () => clearInterval(interval);
   }, [company.id]);
 
   // Subscribe to new activity in real-time
@@ -101,10 +107,10 @@ export function ActivityFeed({ company }: ActivityFeedProps) {
             : emp.status === 'break' ? 'task-completed'
             : 'status-change',
           message: emp.status === 'working'
-            ? `${emp.name} started: ${emp.assignedTask ?? 'task'}`
+            ? `${emp.role} started: ${emp.assignedTask ?? 'task'}`
             : emp.status === 'break'
-            ? `${emp.name} completed their task`
-            : `${emp.name} is now ${emp.status}`,
+            ? `${emp.role} completed their task`
+            : `${emp.role} is now ${emp.status}`,
           created_at: now,
           agent_id: emp.id,
         });
@@ -137,7 +143,7 @@ export function ActivityFeed({ company }: ActivityFeedProps) {
     }}>
       <div style={{
         padding: '6px 10px',
-        fontSize: 9,
+        fontSize: 'var(--font-xs)',
         color: '#4a5568',
         textTransform: 'uppercase',
         letterSpacing: '0.1em',
@@ -156,7 +162,7 @@ export function ActivityFeed({ company }: ActivityFeedProps) {
         }}
       >
         {entries.length === 0 ? (
-          <div style={{ fontSize: 10, color: '#2a3a50', fontStyle: 'italic', padding: '8px 0' }}>
+          <div style={{ fontSize: 'var(--font-sm)', color: '#2a3a50', fontStyle: 'italic', padding: '8px 0' }}>
             No activity yet
           </div>
         ) : (
@@ -172,7 +178,7 @@ export function ActivityFeed({ company }: ActivityFeedProps) {
                 alignItems: 'flex-start',
               }}>
                 <span style={{
-                  fontSize: 8,
+                  fontSize: 'var(--font-xs)',
                   color,
                   flexShrink: 0,
                   width: 8,
@@ -184,14 +190,14 @@ export function ActivityFeed({ company }: ActivityFeedProps) {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: 9,
+                    fontSize: 'var(--font-xs)',
                     color: '#8090a8',
                     lineHeight: 1.3,
                     wordBreak: 'break-word',
                   }}>
                     {entry.message}
                   </div>
-                  <div style={{ fontSize: 7, color: '#2a3a50', marginTop: 1 }}>
+                  <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 1 }}>
                     {formatTime(entry.created_at)}
                   </div>
                 </div>

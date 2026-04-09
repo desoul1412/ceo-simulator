@@ -6,11 +6,6 @@ import { processNextTicket, getTicketQueueStatus } from './ticketProcessor';
 import { startHeartbeatDaemon, stopHeartbeatDaemon, isDaemonRunning } from './heartbeatDaemon';
 import { listWorktrees } from './worktreeManager';
 import { supabase } from './supabaseAdmin';
-import path from 'path';
-
-// Load .env from server directory
-import { config } from 'dotenv';
-config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
