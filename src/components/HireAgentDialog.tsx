@@ -82,6 +82,47 @@ const AGENT_MODELS: Record<string, AgentModel> = {
     systemPrompt: 'You are an Operations agent. Manage budgets, SOPs, compliance, and team capacity.',
     description: 'Process & compliance — budgets, SOPs, legal docs, capacity planning',
   },
+  // ── Data & AI Roles ────────────────────────────────────────────────────────
+  'Data Architect': {
+    role: 'Data Architect', color: '#0ea5e9', model: 'opus', budget: 15,
+    skills: ['Data Modeling', 'ETL Architecture', 'Migration Safety', 'Quality Engineering', 'Context7 Docs'],
+    rules: ['Schema First', 'Migration Safety', 'Normalization', 'No Secrets in Code'],
+    mcpServers: ['Supabase', 'Context7'],
+    systemPrompt: 'You are a Data Architect. Design schemas, data models (star/snowflake), and migration plans. Ensure normalization, referential integrity, and query performance.',
+    description: 'Schema & data modeling — ERDs, migrations, partitions, warehousing',
+  },
+  'Data Scientist': {
+    role: 'Data Scientist', color: '#d946ef', model: 'opus', budget: 15,
+    skills: ['ML Pipelines', 'Experiment Design', 'Statistical Analysis', 'Quality Engineering', 'Tavily Research'],
+    rules: ['Hypothesis First', 'Validate Each Step', 'No Silent Drops', 'Statistical Rigor'],
+    mcpServers: ['Tavily', 'Supabase'],
+    systemPrompt: 'You are a Data Scientist. Run hypothesis-driven analysis, design experiments, build ML pipelines. Validate every transformation step.',
+    description: 'ML & analysis — experiments, statistics, pipelines, reproducibility',
+  },
+  'AI Engineer': {
+    role: 'AI Engineer', color: '#f43f5e', model: 'opus', budget: 20,
+    skills: ['LLM Integration', 'Prompt Engineering', 'Agent Orchestration', 'RAG Systems', 'Quality Engineering', 'Context7 Docs'],
+    rules: ['Cost Awareness', 'Structured Output', 'No Hallucination', 'Session Management'],
+    mcpServers: ['Context7', 'Tavily', 'Supabase'],
+    systemPrompt: 'You are an AI Engineer. Build LLM integrations, design prompts, orchestrate agents via Claude Agent SDK. Optimize for cost and latency.',
+    description: 'LLM & agents — Claude API, prompts, RAG, orchestration, cost optimization',
+  },
+  Automation: {
+    role: 'Automation', color: '#10b981', model: 'sonnet', budget: 10,
+    skills: ['n8n Workflows', 'Pipeline Automation', 'Webhook Integration', 'Quality Engineering'],
+    rules: ['Idempotency', 'Error Handling', 'Retry Logic', 'Secrets Management'],
+    mcpServers: ['Supabase', 'Context7'],
+    systemPrompt: 'You are an Automation Engineer. Build n8n workflows, scheduled tasks, ETL pipelines, and webhook integrations. Ensure idempotency and error handling.',
+    description: 'Workflows & pipelines — n8n, cron, ETL, webhooks, error handling',
+  },
+  'Full-Stack': {
+    role: 'Full-Stack', color: '#6366f1', model: 'sonnet', budget: 12,
+    skills: ['React Development', 'API Design', 'Database', 'Quality Engineering', 'Systematic Debugging', 'Context7 Docs', 'Git Worktree'],
+    rules: ['TDD First', 'Read Before Write', 'Context7 First', 'Small Commits'],
+    mcpServers: ['Context7', 'Supabase'],
+    systemPrompt: 'You are a Full-Stack Developer. Build end-to-end features with TDD-first across React 19 + Vite + Supabase. Read existing code before writing.',
+    description: 'End-to-end builder — React + API + DB, TDD-first, rapid prototyping',
+  },
 };
 
 interface AgentModel {
