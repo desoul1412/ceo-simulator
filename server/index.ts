@@ -1172,6 +1172,25 @@ app.patch('/api/tickets/:id/column', async (req, res) => {
   res.json(data);
 });
 
+// ── Ticket PATCH & Reject ────────────────────────────────────────────────────
+
+app.patch('/api/tickets/:id', async (req, res) => {
+  const allowed = ['title', 'description', 'story_points', 'board_column', 'sprint_id', 'agent_id'];
+  const updates: any = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+  const { data, error } = await supabase.from('tickets').update(updates).eq('id', req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/tickets/:id/reject', async (req, res) => {
+  const { error } = await supabase.from('tickets').update({ status: 'cancelled', board_column: 'done' }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // ── Start Server ─────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

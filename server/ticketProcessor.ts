@@ -30,6 +30,17 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
   if (!ticket) return { processed: false, error: 'Ticket not found after claim' };
   const t = ticket as any;
 
+  // Sequential: only process one ticket per agent at a time
+  if (t.agent_id) {
+    const { data: inProgress } = await supabase.from('tickets')
+      .select('id').eq('agent_id', t.agent_id).eq('status', 'in_progress').neq('id', ticketId).limit(1);
+    if (inProgress?.length) {
+      // Release this ticket — agent is busy with another
+      await supabase.from('tickets').update({ status: 'approved' }).eq('id', ticketId);
+      return { processed: false, error: 'Agent busy with another ticket' };
+    }
+  }
+
   // Check agent budget before execution
   if (t.agent_id) {
     const { data: agent } = await supabase

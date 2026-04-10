@@ -7,6 +7,8 @@ import {
   updateTicketColumn,
   approveTicket,
   approveAllTickets,
+  updateTicket,
+  rejectTicket,
 } from '../lib/orchestratorApi';
 
 interface Ticket {
@@ -71,8 +73,13 @@ export function ScrumBoard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedSprint, setSelectedSprint] = useState<string>('all');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('all');
   const [dragId, setDragId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editPoints, setEditPoints] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!companyId) return;
@@ -90,9 +97,9 @@ export function ScrumBoard() {
     return () => clearInterval(iv);
   }, [load]);
 
-  const filteredTickets = selectedSprint === 'all'
-    ? tickets
-    : tickets.filter(t => t.sprint_id === selectedSprint);
+  const filteredTickets = tickets
+    .filter(t => selectedSprint === 'all' || t.sprint_id === selectedSprint)
+    .filter(t => selectedAgentFilter === 'all' || t.agent_id === selectedAgentFilter);
 
   const columnTickets = (col: Column) => filteredTickets.filter(t => getTicketColumn(t) === col);
 
@@ -115,6 +122,50 @@ export function ScrumBoard() {
   const agentForTicket = (t: Ticket) =>
     company?.employees.find(e => e.id === t.agent_id);
 
+  const openModal = (t: Ticket) => {
+    setSelectedTicketId(t.id);
+    setEditTitle(t.title);
+    setEditDesc(t.description ?? '');
+    setEditPoints(t.story_points);
+  };
+
+  const closeModal = () => setSelectedTicketId(null);
+
+  const selectedTicket = tickets.find(t => t.id === selectedTicketId) ?? null;
+
+  const handleSave = async () => {
+    if (!selectedTicketId) return;
+    setSaving(true);
+    try {
+      const updated = await updateTicket(selectedTicketId, {
+        title: editTitle,
+        description: editDesc,
+        story_points: editPoints,
+      });
+      setTickets(prev => prev.map(t => t.id === selectedTicketId ? { ...t, ...updated } : t));
+      closeModal();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleApproveTicket = async () => {
+    if (!selectedTicketId) return;
+    await approveTicket(selectedTicketId);
+    setTickets(prev => prev.map(t => t.id === selectedTicketId ? { ...t, status: 'approved', board_column: 'todo' } : t));
+    closeModal();
+  };
+
+  const handleReject = async () => {
+    if (!selectedTicketId) return;
+    await rejectTicket(selectedTicketId);
+    setTickets(prev => prev.map(t => t.id === selectedTicketId ? { ...t, status: 'cancelled', board_column: 'done' } : t));
+    closeModal();
+  };
+
+  // Unique agents from company for the filter dropdown
+  const agents = company?.employees ?? [];
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-hud)', overflow: 'hidden' }}>
       {/* Top bar */}
@@ -136,6 +187,22 @@ export function ScrumBoard() {
           <option value="all">All Tickets</option>
           {sprints.map(s => (
             <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        <span style={{ color: 'var(--hud-text-dim)', fontSize: 'var(--font-xs)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          Agent
+        </span>
+        <select
+          value={selectedAgentFilter}
+          onChange={e => setSelectedAgentFilter(e.target.value)}
+          style={{
+            background: '#0d1117', border: '1px solid var(--hud-border)', color: 'var(--hud-text)',
+            fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)', padding: '4px 8px',
+          }}
+        >
+          <option value="all">All Agents</option>
+          {agents.map(a => (
+            <option key={a.id} value={a.id}>{a.role} - {a.name}</option>
           ))}
         </select>
         {/* Approve all open tickets */}
@@ -212,13 +279,12 @@ export function ScrumBoard() {
             <div style={{ flex: 1, overflow: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {columnTickets(col).map(ticket => {
                 const agent = agentForTicket(ticket);
-                const expanded = expandedId === ticket.id;
                 return (
                   <div
                     key={ticket.id}
                     draggable
                     onDragStart={() => setDragId(ticket.id)}
-                    onClick={() => setExpandedId(expanded ? null : ticket.id)}
+                    onClick={() => openModal(ticket)}
                     style={{
                       background: '#0d1117', border: '1px solid var(--hud-border)',
                       padding: '8px 10px', cursor: 'grab',
@@ -268,14 +334,6 @@ export function ScrumBoard() {
                         </button>
                       )}
                     </div>
-                    {expanded && (
-                      <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', lineHeight: 1.4 }}>
-                        {ticket.description && <div style={{ marginBottom: 6 }}>{ticket.description}</div>}
-                        {ticket.merge_request_id && (
-                          <div style={{ color: 'var(--neon-purple)' }}>MR: {ticket.merge_request_id.slice(0, 8)}</div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -310,6 +368,235 @@ export function ScrumBoard() {
           {filteredTickets.length} tickets
         </span>
       </div>
+
+      {/* ── Ticket Detail Modal ─────────────────────────────────────────── */}
+      {selectedTicket && (
+        <div
+          onClick={closeModal}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.75)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#0a0e14', border: '1px solid var(--hud-border)',
+              width: 520, maxHeight: '80vh', overflow: 'auto',
+              fontFamily: 'var(--font-hud)', boxShadow: '0 0 30px rgba(0,255,255,0.08)',
+            }}
+          >
+            {/* Modal header */}
+            <div style={{
+              padding: '10px 14px', borderBottom: '1px solid var(--hud-border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: '#090d14',
+            }}>
+              <span style={{
+                fontSize: 'var(--font-xs)', color: 'var(--neon-cyan)',
+                textTransform: 'uppercase', letterSpacing: '0.1em',
+                textShadow: '0 0 4px var(--neon-cyan)',
+              }}>
+                Ticket Detail
+              </span>
+              <span style={{
+                fontSize: 'var(--font-xs)', padding: '2px 8px',
+                textTransform: 'uppercase',
+                color: selectedTicket.status === 'completed' ? 'var(--neon-green)'
+                  : selectedTicket.status === 'in_progress' ? 'var(--neon-orange)'
+                  : selectedTicket.status === 'cancelled' ? 'var(--neon-red)'
+                  : 'var(--hud-text-dim)',
+                background: selectedTicket.status === 'completed' ? '#00ff8810'
+                  : selectedTicket.status === 'in_progress' ? '#ff880010'
+                  : selectedTicket.status === 'cancelled' ? '#ff224410'
+                  : '#1b2030',
+                border: `1px solid ${
+                  selectedTicket.status === 'completed' ? '#00ff8840'
+                  : selectedTicket.status === 'in_progress' ? '#ff880040'
+                  : selectedTicket.status === 'cancelled' ? '#ff224440'
+                  : 'var(--hud-border)'
+                }`,
+              }}>
+                {selectedTicket.status}
+              </span>
+            </div>
+
+            {/* Modal body */}
+            <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Title */}
+              <div>
+                <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                  Title
+                </label>
+                <input
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  style={{
+                    width: '100%', background: '#05080f', border: '1px solid var(--hud-border)',
+                    color: 'var(--hud-text)', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
+                    padding: '6px 8px', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                  Description
+                </label>
+                <textarea
+                  value={editDesc}
+                  onChange={e => setEditDesc(e.target.value)}
+                  rows={4}
+                  style={{
+                    width: '100%', background: '#05080f', border: '1px solid var(--hud-border)',
+                    color: 'var(--hud-text)', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
+                    padding: '6px 8px', resize: 'vertical', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Agent assigned */}
+              {(() => {
+                const agent = agentForTicket(selectedTicket);
+                return (
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                        Agent
+                      </label>
+                      <div style={{
+                        fontSize: 'var(--font-xs)', padding: '6px 8px',
+                        background: '#05080f', border: '1px solid var(--hud-border)',
+                        color: ROLE_COLORS[agent?.role ?? ''] ?? '#4a5568',
+                      }}>
+                        {agent ? `${agent.name} (${agent.role})` : 'Unassigned'}
+                      </div>
+                    </div>
+
+                    {/* Story Points */}
+                    <div style={{ width: 100 }}>
+                      <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                        Points
+                      </label>
+                      <input
+                        type="number"
+                        value={editPoints ?? ''}
+                        onChange={e => setEditPoints(e.target.value ? Number(e.target.value) : null)}
+                        style={{
+                          width: '100%', background: '#05080f', border: '1px solid var(--hud-border)',
+                          color: 'var(--neon-cyan)', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
+                          padding: '6px 8px', boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Sprint + Created */}
+              <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                    Sprint
+                  </label>
+                  <div style={{
+                    fontSize: 'var(--font-xs)', padding: '6px 8px',
+                    background: '#05080f', border: '1px solid var(--hud-border)',
+                    color: 'var(--neon-purple)',
+                  }}>
+                    {sprints.find(s => s.id === selectedTicket.sprint_id)?.name ?? 'None'}
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                    Created
+                  </label>
+                  <div style={{
+                    fontSize: 'var(--font-xs)', padding: '6px 8px',
+                    background: '#05080f', border: '1px solid var(--hud-border)',
+                    color: 'var(--hud-text-dim)',
+                  }}>
+                    {new Date(selectedTicket.created_at).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* MR link */}
+              {selectedTicket.merge_request_id && (
+                <div>
+                  <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                    Merge Request
+                  </label>
+                  <div style={{
+                    fontSize: 'var(--font-xs)', padding: '6px 8px',
+                    background: '#05080f', border: '1px solid var(--hud-border)',
+                    color: 'var(--neon-purple)',
+                  }}>
+                    MR: {selectedTicket.merge_request_id.slice(0, 8)}...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer buttons */}
+            <div style={{
+              padding: '10px 14px', borderTop: '1px solid var(--hud-border)',
+              display: 'flex', gap: 8, justifyContent: 'flex-end', background: '#090d14',
+            }}>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  padding: '5px 14px', fontSize: 'var(--font-xs)',
+                  background: '#00ffff10', border: '1px solid #00ffff40',
+                  color: 'var(--neon-cyan)', cursor: 'pointer',
+                  fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+                  opacity: saving ? 0.5 : 1,
+                }}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              {(selectedTicket.status === 'open' || selectedTicket.status === 'awaiting_approval') && (
+                <button
+                  onClick={handleApproveTicket}
+                  style={{
+                    padding: '5px 14px', fontSize: 'var(--font-xs)',
+                    background: '#00ff8810', border: '1px solid #00ff8840',
+                    color: 'var(--neon-green)', cursor: 'pointer',
+                    fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+                  }}
+                >
+                  Approve
+                </button>
+              )}
+              <button
+                onClick={handleReject}
+                style={{
+                  padding: '5px 14px', fontSize: 'var(--font-xs)',
+                  background: '#ff224410', border: '1px solid #ff224440',
+                  color: 'var(--neon-red)', cursor: 'pointer',
+                  fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+                }}
+              >
+                Reject
+              </button>
+              <button
+                onClick={closeModal}
+                style={{
+                  padding: '5px 14px', fontSize: 'var(--font-xs)',
+                  background: '#1b2030', border: '1px solid var(--hud-border)',
+                  color: 'var(--hud-text-dim)', cursor: 'pointer',
+                  fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

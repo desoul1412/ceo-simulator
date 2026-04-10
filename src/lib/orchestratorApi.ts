@@ -431,6 +431,17 @@ export async function deleteEnvVar(envId: string) {
   return res.ok;
 }
 
+// ── Ticket Update ───────────────────────────────────────────────────────────
+
+export async function updateTicket(ticketId: string, updates: Record<string, any>) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/tickets/${ticketId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
 // ── Ticket Column ───────────────────────────────────────────────────────────
 
 export async function updateTicketColumn(ticketId: string, column: string) {

@@ -11,7 +11,6 @@ import {
   createEnvVar,
   deleteEnvVar,
   hireAgent,
-  fetchTickets,
 } from '../lib/orchestratorApi';
 
 interface Plan {
@@ -44,7 +43,7 @@ const PLAN_LABELS: Record<string, string> = {
   summary: 'Summary',
   master_plan: 'Master Plan',
   hiring_plan: 'Hiring Plan',
-  daily_plan: "Today's Plan",
+  daily_plan: "Initial Tasks",
 };
 
 export function ProjectOverview() {
@@ -60,18 +59,15 @@ export function ProjectOverview() {
   const [newEnvSecret, setNewEnvSecret] = useState(false);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
-  const [tickets, setTickets] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     if (!companyId) return;
-    const [p, e, t] = await Promise.all([
+    const [p, e] = await Promise.all([
       fetchPlans(companyId),
       fetchEnvVars(companyId),
-      fetchTickets(companyId),
     ]);
     setPlans(p);
     setEnvVars(e);
-    setTickets(t);
   }, [companyId]);
 
   useEffect(() => { load(); }, [load]);
@@ -178,12 +174,6 @@ export function ProjectOverview() {
     color: 'var(--neon-cyan)', cursor: 'pointer', fontFamily: 'var(--font-hud)',
     textTransform: 'uppercase',
   };
-
-  const todayTickets = tickets.filter(t => {
-    const d = new Date(t.created_at);
-    const today = new Date();
-    return d.toDateString() === today.toDateString();
-  });
 
   return (
     <div style={{ height: '100%', overflow: 'auto', padding: 'var(--pad)', fontFamily: 'var(--font-hud)' }}>
@@ -342,32 +332,6 @@ export function ProjectOverview() {
           </div>
         );
       })}
-
-      {/* Today's Tickets */}
-      <div style={sectionStyle}>
-        <div style={headerStyle}>
-          <span style={labelStyle}>Today's Tickets</span>
-          <span style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)' }}>{todayTickets.length}</span>
-        </div>
-        <div style={{ padding: '8px 12px', maxHeight: 200, overflow: 'auto' }}>
-          {todayTickets.length === 0 && (
-            <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', fontStyle: 'italic' }}>No tickets today.</div>
-          )}
-          {todayTickets.map((t: any) => (
-            <div key={t.id} style={{ display: 'flex', gap: 8, padding: '4px 0', borderBottom: '1px solid #0a0e14', fontSize: 'var(--font-xs)' }}>
-              <span style={{
-                color: t.status === 'completed' ? 'var(--neon-green)' : t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--hud-text-dim)',
-                textTransform: 'uppercase', width: 80, flexShrink: 0,
-              }}>
-                {t.status}
-              </span>
-              <span style={{ color: '#8090a8', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {t.title}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Env Vars */}
       <div style={sectionStyle}>
