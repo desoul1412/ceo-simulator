@@ -5,6 +5,8 @@ import {
   fetchTickets,
   fetchSprints,
   updateTicketColumn,
+  approveTicket,
+  approveAllTickets,
 } from '../lib/orchestratorApi';
 
 interface Ticket {
@@ -136,6 +138,24 @@ export function ScrumBoard() {
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
+        {/* Approve all open tickets */}
+        {tickets.some(t => t.status === 'open' || t.status === 'awaiting_approval') && companyId && (
+          <button
+            onClick={async () => {
+              if (!confirm(`Approve all ${tickets.filter(t => t.status === 'open' || t.status === 'awaiting_approval').length} pending tickets? Agents will start executing.`)) return;
+              await approveAllTickets(companyId);
+              load();
+            }}
+            style={{
+              padding: '4px 12px', fontSize: 'var(--font-xs)',
+              background: '#00ff8810', border: '1px solid #00ff8840',
+              color: 'var(--neon-green)', cursor: 'pointer',
+              fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+            }}
+          >
+            ✓ Approve All ({tickets.filter(t => t.status === 'open' || t.status === 'awaiting_approval').length})
+          </button>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, fontSize: 'var(--font-xs)' }}>
           <span style={{ color: 'var(--hud-text-dim)' }}>
             PLANNED: <span style={{ color: 'var(--neon-cyan)' }}>{totalPlanned} pts</span>
@@ -225,9 +245,28 @@ export function ScrumBoard() {
                         </span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: 6, fontSize: 'var(--font-xs)' }}>
-                      <span style={{ color: ROLE_COLORS[agent?.role ?? ''] ?? '#4a5568' }}>{agent?.role ?? '?'}</span>
+                    <div style={{ display: 'flex', gap: 6, fontSize: 'var(--font-xs)', alignItems: 'center' }}>
+                      <span style={{ color: ROLE_COLORS[agent?.role ?? ''] ?? '#4a5568' }}>
+                        {agent?.role ?? '?'}{agent ? ` (${agent.name})` : ''}
+                      </span>
                       <span style={{ color: 'var(--hud-text-dim)', textTransform: 'uppercase' }}>{ticket.status}</span>
+                      {(ticket.status === 'open' || ticket.status === 'awaiting_approval') && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await approveTicket(ticket.id);
+                            setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'approved', board_column: 'todo' } : t));
+                          }}
+                          style={{
+                            marginLeft: 'auto', padding: '1px 8px',
+                            fontSize: 'var(--font-xs)', background: '#00ff8810',
+                            border: '1px solid #00ff8840', color: 'var(--neon-green)',
+                            cursor: 'pointer', fontFamily: 'var(--font-hud)',
+                          }}
+                        >
+                          ✓
+                        </button>
+                      )}
                     </div>
                     {expanded && (
                       <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', lineHeight: 1.4 }}>

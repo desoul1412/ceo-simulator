@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { useDashboardStore } from '../store/dashboardStore';
 import {
   fetchPlans,
   updatePlan,
@@ -86,6 +87,8 @@ export function ProjectOverview() {
   const handleApprove = async (planId: string) => {
     await approvePlan(planId);
     await load();
+    // Force store refresh to pick up newly hired agents
+    useDashboardStore.getState().loadFromBackend();
   };
 
   const loadComments = async (planId: string) => {
