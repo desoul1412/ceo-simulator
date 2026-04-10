@@ -1,5 +1,7 @@
+import { execSync } from 'child_process';
 import { supabase } from './supabaseAdmin';
 import { executeAgent, type AgentContext } from './agents/agentRunner';
+import { createWorktree, removeWorktree, taskBranchName } from './worktreeManager';
 
 /**
  * Ticket-based processor: claims a ticket atomically and executes it.
@@ -92,13 +94,17 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
       : '';
     const fullTask = `${t.title}${t.description ? '\n\n' + t.description : ''}${ancestryContext}`;
 
+    // Create worktree branch for isolated execution
+    const branchName = taskBranchName(agentData.role, t.title);
+    const worktreePath = createWorktree(cwd, branchName);
+
     // Execute via universal agent runner (dispatches to correct runtime)
     const ctx: AgentContext = {
       agentId: t.agent_id,
       companyId: t.company_id,
       role: agentData.role,
       task: fullTask,
-      cwd,
+      cwd: worktreePath,
       systemPrompt: agentData.system_prompt ?? '',
       memory: agentData.memory ?? {},
       skills: agentData.skills ?? [],
@@ -111,10 +117,75 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
 
     const result = await executeAgent(ctx);
 
+    // Post-execution: commit, push, create merge request
+    let mrId: string | null = null;
+    try {
+      // Stage and get diff stats
+      execSync('git add -A && git diff --cached --stat', { cwd: worktreePath, stdio: 'pipe' });
+
+      // Commit
+      const role = agentData.role ?? 'agent';
+      const title = t.title ?? 'task';
+      execSync(`git commit -m "agent/${role}: ${title}" --allow-empty`, { cwd: worktreePath, stdio: 'pipe' });
+
+      // Push (catch errors — remote may not be configured)
+      try {
+        execSync(`git push origin ${branchName}`, { cwd: worktreePath, stdio: 'pipe' });
+      } catch (pushErr: any) {
+        console.warn(`[worktree] Push failed for ${branchName}: ${pushErr.message}`);
+      }
+
+      // Get diff stats from last commit
+      let filesChanged = 0, insertions = 0, deletions = 0;
+      try {
+        const diffOut = execSync('git diff --stat HEAD~1', { cwd: worktreePath, encoding: 'utf8' });
+        const statLine = diffOut.trim().split('\n').pop() ?? '';
+        const fcMatch = statLine.match(/(\d+)\s+file/);
+        const insMatch = statLine.match(/(\d+)\s+insertion/);
+        const delMatch = statLine.match(/(\d+)\s+deletion/);
+        if (fcMatch) filesChanged = parseInt(fcMatch[1], 10);
+        if (insMatch) insertions = parseInt(insMatch[1], 10);
+        if (delMatch) deletions = parseInt(delMatch[1], 10);
+      } catch { /* no diff stats available */ }
+
+      // Create merge_request in supabase
+      const { data: mr } = await supabase.from('merge_requests').insert({
+        company_id: t.company_id,
+        ticket_id: ticketId,
+        agent_id: t.agent_id,
+        branch_name: branchName,
+        target_branch: 'main',
+        status: 'open',
+        files_changed: filesChanged,
+        insertions,
+        deletions,
+        title: `agent/${role}: ${title}`,
+      }).select().single();
+
+      if (mr) {
+        mrId = (mr as any).id;
+
+        // Create notification
+        await supabase.from('notifications').insert({
+          company_id: t.company_id,
+          type: 'merge_request',
+          title: `New MR: ${branchName}`,
+          message: `${role} completed "${title}" — ${filesChanged} files, +${insertions}/-${deletions}`,
+          link: `/company/${t.company_id}/board`,
+        });
+      }
+    } catch (gitErr: any) {
+      console.warn(`[worktree] Git post-processing failed: ${gitErr.message}`);
+    }
+
+    // Remove worktree (keep remote branch)
+    removeWorktree(cwd, branchName);
+
     // Mark ticket completed
-    await supabase.from('tickets').update({
+    const ticketUpdate: any = {
       status: 'completed',
       completed_at: new Date().toISOString(),
+      board_column: 'review',
       result: {
         output: result.output.slice(0, 2000),
         costUsd: result.costUsd,
@@ -122,7 +193,9 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
         outputTokens: result.outputTokens,
         sessionId: result.sessionId,
       },
-    }).eq('id', ticketId);
+    };
+    if (mrId) ticketUpdate.merge_request_id = mrId;
+    await supabase.from('tickets').update(ticketUpdate).eq('id', ticketId);
 
     // Update agent budget_spent
     if (t.agent_id) {

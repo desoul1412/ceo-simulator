@@ -286,3 +286,158 @@ export async function fetchQueueStatus(companyId: string): Promise<{
   if (!res.ok) return { pending: 0, processing: 0, completed: 0, failed: 0, isProcessing: false };
   return res.json();
 }
+
+// ── Merge Requests ──────────────────────────────────────────────────────────
+
+export async function fetchMergeRequests(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/merge-requests`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function mergeMR(mrId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/merge`, { method: 'POST' });
+  return res.json();
+}
+
+export async function rejectMR(mrId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/reject`, { method: 'POST' });
+  return res.json();
+}
+
+export async function getMRDiff(mrId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/diff`);
+  if (!res.ok) return { diff: '' };
+  return res.json();
+}
+
+// ── Sprints ─────────────────────────────────────────────────────────────────
+
+export async function fetchSprints(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/sprints`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createSprint(companyId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/sprints`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ── Plans ───────────────────────────────────────────────────────────────────
+
+export async function fetchPlans(companyId: string, type?: string) {
+  const params = type ? `?type=${type}` : '';
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/plans${params}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createPlan(companyId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/plans`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updatePlan(planId: string, content: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  return res.json();
+}
+
+export async function approvePlan(planId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/approve`, { method: 'POST' });
+  return res.json();
+}
+
+export async function addPlanComment(planId: string, content: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  return res.json();
+}
+
+export async function fetchPlanComments(planId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/comments`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+// ── Notifications ───────────────────────────────────────────────────────────
+
+export async function fetchNotifications() {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getUnreadCount(): Promise<number> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/count`);
+  if (!res.ok) return 0;
+  const data = await res.json();
+  return data.count ?? 0;
+}
+
+export async function markRead(notifId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/${notifId}/read`, { method: 'POST' });
+  return res.json();
+}
+
+export async function markAllRead() {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/read-all`, { method: 'POST' });
+  return res.json();
+}
+
+// ── Env Vars ────────────────────────────────────────────────────────────────
+
+export async function fetchEnvVars(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/env-vars`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createEnvVar(companyId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/env-vars`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateEnvVar(envId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/env-vars/${envId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteEnvVar(envId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/env-vars/${envId}`, { method: 'DELETE' });
+  return res.ok;
+}
+
+// ── Ticket Column ───────────────────────────────────────────────────────────
+
+export async function updateTicketColumn(ticketId: string, column: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/tickets/${ticketId}/column`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ board_column: column }),
+  });
+  return res.json();
+}

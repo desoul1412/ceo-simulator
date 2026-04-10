@@ -1,5 +1,6 @@
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
+import { InboxPanel } from './InboxPanel';
 
 function Tab({ label, to, active }: { label: string; to: string; active: boolean }) {
   const navigate = useNavigate();
@@ -85,9 +86,11 @@ export function NavBar() {
           }}>
             {company.name}
           </span>
+          <Tab label="Overview" to={`/company/${companyId}/overview`} active={path.includes('/overview')} />
           <Tab label="Office" to={`/company/${companyId}`} active={path === `/company/${companyId}`} />
           <Tab label="Agents" to={`/company/${companyId}/agents`} active={path.includes('/agents')} />
           <Tab label="Goals" to={`/company/${companyId}/goals`} active={path.includes('/goals')} />
+          <Tab label="Board" to={`/company/${companyId}/board`} active={path.includes('/board')} />
           <Tab label="Docs" to={`/company/${companyId}/documents`} active={path.includes('/documents')} />
           <Tab label="Costs" to={`/company/${companyId}/costs`} active={path.includes('/costs')} />
           <Tab label="Org" to={`/company/${companyId}/org-chart`} active={path.includes('/org-chart')} />
@@ -108,6 +111,7 @@ export function NavBar() {
         }}>
           {synced ? '● ONLINE' : '● OFFLINE'}
         </span>
+        <InboxPanel />
         <button
           onClick={() => navigate('/settings')}
           style={{

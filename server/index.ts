@@ -637,6 +637,315 @@ app.get('/api/daemon/status', (_req, res) => {
   res.json({ running: isDaemonRunning() });
 });
 
+// ── Merge Requests ──────────────────────────────────────────────────────────
+
+app.get('/api/companies/:id/merge-requests', async (req, res) => {
+  const { data, error } = await supabase
+    .from('merge_requests')
+    .select('*')
+    .eq('company_id', req.params.id)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/merge-requests/:id/merge', async (req, res) => {
+  try {
+    const { data: mr } = await supabase
+      .from('merge_requests')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (!mr) return res.status(404).json({ error: 'MR not found' });
+    const m = mr as any;
+
+    // Attempt git merge in the company repo
+    const cwd = await getCompanyCwd(m.company_id);
+    const { execSync } = await import('child_process');
+    try {
+      execSync(`git merge ${m.branch_name} --no-ff -m "Merge ${m.branch_name}"`, { cwd, stdio: 'pipe' });
+    } catch (mergeErr: any) {
+      return res.status(409).json({ error: `Merge conflict: ${mergeErr.message}` });
+    }
+
+    await supabase.from('merge_requests').update({ status: 'merged', merged_at: new Date().toISOString() }).eq('id', req.params.id);
+    await supabase.from('notifications').insert({
+      company_id: m.company_id,
+      type: 'merge_request',
+      title: `MR merged: ${m.branch_name}`,
+      message: `Branch ${m.branch_name} merged to ${m.target_branch}`,
+      link: `/company/${m.company_id}/board`,
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/merge-requests/:id/reject', async (req, res) => {
+  const { error } = await supabase
+    .from('merge_requests')
+    .update({ status: 'rejected' })
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.get('/api/merge-requests/:id/diff', async (req, res) => {
+  try {
+    const { data: mr } = await supabase
+      .from('merge_requests')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (!mr) return res.status(404).json({ error: 'MR not found' });
+    const m = mr as any;
+
+    const cwd = await getCompanyCwd(m.company_id);
+    const { execSync } = await import('child_process');
+    let diff = '';
+    try {
+      diff = execSync(`git diff ${m.target_branch}...${m.branch_name} --stat`, { cwd, encoding: 'utf8' });
+    } catch { /* branch may not exist locally */ }
+    res.json({ diff });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Sprints ─────────────────────────────────────────────────────────────────
+
+app.get('/api/companies/:id/sprints', async (req, res) => {
+  const { data, error } = await supabase
+    .from('sprints')
+    .select('*')
+    .eq('company_id', req.params.id)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/companies/:id/sprints', async (req, res) => {
+  const { name, goal, start_date, end_date } = req.body;
+  const { data, error } = await supabase
+    .from('sprints')
+    .insert({ company_id: req.params.id, name, goal, start_date, end_date })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.patch('/api/sprints/:id', async (req, res) => {
+  const updates: any = {};
+  for (const key of ['name', 'goal', 'start_date', 'end_date', 'status']) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+  const { data, error } = await supabase
+    .from('sprints')
+    .update(updates)
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.get('/api/sprints/:id/tickets', async (req, res) => {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('sprint_id', req.params.id)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ── Project Plans ───────────────────────────────────────────────────────────
+
+app.get('/api/companies/:id/plans', async (req, res) => {
+  let query = supabase.from('project_plans').select('*').eq('company_id', req.params.id);
+  if (req.query.type) query = query.eq('type', req.query.type as string);
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/companies/:id/plans', async (req, res) => {
+  const { type, title, content } = req.body;
+  const { data, error } = await supabase
+    .from('project_plans')
+    .insert({ company_id: req.params.id, type, title, content })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.patch('/api/plans/:id', async (req, res) => {
+  const { content, title } = req.body;
+  const updates: any = {};
+  if (content !== undefined) updates.content = content;
+  if (title !== undefined) updates.title = title;
+  const { data, error } = await supabase
+    .from('project_plans')
+    .update(updates)
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/plans/:id/approve', async (req, res) => {
+  const { data: plan, error } = await supabase
+    .from('project_plans')
+    .update({ status: 'approved', approved_at: new Date().toISOString() })
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  const p = plan as any;
+  await supabase.from('notifications').insert({
+    company_id: p.company_id,
+    type: 'plan_approved',
+    title: `Plan approved: ${p.title}`,
+    message: `${p.type} plan "${p.title}" was approved`,
+    link: `/company/${p.company_id}/overview`,
+  });
+  res.json(plan);
+});
+
+app.post('/api/plans/:id/comments', async (req, res) => {
+  const { content, author } = req.body;
+  const { data, error } = await supabase
+    .from('plan_comments')
+    .insert({ plan_id: req.params.id, content, author: author ?? 'CEO' })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.get('/api/plans/:id/comments', async (req, res) => {
+  const { data, error } = await supabase
+    .from('plan_comments')
+    .select('*')
+    .eq('plan_id', req.params.id)
+    .order('created_at', { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ── Notifications ───────────────────────────────────────────────────────────
+
+app.get('/api/notifications', async (_req, res) => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('read', false)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/notifications/:id/read', async (req, res) => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.post('/api/notifications/read-all', async (_req, res) => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('read', false);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.get('/api/notifications/count', async (_req, res) => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('read', false);
+  if (error) return res.status(500).json({ error: error.message });
+  // Supabase head: true doesn't return data, use count header
+  const { count } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('read', false);
+  res.json({ count: count ?? 0 });
+});
+
+// ── Env Vars ────────────────────────────────────────────────────────────────
+
+app.get('/api/companies/:id/env-vars', async (req, res) => {
+  const { data, error } = await supabase
+    .from('project_env_vars')
+    .select('*')
+    .eq('company_id', req.params.id)
+    .order('key', { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  // Mask secret values
+  const masked = (data ?? []).map((row: any) => ({
+    ...row,
+    value: row.is_secret ? '********' : row.value,
+  }));
+  res.json(masked);
+});
+
+app.post('/api/companies/:id/env-vars', async (req, res) => {
+  const { key, value, is_secret } = req.body;
+  const { data, error } = await supabase
+    .from('project_env_vars')
+    .insert({ company_id: req.params.id, key, value, is_secret: is_secret ?? false })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.patch('/api/env-vars/:id', async (req, res) => {
+  const updates: any = {};
+  for (const key of ['key', 'value', 'is_secret']) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+  const { data, error } = await supabase
+    .from('project_env_vars')
+    .update(updates)
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/env-vars/:id', async (req, res) => {
+  const { error } = await supabase.from('project_env_vars').delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// ── Ticket Board Column ─────────────────────────────────────────────────────
+
+app.patch('/api/tickets/:id/column', async (req, res) => {
+  const { board_column } = req.body;
+  if (!board_column) return res.status(400).json({ error: 'Missing board_column' });
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ board_column })
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // ── Start Server ─────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

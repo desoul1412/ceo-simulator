@@ -5,6 +5,7 @@ import { CeoPlanFlow } from './CeoPlanFlow';
 import { DelegationFeed } from './DelegationFeed';
 import { ActivityFeed } from './ActivityFeed';
 import { ApprovalPanel } from './ApprovalPanel';
+import { MergeRequestsPanel } from './MergeRequestsPanel';
 import { sendHeartbeat, checkStaleAgents } from '../lib/api';
 import * as api from '../lib/api';
 import { processQueue, fetchQueueStatus } from '../lib/orchestratorApi';
@@ -158,6 +159,7 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
         }}>
           <CeoPlanFlow company={company} />
           <ApprovalPanel company={company} />
+          <MergeRequestsPanel company={company} />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
             <DelegationFeed company={company} />
             <ActivityFeed company={company} />

@@ -8,8 +8,11 @@ import { isOnline } from '../lib/supabase';
 function CompanyTile({ company }: { company: Company }) {
   const navigate = useNavigate();
   const activeAgents = company.employees.filter(e => e.status === 'working' || e.status === 'meeting').length;
+  const isWorking = activeAgents > 0;
   const DAILY_CAP = 3.3;
+  const WEEKLY_CAP_TILE = 23;
   const dailyPct = Math.min(100, Math.round((company.budgetSpent / DAILY_CAP) * 100));
+  const weeklyPctTile = Math.min(100, Math.round((company.budgetSpent / WEEKLY_CAP_TILE) * 100));
   const budgetColor = dailyPct < 50 ? '#00ff88' : dailyPct < 80 ? '#ff8800' : '#ff2244';
 
   return (
@@ -50,15 +53,24 @@ function CompanyTile({ company }: { company: Company }) {
           {company.name}
         </div>
 
-        <div style={{ display: 'flex', gap: 14, fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)' }}>
-          <span>
-            <span style={{ color: '#00ff88' }}>●</span> {activeAgents} active
+        <div style={{ display: 'flex', gap: 14, fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: isWorking ? '#00ff88' : '#4a5568',
+              boxShadow: isWorking ? '0 0 6px #00ff88' : 'none',
+              animation: isWorking ? 'pulse 2s ease-in-out infinite' : 'none',
+            }} />
+            {activeAgents} active
           </span>
           <span>
             {company.employees.length} agents
           </span>
           <span style={{ color: budgetColor }}>
-            {dailyPct}%
+            {dailyPct}% <span style={{ color: 'var(--hud-text-dim)' }}>d</span>
+          </span>
+          <span style={{ color: budgetColor }}>
+            {weeklyPctTile}% <span style={{ color: 'var(--hud-text-dim)' }}>w</span>
           </span>
         </div>
 
@@ -233,13 +245,17 @@ export function MasterDashboard() {
         )}
       </div>
 
-      {/* Company grid */}
+      {/* Company grid — working projects first, then idle */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
         gap: 'var(--gap)',
       }}>
-        {companies.map(co => (
+        {[...companies].sort((a, b) => {
+          const aActive = a.employees.some(e => e.status === 'working' || e.status === 'meeting') ? 1 : 0;
+          const bActive = b.employees.some(e => e.status === 'working' || e.status === 'meeting') ? 1 : 0;
+          return bActive - aActive;
+        }).map(co => (
           <CompanyTile key={co.id} company={co} />
         ))}
         <NewCompanyTile />
