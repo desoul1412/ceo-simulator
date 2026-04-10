@@ -288,6 +288,7 @@ export async function executeCeoProjectReview(
   companyId: string,
   cwd: string,
   onActivity: (message: string) => Promise<void>,
+  customRequirements?: string,
 ): Promise<ProjectOverviewResult> {
   const { data: company } = await supabase
     .from('companies').select('*').eq('id', companyId).single();
@@ -321,8 +322,12 @@ Respond with a JSON object (no markdown fences, no extra text):
   "daily_plan": "## Today's Plan\\n\\n- [ ] First priority task\\n- [ ] Second priority task"
 }`;
 
+  const requirementsClause = customRequirements
+    ? `\n\nThe CEO has provided these custom requirements — incorporate them into ALL plans:\n${customRequirements}`
+    : '';
+
   const q = query({
-    prompt: 'Review this project codebase. Read key files, understand the stack, and produce a structured project overview with findings, hiring plan, summary, master plan, and daily plan.',
+    prompt: `Review this project codebase. Read key files, understand the stack, and produce a structured project overview with findings, hiring plan, summary, master plan, and daily plan.${requirementsClause}`,
     options: {
       cwd,
       systemPrompt,

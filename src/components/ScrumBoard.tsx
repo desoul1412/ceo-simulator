@@ -9,6 +9,7 @@ import {
   approveAllTickets,
   updateTicket,
   rejectTicket,
+  completeSprint,
 } from '../lib/orchestratorApi';
 
 interface Ticket {
@@ -34,11 +35,10 @@ interface Sprint {
   status: string;
 }
 
-const COLUMNS = ['backlog', 'todo', 'in_progress', 'review', 'done'] as const;
+const COLUMNS = ['todo', 'in_progress', 'review', 'done'] as const;
 type Column = (typeof COLUMNS)[number];
 
 const COLUMN_LABELS: Record<Column, string> = {
-  backlog: 'Backlog',
   todo: 'Todo',
   in_progress: 'In Progress',
   review: 'Review',
@@ -46,7 +46,6 @@ const COLUMN_LABELS: Record<Column, string> = {
 };
 
 const COLUMN_COLORS: Record<Column, string> = {
-  backlog: '#4a5568',
   todo: '#c084fc',
   in_progress: '#00ff88',
   review: '#ff8800',
@@ -60,11 +59,12 @@ const ROLE_COLORS: Record<string, string> = {
 
 function getTicketColumn(t: Ticket): Column {
   if (t.board_column && COLUMNS.includes(t.board_column as Column)) return t.board_column as Column;
+  if (t.board_column === 'backlog') return 'todo'; // backlog → todo
   if (t.status === 'completed') return 'done';
   if (t.status === 'in_progress') return 'in_progress';
   if (t.status === 'approved') return 'todo';
   if (t.status === 'awaiting_approval') return 'review';
-  return 'backlog';
+  return 'todo';
 }
 
 export function ScrumBoard() {
@@ -205,6 +205,24 @@ export function ScrumBoard() {
             <option key={a.id} value={a.id}>{a.role} - {a.name}</option>
           ))}
         </select>
+        {/* Complete Sprint button — visible when a specific sprint is selected and burndown >= 90% */}
+        {selectedSprint !== 'all' && burndownPct >= 90 && activeSprint?.status !== 'completed' && (
+          <button
+            onClick={async () => {
+              if (!confirm(`Complete "${activeSprint?.name}"? This will create the next sprint from the master plan.`)) return;
+              await completeSprint(selectedSprint);
+              load();
+            }}
+            style={{
+              padding: '4px 12px', fontSize: 'var(--font-xs)',
+              background: '#c084fc10', border: '1px solid #c084fc40',
+              color: 'var(--neon-purple)', cursor: 'pointer',
+              fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+            }}
+          >
+            Complete Sprint →
+          </button>
+        )}
         {/* Approve all open tickets */}
         {tickets.some(t => t.status === 'open' || t.status === 'awaiting_approval') && companyId && (
           <button

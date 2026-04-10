@@ -339,14 +339,22 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
     return () => obs.disconnect();
   }, []);
 
-  const scale = useMemo(() => {
-    if (!layout || containerSize.w === 0) return SCALE;
-    const nw = layout.cols * TILE_SIZE;
-    const nh = layout.rows * TILE_SIZE;
+  // Internal rendering scale (integer for crisp pixels)
+  const renderScale = SCALE;
+
+  // CSS display: fit canvas into container (contain — no cropping), using fractional scale to avoid gaps
+  const displaySize = useMemo(() => {
+    if (!layout || containerSize.w === 0) return { w: 0, h: 0 };
+    const nw = layout.cols * TILE_SIZE * renderScale;
+    const nh = layout.rows * TILE_SIZE * renderScale;
     const sx = containerSize.w / nw;
     const sy = containerSize.h / nh;
-    return Math.max(1, Math.floor(Math.min(sx, sy)));
-  }, [layout, containerSize]);
+    const s = Math.min(sx, sy); // contain — fit fully, no cropping
+    return { w: Math.round(nw * s), h: Math.round(nh * s) };
+  }, [layout, containerSize, renderScale]);
+
+  // keep old `scale` name for rendering code
+  const scale = renderScale;
 
   if (!layout) {
     return (
@@ -362,8 +370,8 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
 
   const nativeW = layout.cols * TILE_SIZE;
   const nativeH = layout.rows * TILE_SIZE;
-  const displayW = nativeW * scale;
-  const displayH = nativeH * scale;
+  const canvasW = nativeW * scale;
+  const canvasH = nativeH * scale;
 
   return (
     <div ref={containerRef} style={{
@@ -373,11 +381,11 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
     }}>
       <canvas
         ref={canvasRef}
-        width={displayW}
-        height={displayH}
+        width={canvasW}
+        height={canvasH}
         style={{
-          width: displayW,
-          height: displayH,
+          width: displaySize.w || canvasW,
+          height: displaySize.h || canvasH,
           imageRendering: 'pixelated',
           display: 'block',
         }}

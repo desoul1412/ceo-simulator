@@ -100,8 +100,7 @@ export function NavBar() {
             {company.name}
           </span>
           <Tab label="Overview" to={`/company/${companyId}/overview`} active={path.includes('/overview')} />
-          <Tab label="Office" to={`/company/${companyId}`} active={path === `/company/${companyId}`} />
-          <Tab label="Agents" to={`/company/${companyId}/agents`} active={path.includes('/agents')} />
+          <Tab label="Office" to={`/company/${companyId}`} active={path === `/company/${companyId}` || path.includes('/agents')} />
           <Tab label="Goals" to={`/company/${companyId}/goals`} active={path.includes('/goals')} />
           <span style={{ position: 'relative', display: 'inline-flex' }}>
             <Tab label="Board" to={`/company/${companyId}/board`} active={path.includes('/board')} />
@@ -120,8 +119,7 @@ export function NavBar() {
           </span>
           <Tab label="MRs" to={`/company/${companyId}/merge-requests`} active={path.includes('/merge-requests')} />
           <Tab label="Docs" to={`/company/${companyId}/documents`} active={path.includes('/documents')} />
-          <Tab label="Costs" to={`/company/${companyId}/costs`} active={path.includes('/costs')} />
-          <Tab label="Org" to={`/company/${companyId}/org-chart`} active={path.includes('/org-chart')} />
+          <Tab label="Org & Costs" to={`/company/${companyId}/org-chart`} active={path.includes('/org-chart') || path.includes('/costs')} />
           <Tab label="Config" to={`/company/${companyId}/settings`} active={path.endsWith('/settings') || path.includes('/settings?')} />
         </>
       )}

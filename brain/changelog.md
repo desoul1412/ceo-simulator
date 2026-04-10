@@ -1,10 +1,80 @@
 ---
 tags: [changelog, meta]
-date: 2026-04-08
+date: 2026-04-10
 status: active
 ---
 
 # Changelog
+
+## 2026-04-10 — UI Overhaul: Compact Agent Grid, Goals+Costs Merge, Office Fill
+
+### Office Layout v2
+- Canvas now takes ~65% width (flex: 2), agent grid ~35% — fills all available space
+- Agent cards redesigned: compact 3-column grid showing pixel avatar + role + status + pending badge
+- Click any card to open full-detail modal with scrollable activity, ticket approvals, edit buttons
+- `AgentCard.tsx` exports `PixelAvatar` component (reusable CSS sprite renderer)
+- Empty grid slots show "+ Hire" placeholder up to 9 agents
+
+### Goals + Costs Merge
+- `GoalsPage.tsx` now includes: Active Goal, Master Plan Progress (moved from Board), Delegation Tree, Agent Cost Cards, Sprint History
+- Agent Cost Cards: 3-column grid with pixel avatar, role, daily/weekly usage %, cost bar
+- Removed "Costs" tab from NavBar (route still exists for deep links)
+
+### Board Cleanup
+- Removed master plan progress panel from ScrumBoard (now in Goals)
+- Board is pure kanban: sprint selector, agent filter, 5-column drag-drop, burndown
+
+---
+
+## 2026-04-10 — Unified Office+Agents, Sprint Auto-Transition, Brain Directories, Board Checklist, Custom Requirements
+
+### Unified Agent + Office View (Feature 6)
+- New `AgentCard.tsx` component — pixel avatar (CSS sprite from char_N.png), status dot, real-time activity feed, pending ticket approvals
+- Redesigned `CompanyDetail.tsx` layout: Office canvas (left 50%) + Agent cards (right 50%) + CEO directive (bottom)
+- Removed separate "Agents" tab from NavBar — merged into "Office" tab
+- Each agent card expands to show activity stream and approval buttons
+- Hire button integrated into agent cards header
+
+### Custom Requirements for Project Regeneration (Feature 5)
+- `ProjectOverview.tsx` — toggle-able requirements textarea before "Regenerate with CEO"
+- Requirements passed to `POST /api/companies/:id/review` body
+- `server/agents/ceo.ts` — `executeCeoProjectReview()` accepts optional `customRequirements` param, injected into CEO prompt
+
+### Master Plan Checklist on Board (Feature 4)
+- `ScrumBoard.tsx` — collapsible "Master Plan Progress" panel between top bar and kanban columns
+- Parses approved master_plan markdown into phases with task checklists
+- Each phase shows progress bar + task completion (cross-referenced with done tickets)
+- Overall progress bar with percentage
+- Current sprint phase highlighted
+- "Complete Sprint" button when burndown >= 90%
+- `completeSprint(sprintId)` API client function
+
+### Feature 1: Sprint Auto-Transition
+- `checkSprintCompletion(sprintId)` helper — detects when all tickets in a sprint are done/cancelled
+- Auto-marks sprint as completed, then parses master_plan phases to create the next sprint + tickets
+- `parseMasterPlanPhases(content)` parser for `### Phase N:` headers and `- [ ] Task` checklist items
+- Hooked into: `PATCH /api/tickets/:id/column`, `PATCH /api/tickets/:id`, `POST /api/tickets/:id/reject`
+- New endpoint: `POST /api/sprints/:id/complete` for manual sprint completion with auto-transition
+
+### Feature 2: Per-Company Brain Directory
+- `updateCompanyBrainSummary(companyId)` helper — writes `brain/{company-slug}/summary.md`
+- Summary includes YAML frontmatter, current sprint, agent count, ticket progress, completed sprints list
+- New endpoint: `POST /api/companies/:id/brain/update-summary`
+- Auto-triggered on sprint completion
+
+### Feature 3: Per-Agent Brain Directory
+- `initAgentBrain(companyId, agentId)` helper — creates `brain/{company-slug}/{agent-slug}/` with soul.md, context.md, memory.md
+- `updateAgentMemory(companyId, agentId, ticketTitle)` helper — appends completed ticket entries to memory.md
+- New endpoints: `POST /api/companies/:companyId/agents/:agentId/brain/init`, `POST /api/companies/:companyId/agents/:agentId/brain/update-memory`
+- Hooked into: `POST /api/hire-agent` (auto-init), hiring_plan approval (auto-init), ticket column move to done (memory update)
+
+### Hooks Summary
+- `PATCH /api/tickets/:id/column` (done) -> checkSprintCompletion + updateAgentMemory
+- `PATCH /api/tickets/:id` (board_column=done) -> checkSprintCompletion + updateAgentMemory
+- `POST /api/tickets/:id/reject` -> checkSprintCompletion
+- `POST /api/hire-agent` -> initAgentBrain
+- `POST /api/plans/:id/approve` (hiring_plan) -> initAgentBrain per auto-hired agent
+- Sprint completion -> updateCompanyBrainSummary
 
 ## 2026-04-08 — Wave 2: Agent-Agnostic Runtimes + Session Resume + Skill Injection + Mobile UI
 

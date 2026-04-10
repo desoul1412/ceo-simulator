@@ -2,7 +2,6 @@ import { createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
 import { MasterDashboard } from './components/MasterDashboard';
 import { CompanyView } from './components/CompanyView';
-import { AgentsPage } from './components/AgentsPage';
 import { AgentDetail } from './components/AgentDetail';
 import { GoalsPage } from './components/GoalsPage';
 import { DocumentsPage } from './components/DocumentsPage';
@@ -21,7 +20,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <MasterDashboard /> },
       { path: 'company/:companyId', element: <CompanyView /> },
-      { path: 'company/:companyId/agents', element: <AgentsPage /> },
+      { path: 'company/:companyId/agents', element: <CompanyView /> },
       { path: 'company/:companyId/agents/:agentId', element: <AgentDetail /> },
       { path: 'company/:companyId/goals', element: <GoalsPage /> },
       { path: 'company/:companyId/documents', element: <DocumentsPage /> },

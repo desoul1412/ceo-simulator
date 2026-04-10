@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import { executeCeoGoal, executeCeoProjectReview } from './agents/ceo';
 import { processNextTask, getQueueStatus } from './taskProcessor';
 import { processNextTicket, getTicketQueueStatus } from './ticketProcessor';
@@ -10,6 +12,377 @@ import { supabase } from './supabaseAdmin';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+const BRAIN_ROOT = path.join(process.cwd(), 'brain');
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * Parse phases from a master plan markdown.
+ * Returns array of { title, tasks[] } where tasks are from `- [ ] ...` lines
+ * Each phase starts at a `### Phase N: ...` heading.
+ */
+function parseMasterPlanPhases(content: string): { title: string; tasks: string[] }[] {
+  const lines = content.split('\n');
+  const phases: { title: string; tasks: string[] }[] = [];
+  let current: { title: string; tasks: string[] } | null = null;
+
+  for (const line of lines) {
+    const phaseMatch = line.match(/^###\s+(.+)/);
+    if (phaseMatch) {
+      if (current) phases.push(current);
+      current = { title: phaseMatch[1].trim(), tasks: [] };
+      continue;
+    }
+    const taskMatch = line.match(/^- \[ \]\s+(.+)/);
+    if (taskMatch && current) {
+      current.tasks.push(taskMatch[1].trim());
+    }
+  }
+  if (current) phases.push(current);
+  return phases;
+}
+
+/**
+ * Feature 1: Check if all tickets in a sprint are done, and if so,
+ * complete the sprint and create the next one from the master plan.
+ */
+async function checkSprintCompletion(sprintId: string): Promise<void> {
+  try {
+    // 1. Get the sprint
+    const { data: sprint } = await supabase
+      .from('sprints')
+      .select('*')
+      .eq('id', sprintId)
+      .single();
+    if (!sprint) return;
+    const s = sprint as any;
+    if (s.status === 'completed') return; // already done
+
+    // 2. Get all tickets for this sprint
+    const { data: tickets } = await supabase
+      .from('tickets')
+      .select('id, status, board_column')
+      .eq('sprint_id', sprintId);
+
+    if (!tickets || tickets.length === 0) return;
+
+    // 3. Check if ALL tickets are done/cancelled
+    const allDone = (tickets as any[]).every(
+      (t) => t.board_column === 'done' || ['completed', 'cancelled'].includes(t.status)
+    );
+    if (!allDone) return;
+
+    // 4. Mark sprint as completed
+    await supabase.from('sprints')
+      .update({ status: 'completed' })
+      .eq('id', sprintId);
+
+    await supabase.from('activity_log').insert({
+      company_id: s.company_id,
+      type: 'status-change',
+      message: `Sprint "${s.name}" completed — all tickets done`,
+    });
+
+    await supabase.from('notifications').insert({
+      company_id: s.company_id,
+      type: 'system',
+      title: `Sprint completed: ${s.name}`,
+      message: `All tickets in "${s.name}" are done.`,
+      link: `/company/${s.company_id}/board`,
+    });
+
+    // 5. Update the company brain summary
+    await updateCompanyBrainSummary(s.company_id);
+
+    // 6. Look up master_plan for auto-transition
+    const { data: plans } = await supabase
+      .from('project_plans')
+      .select('*')
+      .eq('company_id', s.company_id)
+      .eq('type', 'master_plan')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (!plans || plans.length === 0) return;
+    const masterPlan = plans[0] as any;
+
+    // 7. Parse all phases
+    const phases = parseMasterPlanPhases(masterPlan.content);
+    if (phases.length === 0) return;
+
+    // 8. Count existing sprints to determine next sprint number
+    const { data: existingSprints } = await supabase
+      .from('sprints')
+      .select('id, name')
+      .eq('company_id', s.company_id)
+      .order('created_at', { ascending: true });
+
+    const nextSprintNumber = (existingSprints ?? []).length + 1;
+
+    // 9. Find the next unprocessed phase
+    // Existing sprints consumed phases 0..N-1, so next phase index = existingSprints.length - 1 + 1
+    // But we just completed one, so the count includes it. Next phase = existingSprints.length (0-indexed)
+    const nextPhaseIndex = (existingSprints ?? []).length; // already includes the just-completed sprint
+    if (nextPhaseIndex >= phases.length) {
+      // All phases done
+      await supabase.from('notifications').insert({
+        company_id: s.company_id,
+        type: 'system',
+        title: 'All master plan phases completed',
+        message: `All ${phases.length} phases from the master plan have been completed.`,
+        link: `/company/${s.company_id}/overview`,
+      });
+      return;
+    }
+
+    const nextPhase = phases[nextPhaseIndex];
+
+    // 10. Create new sprint
+    const { data: newSprint } = await supabase.from('sprints').insert({
+      company_id: s.company_id,
+      name: `Sprint ${nextSprintNumber}`,
+      goal: nextPhase.title,
+      status: 'planning',
+    } as any).select().single();
+
+    if (!newSprint) return;
+
+    // 11. Create tickets from the phase's tasks
+    const { data: agents } = await supabase.from('agents')
+      .select('id, role').eq('company_id', s.company_id);
+
+    for (let i = 0; i < nextPhase.tasks.length; i++) {
+      const taskText = nextPhase.tasks[i];
+      const agent = (agents ?? []).find((a: any) => {
+        const r = (a.role as string).toLowerCase();
+        return taskText.toLowerCase().includes(r);
+      }) ?? (agents ?? [])[i % Math.max((agents ?? []).length, 1)];
+
+      await supabase.from('tickets').insert({
+        company_id: s.company_id,
+        agent_id: (agent as any)?.id ?? null,
+        title: taskText,
+        status: 'open',
+        sprint_id: (newSprint as any).id,
+        board_column: 'backlog',
+        story_points: 1,
+        priority: i,
+      } as any);
+    }
+
+    // 12. Notify
+    await supabase.from('activity_log').insert({
+      company_id: s.company_id,
+      type: 'status-change',
+      message: `Auto-created Sprint ${nextSprintNumber} from master plan phase: ${nextPhase.title}`,
+    });
+
+    await supabase.from('notifications').insert({
+      company_id: s.company_id,
+      type: 'system',
+      title: `Sprint ${nextSprintNumber} auto-created`,
+      message: `${nextPhase.tasks.length} tickets from "${nextPhase.title}"`,
+      link: `/company/${s.company_id}/board`,
+    });
+  } catch (err: any) {
+    console.error('[checkSprintCompletion] Error:', err.message);
+  }
+}
+
+/**
+ * Feature 2: Update the company brain summary file.
+ */
+async function updateCompanyBrainSummary(companyId: string): Promise<string> {
+  // Get company info
+  const { data: company } = await supabase
+    .from('companies').select('*').eq('id', companyId).single();
+  if (!company) throw new Error('Company not found');
+  const c = company as any;
+
+  const companySlug = slugify(c.name);
+  const companyDir = path.join(BRAIN_ROOT, companySlug);
+  fs.mkdirSync(companyDir, { recursive: true });
+
+  // Fetch data in parallel
+  const [sprintsRes, agentsRes, ticketsRes] = await Promise.all([
+    supabase.from('sprints').select('*').eq('company_id', companyId).order('created_at', { ascending: true }),
+    supabase.from('agents').select('*').eq('company_id', companyId),
+    supabase.from('tickets').select('id, status, board_column, sprint_id').eq('company_id', companyId),
+  ]);
+
+  const sprints = (sprintsRes.data ?? []) as any[];
+  const agents = (agentsRes.data ?? []) as any[];
+  const tickets = (ticketsRes.data ?? []) as any[];
+
+  const activeSprint = sprints.find(s => s.status !== 'completed') ?? sprints[sprints.length - 1];
+  const completedSprints = sprints.filter(s => s.status === 'completed');
+  const doneTickets = tickets.filter(t => t.board_column === 'done' || t.status === 'completed');
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const completedSprintsList = completedSprints.length > 0
+    ? completedSprints.map(s => `- **${s.name}**: ${s.goal ?? 'No goal set'}`).join('\n')
+    : '- None yet';
+
+  const agentList = agents.length > 0
+    ? agents.map(a => `- **${a.name}** — ${a.role} (${a.status ?? 'idle'})`).join('\n')
+    : '- No agents hired';
+
+  const content = `---
+tags: [company, summary]
+date: ${today}
+status: active
+---
+
+# ${c.name} — Project Summary
+
+## Status
+- Current Sprint: ${activeSprint?.name ?? 'None'}
+- Agents: ${agents.length}
+- Tickets: ${doneTickets.length}/${tickets.length}
+
+## Completed Sprints
+${completedSprintsList}
+
+## Active Agents
+${agentList}
+`;
+
+  const summaryPath = path.join(companyDir, 'summary.md');
+  fs.writeFileSync(summaryPath, content, 'utf8');
+  return summaryPath;
+}
+
+/**
+ * Feature 3: Initialize an agent's brain directory.
+ */
+async function initAgentBrain(companyId: string, agentId: string): Promise<string> {
+  const [companyRes, agentRes] = await Promise.all([
+    supabase.from('companies').select('name').eq('id', companyId).single(),
+    supabase.from('agents').select('*').eq('id', agentId).single(),
+  ]);
+  if (!companyRes.data) throw new Error('Company not found');
+  if (!agentRes.data) throw new Error('Agent not found');
+
+  const company = companyRes.data as any;
+  const agent = agentRes.data as any;
+
+  const companySlug = slugify(company.name);
+  const agentSlug = slugify(agent.name);
+  const agentDir = path.join(BRAIN_ROOT, companySlug, agentSlug);
+  fs.mkdirSync(agentDir, { recursive: true });
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get team members and sprint info
+  const [agentsRes, sprintsRes] = await Promise.all([
+    supabase.from('agents').select('name, role').eq('company_id', companyId),
+    supabase.from('sprints').select('name, goal, status').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1),
+  ]);
+  const teammates = (agentsRes.data ?? []) as any[];
+  const currentSprint = ((sprintsRes.data ?? []) as any[])[0];
+
+  // soul.md
+  const soulContent = `---
+tags: [agent, soul]
+date: ${today}
+status: active
+---
+
+# ${agent.name} — ${agent.role}
+
+## System Prompt
+${agent.system_prompt ?? 'No system prompt defined.'}
+
+## Skills
+${(agent.skills ?? []).map((s: string) => `- ${s}`).join('\n') || '- None'}
+
+## Configuration
+- Model: ${agent.runtime_config?.model ?? 'default'}
+- Budget Limit: $${agent.budget_limit ?? 10}
+- Runtime: ${agent.runtime_type ?? 'claude_sdk'}
+`;
+
+  // context.md
+  const teamList = teammates
+    .filter(t => t.name !== agent.name)
+    .map(t => `- **${t.name}** — ${t.role}`)
+    .join('\n') || '- Solo agent';
+
+  const contextContent = `---
+tags: [agent, context]
+date: ${today}
+status: active
+---
+
+# ${agent.name} — Current Context
+
+## Assignment
+- Current Task: ${agent.assigned_task ?? 'None'}
+- Status: ${agent.status ?? 'idle'}
+
+## Sprint
+- Sprint: ${currentSprint?.name ?? 'None'}
+- Goal: ${currentSprint?.goal ?? 'N/A'}
+
+## Team
+${teamList}
+`;
+
+  // memory.md
+  const memoryContent = `---
+tags: [agent, memory]
+date: ${today}
+status: active
+---
+
+# ${agent.name} — Task Memory
+
+_Ticket summaries will be appended here as work is completed._
+
+## Completed Tasks
+`;
+
+  fs.writeFileSync(path.join(agentDir, 'soul.md'), soulContent, 'utf8');
+  fs.writeFileSync(path.join(agentDir, 'context.md'), contextContent, 'utf8');
+  fs.writeFileSync(path.join(agentDir, 'memory.md'), memoryContent, 'utf8');
+
+  return agentDir;
+}
+
+/**
+ * Feature 3: Append a completed ticket summary to the agent's memory.md.
+ */
+async function updateAgentMemory(companyId: string, agentId: string, ticketTitle: string): Promise<void> {
+  try {
+    const [companyRes, agentRes] = await Promise.all([
+      supabase.from('companies').select('name').eq('id', companyId).single(),
+      supabase.from('agents').select('name').eq('id', agentId).single(),
+    ]);
+    if (!companyRes.data || !agentRes.data) return;
+
+    const companySlug = slugify((companyRes.data as any).name);
+    const agentSlug = slugify((agentRes.data as any).name);
+    const memoryPath = path.join(BRAIN_ROOT, companySlug, agentSlug, 'memory.md');
+
+    if (!fs.existsSync(memoryPath)) {
+      // Init brain first if it doesn't exist
+      await initAgentBrain(companyId, agentId);
+    }
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const entry = `\n- [${timestamp}] Completed: ${ticketTitle}`;
+    fs.appendFileSync(memoryPath, entry, 'utf8');
+  } catch (err: any) {
+    console.error('[updateAgentMemory] Error:', err.message);
+  }
+}
 
 app.use(cors({
   origin: [
@@ -85,12 +458,13 @@ app.post('/api/assign-goal', async (req, res) => {
 app.post('/api/companies/:id/review', async (req, res) => {
   try {
     const cwd = await getCompanyCwd(req.params.id);
+    const { requirements } = req.body ?? {};
     const logActivity = async (message: string) => {
       await supabase.from('activity_log').insert({
         company_id: req.params.id, type: 'ceo-reasoning', message,
       });
     };
-    const result = await executeCeoProjectReview(req.params.id, cwd, logActivity);
+    const result = await executeCeoProjectReview(req.params.id, cwd, logActivity, requirements);
     res.json({ success: true, ...result });
   } catch (err: any) {
     console.error('[review] Error:', err.message);
@@ -262,6 +636,11 @@ app.post('/api/hire-agent', async (req, res) => {
       type: 'agent-hired',
       message: `${agentName} hired as ${role}${mode === 'auto' ? ' (auto)' : ''}`,
     });
+
+    // Hook: auto-init agent brain directory
+    initAgentBrain(companyId, (newAgent as any).id).catch(e =>
+      console.error('[hire-agent-hook] brain init error:', e.message)
+    );
 
     res.json({ success: true, agent: newAgent });
   } catch (err: any) {
@@ -949,17 +1328,24 @@ app.post('/api/plans/:id/approve', async (req, res) => {
 
           const ceo = (allAgents as any[])?.find?.((a: any) => a.role === 'CEO');
 
-          await supabase.from('agents').insert({
+          const { data: hiredAgent } = await supabase.from('agents').insert({
             company_id: p.company_id, name: agentName, role, color,
             sprite_index: sprite, tile_col: desk.col, tile_row: desk.row,
             system_prompt: prompt, skills, budget_limit: budget,
             reports_to: ceo?.id ?? null, memory: {},
-          } as any);
+          } as any).select().single();
 
           await supabase.from('activity_log').insert({
             company_id: p.company_id, type: 'agent-hired',
             message: `Auto-hired ${agentName} as ${role} (from approved hiring plan)`,
           });
+
+          // Hook: auto-init agent brain directory
+          if (hiredAgent) {
+            initAgentBrain(p.company_id, (hiredAgent as any).id).catch(e =>
+              console.error('[plan-hire-hook] brain init error:', e.message)
+            );
+          }
         }
       }
 
@@ -1061,6 +1447,150 @@ app.get('/api/plans/:id/comments', async (req, res) => {
     .order('created_at', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// ── Sprint Manual Completion ────────────────────────────────────────────────
+
+app.post('/api/sprints/:id/complete', async (req, res) => {
+  try {
+    const { data: sprint } = await supabase
+      .from('sprints').select('*').eq('id', req.params.id).single();
+    if (!sprint) return res.status(404).json({ error: 'Sprint not found' });
+
+    await checkSprintCompletion(req.params.id);
+
+    // If checkSprintCompletion didn't mark it (not all tickets done), force complete
+    const { data: updated } = await supabase
+      .from('sprints').select('status').eq('id', req.params.id).single();
+    if ((updated as any)?.status !== 'completed') {
+      await supabase.from('sprints')
+        .update({ status: 'completed' })
+        .eq('id', req.params.id);
+
+      const s = sprint as any;
+      await supabase.from('activity_log').insert({
+        company_id: s.company_id,
+        type: 'status-change',
+        message: `Sprint "${s.name}" manually completed`,
+      });
+
+      await supabase.from('notifications').insert({
+        company_id: s.company_id,
+        type: 'system',
+        title: `Sprint completed: ${s.name}`,
+        message: `Sprint "${s.name}" was manually completed.`,
+        link: `/company/${s.company_id}/board`,
+      });
+
+      // Still trigger auto-transition for next sprint
+      // Re-fetch and run the transition logic
+      await updateCompanyBrainSummary(s.company_id);
+
+      // Create next sprint from master plan
+      const { data: plans } = await supabase
+        .from('project_plans')
+        .select('*')
+        .eq('company_id', s.company_id)
+        .eq('type', 'master_plan')
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (plans && plans.length > 0) {
+        const masterPlan = plans[0] as any;
+        const phases = parseMasterPlanPhases(masterPlan.content);
+
+        const { data: existingSprints } = await supabase
+          .from('sprints')
+          .select('id')
+          .eq('company_id', s.company_id);
+
+        const nextSprintNumber = (existingSprints ?? []).length + 1;
+        const nextPhaseIndex = (existingSprints ?? []).length;
+
+        if (nextPhaseIndex < phases.length) {
+          const nextPhase = phases[nextPhaseIndex];
+          const { data: newSprint } = await supabase.from('sprints').insert({
+            company_id: s.company_id,
+            name: `Sprint ${nextSprintNumber}`,
+            goal: nextPhase.title,
+            status: 'planning',
+          } as any).select().single();
+
+          if (newSprint) {
+            const { data: agents } = await supabase.from('agents')
+              .select('id, role').eq('company_id', s.company_id);
+
+            for (let i = 0; i < nextPhase.tasks.length; i++) {
+              const taskText = nextPhase.tasks[i];
+              const agent = (agents ?? []).find((a: any) => {
+                const r = (a.role as string).toLowerCase();
+                return taskText.toLowerCase().includes(r);
+              }) ?? (agents ?? [])[i % Math.max((agents ?? []).length, 1)];
+
+              await supabase.from('tickets').insert({
+                company_id: s.company_id,
+                agent_id: (agent as any)?.id ?? null,
+                title: taskText,
+                status: 'open',
+                sprint_id: (newSprint as any).id,
+                board_column: 'backlog',
+                story_points: 1,
+                priority: i,
+              } as any);
+            }
+
+            await supabase.from('notifications').insert({
+              company_id: s.company_id,
+              type: 'system',
+              title: `Sprint ${nextSprintNumber} auto-created`,
+              message: `${nextPhase.tasks.length} tickets from "${nextPhase.title}"`,
+              link: `/company/${s.company_id}/board`,
+            });
+          }
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Company Brain Summary ──────────────────────────────────────────────────
+
+app.post('/api/companies/:id/brain/update-summary', async (req, res) => {
+  try {
+    const summaryPath = await updateCompanyBrainSummary(req.params.id);
+    res.json({ success: true, path: summaryPath });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Agent Brain Init ────────────────────────────────────────────────────────
+
+app.post('/api/companies/:companyId/agents/:agentId/brain/init', async (req, res) => {
+  try {
+    const agentDir = await initAgentBrain(req.params.companyId, req.params.agentId);
+    res.json({ success: true, path: agentDir });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Agent Brain Memory Update ───────────────────────────────────────────────
+
+app.post('/api/companies/:companyId/agents/:agentId/brain/update-memory', async (req, res) => {
+  try {
+    const { ticketTitle } = req.body;
+    if (!ticketTitle) return res.status(400).json({ error: 'Missing ticketTitle' });
+    await updateAgentMemory(req.params.companyId, req.params.agentId, ticketTitle);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Notifications ───────────────────────────────────────────────────────────
@@ -1169,6 +1699,16 @@ app.patch('/api/tickets/:id/column', async (req, res) => {
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
+
+  // Hook: check sprint completion + update agent memory when moved to done
+  const t = data as any;
+  if (board_column === 'done' && t.sprint_id) {
+    checkSprintCompletion(t.sprint_id).catch(e => console.error('[column-hook] sprint check error:', e.message));
+    if (t.agent_id) {
+      updateAgentMemory(t.company_id, t.agent_id, t.title).catch(e => console.error('[column-hook] memory error:', e.message));
+    }
+  }
+
   res.json(data);
 });
 
@@ -1182,12 +1722,32 @@ app.patch('/api/tickets/:id', async (req, res) => {
   }
   const { data, error } = await supabase.from('tickets').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
+
+  // Hook: check sprint completion + update agent memory when board_column set to done
+  const t = data as any;
+  if (updates.board_column === 'done' && t.sprint_id) {
+    checkSprintCompletion(t.sprint_id).catch(e => console.error('[ticket-patch-hook] sprint check error:', e.message));
+    if (t.agent_id) {
+      updateAgentMemory(t.company_id, t.agent_id, t.title).catch(e => console.error('[ticket-patch-hook] memory error:', e.message));
+    }
+  }
+
   res.json(data);
 });
 
 app.post('/api/tickets/:id/reject', async (req, res) => {
+  // Get ticket info before updating (for sprint check)
+  const { data: ticket } = await supabase.from('tickets').select('sprint_id, company_id').eq('id', req.params.id).single();
   const { error } = await supabase.from('tickets').update({ status: 'cancelled', board_column: 'done' }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+
+  // Hook: check sprint completion after ticket rejection
+  if (ticket && (ticket as any).sprint_id) {
+    checkSprintCompletion((ticket as any).sprint_id).catch(e =>
+      console.error('[ticket-reject-hook] sprint check error:', e.message)
+    );
+  }
+
   res.json({ success: true });
 });
 

@@ -59,6 +59,8 @@ export function ProjectOverview() {
   const [newEnvSecret, setNewEnvSecret] = useState(false);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [customRequirements, setCustomRequirements] = useState('');
+  const [showRequirements, setShowRequirements] = useState(false);
 
   const load = useCallback(async () => {
     if (!companyId) return;
@@ -108,9 +110,12 @@ export function ProjectOverview() {
       // Call the dedicated CEO project review endpoint
       // CEO reads the codebase, then writes structured plans directly to Supabase
       const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:3001';
+      const body: any = {};
+      if (customRequirements.trim()) body.requirements = customRequirements.trim();
       const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -185,13 +190,47 @@ export function ProjectOverview() {
         <span style={{ fontSize: 'var(--font-md)', color: 'var(--neon-cyan)', textShadow: '0 0 6px var(--neon-cyan)' }}>
           PROJECT OVERVIEW
         </span>
-        <button onClick={handleRegenerate} disabled={loading} style={{
-          ...btnStyle, marginLeft: 'auto',
-          background: loading ? '#1b2030' : '#c084fc10', borderColor: '#c084fc40', color: 'var(--neon-purple)',
-        }}>
-          {loading ? 'Generating...' : 'Regenerate with CEO'}
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={() => setShowRequirements(!showRequirements)}
+            style={{ ...btnStyle, borderColor: showRequirements ? '#c084fc40' : '#00ffff30', color: showRequirements ? 'var(--neon-purple)' : 'var(--neon-cyan)' }}
+          >
+            {showRequirements ? '- Requirements' : '+ Requirements'}
+          </button>
+          <button onClick={handleRegenerate} disabled={loading} style={{
+            ...btnStyle,
+            background: loading ? '#1b2030' : '#c084fc10', borderColor: '#c084fc40', color: 'var(--neon-purple)',
+          }}>
+            {loading ? 'Generating...' : 'Regenerate with CEO'}
+          </button>
+        </div>
       </div>
+
+      {/* Custom requirements input */}
+      {showRequirements && (
+        <div style={{
+          ...sectionStyle, marginBottom: 12, padding: 12,
+        }}>
+          <label style={{ ...labelStyle, display: 'block', marginBottom: 6 }}>
+            Custom Requirements
+          </label>
+          <textarea
+            value={customRequirements}
+            onChange={e => setCustomRequirements(e.target.value)}
+            placeholder="Enter custom requirements for the CEO to consider during regeneration...&#10;&#10;e.g., Focus on mobile-first design, use Stripe for payments, prioritize auth system first..."
+            rows={4}
+            style={{
+              width: '100%', background: '#05080f',
+              border: '1px solid var(--hud-border)', color: 'var(--hud-text)',
+              fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
+              padding: 8, resize: 'vertical', boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 4 }}>
+            These requirements will be sent to the CEO agent when regenerating plans.
+          </div>
+        </div>
+      )}
 
       {/* Plan sections */}
       {PLAN_TYPES.map(type => {

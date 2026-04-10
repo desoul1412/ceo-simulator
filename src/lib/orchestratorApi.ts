@@ -319,6 +319,11 @@ export async function fetchSprints(companyId: string) {
   return res.json();
 }
 
+export async function completeSprint(sprintId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/sprints/${sprintId}/complete`, { method: 'POST' });
+  return res.json();
+}
+
 export async function createSprint(companyId: string, data: any) {
   const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/sprints`, {
     method: 'POST',
@@ -423,6 +428,18 @@ export async function updateEnvVar(envId: string, data: any) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+  return res.json();
+}
+
+// ── Brain Management ───────────────────────────────────────────────────────
+
+export async function updateCompanyBrain(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/brain/update-summary`, { method: 'POST' });
+  return res.json();
+}
+
+export async function initAgentBrain(companyId: string, agentId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/agents/${agentId}/brain/init`, { method: 'POST' });
   return res.json();
 }
 
