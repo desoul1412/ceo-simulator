@@ -271,3 +271,154 @@ export async function executeCeoGoal(
 
   return { plan, costUsd, inputTokens, outputTokens, sessionId };
 }
+
+// ── CEO Project Review (structured plan generation) ──────────────────────────
+
+export interface ProjectOverviewResult {
+  findings: string;
+  hiring_plan: string;
+  summary: string;
+  master_plan: string;
+  daily_plan: string;
+  costUsd: number;
+}
+
+export async function executeCeoProjectReview(
+  companyId: string,
+  cwd: string,
+  onActivity: (message: string) => Promise<void>,
+): Promise<ProjectOverviewResult> {
+  const { data: company } = await supabase
+    .from('companies').select('*').eq('id', companyId).single();
+  if (!company) throw new Error(`Company ${companyId} not found`);
+  const co = company as any;
+
+  const { data: agents } = await supabase
+    .from('agents').select('*').eq('company_id', companyId);
+  const ceoAgent = (agents ?? []).find((a: any) => a.role === 'CEO');
+
+  await onActivity('CEO reviewing project...');
+
+  const systemPrompt = `You are the CEO reviewing a project codebase. Your job is to produce a structured project overview.
+
+You have access to Read, Glob, and Grep tools. USE THEM to explore the codebase at the current working directory.
+
+## Step-by-step process:
+1. **Findings**: Read README.md, package.json, and scan the src/ directory structure. Identify tech stack, current state, and what exists.
+2. **Hiring Plan**: Based on findings, determine which agent roles are needed (PM, Frontend, Backend, DevOps, QA, etc.) and WHY.
+3. **Summary**: Synthesize findings into a concise project summary.
+4. **Master Execution Plan**: Create a phased plan with concrete tasks.
+5. **Daily Plan**: Define what should be done TODAY (first day).
+
+## Output Format
+Respond with a JSON object (no markdown fences, no extra text):
+{
+  "findings": "What you found in the codebase — tech stack, file structure, current state, dependencies",
+  "hiring_plan": "## Hiring Plan\\n\\n| Role | Model | Budget | Reason |\\n|------|-------|--------|--------|\\n| PM | sonnet | $15 | ... |\\n| Frontend | sonnet | $15 | ... |",
+  "summary": "## Project Summary\\n\\n**Name:** ...\\n**Stack:** ...\\n**Current State:** ...\\n**Goal:** ...",
+  "master_plan": "## Master Execution Plan\\n\\n### Phase 1: ...\\n- [ ] task\\n\\n### Phase 2: ...\\n- [ ] task",
+  "daily_plan": "## Today's Plan\\n\\n- [ ] First priority task\\n- [ ] Second priority task"
+}`;
+
+  const q = query({
+    prompt: 'Review this project codebase. Read key files, understand the stack, and produce a structured project overview with findings, hiring plan, summary, master plan, and daily plan.',
+    options: {
+      cwd,
+      systemPrompt,
+      maxTurns: 8,
+      maxBudgetUsd: 2.0,
+      tools: ['Read', 'Glob', 'Grep'],
+      allowedTools: ['Read', 'Glob', 'Grep'],
+      model: 'sonnet',
+      persistSession: true,
+    },
+  });
+
+  let result = '';
+  let costUsd = 0;
+  for await (const message of q) {
+    if (message.type === 'assistant') {
+      const msg = message as any;
+      if (msg.message?.content) {
+        for (const block of msg.message.content) {
+          if (block.type === 'text') result += block.text;
+        }
+      }
+    } else if (message.type === 'result') {
+      const res = message as any;
+      costUsd = res.total_cost_usd ?? 0;
+      if (res.result) result = res.result;
+    }
+  }
+
+  // Parse structured JSON from CEO's response
+  let overview: ProjectOverviewResult = {
+    findings: '', hiring_plan: '', summary: '', master_plan: '', daily_plan: '', costUsd,
+  };
+
+  try {
+    const jsonMatch = result.match(/\{[\s\S]*"findings"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      overview = { ...overview, ...parsed, costUsd };
+    }
+  } catch {
+    // If JSON parsing fails, use the raw result as findings
+    overview.findings = result.slice(0, 2000);
+    overview.summary = `## Project Summary\n\n${result.slice(0, 500)}`;
+    overview.hiring_plan = '## Hiring Plan\n\n| Role | Model | Budget | Reason |\n|------|-------|--------|--------|\n| PM | sonnet | $15 | Planning |\n| Frontend | sonnet | $15 | UI |\n| Backend | sonnet | $15 | API |';
+    overview.master_plan = '## Master Execution Plan\n\n### Phase 1\n- [ ] Review and plan\n\n### Phase 2\n- [ ] Implement';
+    overview.daily_plan = "## Today's Plan\n\n- [ ] Review CEO findings\n- [ ] Approve hiring plan";
+  }
+
+  // Update CEO agent status
+  if (ceoAgent) {
+    await supabase.from('agents').update({
+      status: 'idle', assigned_task: null,
+      last_heartbeat: new Date().toISOString(),
+    }).eq('id', (ceoAgent as any).id);
+  }
+
+  // Write plans to project_plans table
+  const planTypes = [
+    { type: 'summary', title: 'Project Summary', content: overview.summary },
+    { type: 'master_plan', title: 'Master Execution Plan', content: overview.master_plan },
+    { type: 'hiring_plan', title: 'Hiring Plan', content: overview.hiring_plan },
+    { type: 'daily_plan', title: "Today's Plan", content: overview.daily_plan },
+  ];
+
+  for (const p of planTypes) {
+    const { data: existing } = await supabase
+      .from('project_plans')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('type', p.type)
+      .limit(1);
+
+    if (existing?.length) {
+      await supabase.from('project_plans').update({
+        content: p.content, updated_at: new Date().toISOString(), author_type: 'ceo',
+      } as any).eq('id', (existing[0] as any).id);
+    } else {
+      await supabase.from('project_plans').insert({
+        company_id: companyId, type: p.type, title: p.title,
+        content: p.content, status: 'submitted', author_type: 'ceo',
+      } as any);
+    }
+  }
+
+  // Create notification
+  await supabase.from('notifications').insert({
+    company_id: companyId, type: 'plan_submitted',
+    title: 'CEO submitted project overview',
+    message: 'Project review complete. Review and approve plans.',
+    link: `/company/${companyId}/overview`,
+  });
+
+  await onActivity(`CEO completed project review. Cost: $${costUsd.toFixed(4)}`);
+
+  // Reset ceo_goal
+  await supabase.from('companies').update({ ceo_goal: null } as any).eq('id', companyId);
+
+  return overview;
+}

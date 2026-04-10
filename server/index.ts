@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { executeCeoGoal } from './agents/ceo';
+import { executeCeoGoal, executeCeoProjectReview } from './agents/ceo';
 import { processNextTask, getQueueStatus } from './taskProcessor';
 import { processNextTicket, getTicketQueueStatus } from './ticketProcessor';
 import { startHeartbeatDaemon, stopHeartbeatDaemon, isDaemonRunning } from './heartbeatDaemon';
@@ -76,6 +76,24 @@ app.post('/api/assign-goal', async (req, res) => {
       message: `CEO goal assignment failed: ${err.message}`,
     });
 
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── CEO Project Review (structured plan generation) ──────────────────────────
+
+app.post('/api/companies/:id/review', async (req, res) => {
+  try {
+    const cwd = await getCompanyCwd(req.params.id);
+    const logActivity = async (message: string) => {
+      await supabase.from('activity_log').insert({
+        company_id: req.params.id, type: 'ceo-reasoning', message,
+      });
+    };
+    const result = await executeCeoProjectReview(req.params.id, cwd, logActivity);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[review] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

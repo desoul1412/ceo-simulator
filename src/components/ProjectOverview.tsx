@@ -9,7 +9,6 @@ import {
   fetchEnvVars,
   createEnvVar,
   deleteEnvVar,
-  assignGoalToOrchestrator,
   hireAgent,
   fetchTickets,
 } from '../lib/orchestratorApi';
@@ -106,72 +105,39 @@ export function ProjectOverview() {
     if (!companyId) return;
     setLoading(true);
 
-    const { supabase, isOnline } = await import('../lib/supabase');
-    if (!isOnline() || !supabase) { setLoading(false); return; }
-
-    // Step 1: Call CEO agent to analyze the project
-    let ceoReasoning = '';
-    let ceoSubtasks: { role: string; task: string }[] = [];
     try {
-      const result = await assignGoalToOrchestrator(companyId,
-        'Review this project. Analyze the codebase, tech stack, and current state. Produce a project overview.');
-      ceoReasoning = result?.plan?.reasoning ?? '';
-      ceoSubtasks = result?.plan?.subtasks ?? [];
-    } catch {
-      // Orchestrator offline — will use templates
-    }
+      // Call the dedicated CEO project review endpoint
+      // CEO reads the codebase, then writes structured plans directly to Supabase
+      const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:3001';
+      const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-    // Step 2: Fetch FRESH plans from DB to check for existing ones
-    const { data: existingPlans } = await supabase
-      .from('project_plans')
-      .select('id, type')
-      .eq('company_id', companyId);
-    const existingByType = new Map((existingPlans ?? []).map((p: any) => [p.type, p.id]));
-
-    // Step 3: Upsert each plan type (update if exists, create if not)
-    const templates: { type: string; title: string; content: string }[] = [
-      {
-        type: 'summary', title: 'Project Summary',
-        content: ceoReasoning
-          ? `## Project Summary\n\n${ceoReasoning}\n\n_CEO analysis. Edit to refine._`
-          : '## Project Summary\n\n**Name:** \n**Stack:** \n**Repo:** \n**Current State:** \n**Goal:** \n\n_Edit this with your project details._',
-      },
-      {
-        type: 'master_plan', title: 'Master Execution Plan',
-        content: ceoSubtasks.length > 0
-          ? `## Master Execution Plan\n\n${ceoSubtasks.map((s, i) => `### Phase ${i + 1}: ${s.role}\n- [ ] ${s.task}`).join('\n\n')}`
-          : '## Master Execution Plan\n\n### Phase 1: Setup & Planning\n- [ ] Review codebase\n- [ ] Define requirements\n\n### Phase 2: Core Features\n- [ ] Feature A\n- [ ] Feature B\n\n### Phase 3: Launch\n- [ ] Testing\n- [ ] Deploy',
-      },
-      {
-        type: 'hiring_plan', title: 'Hiring Plan',
-        content: ceoSubtasks.length > 0
-          ? `## Hiring Plan\n\n| Role | Reason |\n|------|--------|\n${ceoSubtasks.map(s => `| ${s.role} | ${s.task} |`).join('\n')}`
-          : '## Hiring Plan\n\n| Role | Model | Budget | Reason |\n|------|-------|--------|--------|\n| PM | sonnet | $15 | Specs |\n| Frontend | sonnet | $15 | UI |\n| Backend | sonnet | $15 | API |\n| QA | haiku | $5 | Tests |',
-      },
-      {
-        type: 'daily_plan', title: "Today's Plan",
-        content: "## Today's Plan\n\nApprove the hiring plan first, then create a sprint.",
-      },
-    ];
-
-    for (const t of templates) {
-      const existingId = existingByType.get(t.type);
-      if (existingId) {
-        await supabase.from('project_plans').update({
-          content: t.content, updated_at: new Date().toISOString(),
-        } as any).eq('id', existingId);
-      } else {
-        await supabase.from('project_plans').insert({
-          company_id: companyId, type: t.type, title: t.title,
-          content: t.content, status: 'draft',
-          author_type: ceoReasoning ? 'ceo' : 'human',
-        } as any);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown' }));
+        console.error('[review] Server error:', err);
+      }
+    } catch (err) {
+      console.error('[review] Network error:', err);
+      // Orchestrator offline — create empty templates directly
+      const { supabase, isOnline } = await import('../lib/supabase');
+      if (isOnline() && supabase) {
+        const templates = [
+          { type: 'summary', title: 'Project Summary', content: '## Project Summary\n\n_Edit with your project details. Start the orchestrator for CEO auto-review._' },
+          { type: 'master_plan', title: 'Master Execution Plan', content: '## Phases\n\n### Phase 1\n- [ ] Task' },
+          { type: 'hiring_plan', title: 'Hiring Plan', content: '## Hiring Plan\n\n| Role | Reason |\n|------|--------|\n| PM | Planning |' },
+          { type: 'daily_plan', title: "Today's Plan", content: "## Today\n\n- [ ] Start orchestrator\n- [ ] Click Regenerate" },
+        ];
+        for (const t of templates) {
+          if (!planByType(t.type)) {
+            await supabase.from('project_plans').insert({
+              company_id: companyId, ...t, status: 'draft', author_type: 'human',
+            } as any);
+          }
+        }
       }
     }
-
-    // Step 4: Reset company ceo_goal so it can be called again later
-    await supabase.from('companies').update({ ceo_goal: null, status: 'bootstrapping' } as any)
-      .eq('id', companyId);
 
     await load();
     setLoading(false);
