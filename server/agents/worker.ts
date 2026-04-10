@@ -152,6 +152,7 @@ export async function executeWorkerTask(
       model: 'sonnet',
       persistSession: true,
       effort: 'medium',
+      permissionMode: 'acceptEdits' as const,
     },
   });
 

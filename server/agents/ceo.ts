@@ -120,6 +120,7 @@ export async function executeCeoGoal(
       allowedTools: ['Read', 'Glob', 'Grep'], // auto-approve reads
       model: 'sonnet',
       persistSession: true,
+      permissionMode: 'acceptEdits' as const,
     },
   });
 
@@ -331,6 +332,7 @@ Respond with a JSON object (no markdown fences, no extra text):
       allowedTools: ['Read', 'Glob', 'Grep'],
       model: 'sonnet',
       persistSession: true,
+      permissionMode: 'acceptEdits' as const,
     },
   });
 

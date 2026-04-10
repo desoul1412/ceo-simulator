@@ -55,6 +55,7 @@ export async function executeClaudeAgent(ctx: AgentContext): Promise<AgentRunRes
     model,
     persistSession: true,
     effort: 'medium',
+    permissionMode: 'acceptEdits' as const,
   };
 
   // Resume previous session if available (persistent agent state across heartbeats)
