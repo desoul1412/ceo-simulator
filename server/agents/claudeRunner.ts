@@ -96,6 +96,35 @@ export async function executeClaudeAgent(ctx: AgentContext): Promise<AgentRunRes
       outputTokens = res.usage?.output_tokens ?? 0;
       sessionId = res.session_id ?? '';
       if (res.result) result = res.result;
+
+      // Check for permission denials — escalate to human via notification
+      const denials = res.permission_denials ?? [];
+      if (denials.length > 0) {
+        const denialMsg = denials.map((d: any) => `${d.tool_name}: ${JSON.stringify(d.tool_input).slice(0, 100)}`).join('; ');
+        await supabase.from('notifications').insert({
+          company_id: ctx.companyId,
+          type: 'agent_blocked',
+          title: `Agent ${ctx.role} needs permission`,
+          message: `Blocked on: ${denialMsg}. Review agent config or approve manually.`,
+          link: `/company/${ctx.companyId}/agents`,
+        });
+        await ctx.onActivity(`Permission denied: ${denialMsg}`);
+      }
+
+      // Check if agent stopped due to error or budget — escalate
+      if (res.is_error || res.stop_reason === 'error_max_budget_usd') {
+        const reason = res.stop_reason === 'error_max_budget_usd'
+          ? `Budget exhausted ($${costUsd.toFixed(2)})`
+          : `Agent error: ${(res.result ?? '').slice(0, 200)}`;
+        await supabase.from('notifications').insert({
+          company_id: ctx.companyId,
+          type: 'agent_blocked',
+          title: `Agent ${ctx.role} stopped`,
+          message: reason,
+          link: `/company/${ctx.companyId}/agents`,
+        });
+        await ctx.onActivity(`Agent stopped: ${reason}`);
+      }
     }
   }
 

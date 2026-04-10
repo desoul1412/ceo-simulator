@@ -597,6 +597,23 @@ app.post('/api/agents/:agentId/inject-skill', async (req, res) => {
   res.json({ success: true, skills });
 });
 
+// ── Agent Update (name, budget, system_prompt) ──────────────────────────────
+
+app.patch('/api/agents/:agentId', async (req, res) => {
+  const allowed = ['name', 'system_prompt', 'budget_limit', 'skills', 'role'];
+  const updates: any = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No valid fields to update' });
+  }
+  const { data, error } = await supabase
+    .from('agents').update(updates).eq('id', req.params.agentId).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // ── Agent Lifecycle ──────────────────────────────────────────────────────────
 
 app.patch('/api/agents/:agentId/lifecycle', async (req, res) => {
@@ -941,37 +958,19 @@ app.post('/api/plans/:id/approve', async (req, res) => {
     }
 
     if (p.type === 'daily_plan') {
-      // Auto-approve all 'awaiting_approval' tickets for this company
+      // Daily plan approved — notify about pending tickets but do NOT auto-approve them
+      // Human reviews tickets individually from the Board or Approval Panel
       const { data: pendingTickets } = await supabase.from('tickets')
-        .select('id, agent_id, title')
+        .select('id')
         .eq('company_id', p.company_id)
-        .eq('status', 'awaiting_approval');
+        .in('status', ['open', 'awaiting_approval']);
 
-      if (pendingTickets?.length) {
-        for (const t of pendingTickets as any[]) {
-          await supabase.from('tickets').update({
-            status: 'approved', board_column: 'todo',
-          }).eq('id', t.id);
-          if (t.agent_id) {
-            await supabase.from('agents').update({
-              status: 'working', assigned_task: t.title,
-            }).eq('id', t.agent_id);
-          }
-        }
-
-        await supabase.from('notifications').insert({
-          company_id: p.company_id, type: 'system',
-          title: 'Daily plan approved — execution started',
-          message: `${pendingTickets.length} tickets approved. Heartbeat daemon will process them.`,
-          link: `/company/${p.company_id}/board`,
-        });
-      }
-
-      // Also approve 'open' tickets to 'approved' so heartbeat picks them up
-      await supabase.from('tickets')
-        .update({ status: 'approved', board_column: 'todo' })
-        .eq('company_id', p.company_id)
-        .eq('status', 'open');
+      await supabase.from('notifications').insert({
+        company_id: p.company_id, type: 'ticket_approval',
+        title: 'Daily plan approved — review tickets',
+        message: `${(pendingTickets ?? []).length} tickets awaiting your review on the Board.`,
+        link: `/company/${p.company_id}/board`,
+      });
     }
   } catch (execErr: any) {
     console.error('[approve] Execution trigger error:', execErr.message);

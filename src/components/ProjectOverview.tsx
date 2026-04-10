@@ -215,9 +215,9 @@ export function ProjectOverview() {
                   <button onClick={async () => {
                     const actions: Record<string, string> = {
                       summary: 'Mark summary as approved',
-                      master_plan: 'Approve → auto-create Sprint 1 + tickets from phases',
+                      master_plan: 'Approve → auto-create Sprint 1 + tickets from phases (tickets need separate approval)',
                       hiring_plan: 'Approve → auto-hire all listed agents',
-                      daily_plan: 'Approve → auto-approve all tickets → agents start working',
+                      daily_plan: 'Approve daily plan → you will review tickets on the Board before they execute',
                     };
                     if (!confirm(`${actions[type] ?? 'Approve this plan'}?`)) return;
                     await handleApprove(plan.id);
@@ -226,7 +226,7 @@ export function ProjectOverview() {
                   }}>
                     {type === 'hiring_plan' ? 'Approve & Hire' :
                      type === 'master_plan' ? 'Approve & Create Sprint' :
-                     type === 'daily_plan' ? 'Approve & Execute' : 'Approve'}
+                     type === 'daily_plan' ? 'Approve Plan' : 'Approve'}
                   </button>
                 )}
                 {plan && !isEditing && (

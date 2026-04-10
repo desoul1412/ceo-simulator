@@ -5,7 +5,7 @@ import { supabase, isOnline } from '../lib/supabase';
 import { ConfigManager } from './ConfigManager';
 import { fireAgent } from '../lib/orchestratorApi';
 import * as api from '../lib/api';
-import { getRoleDisplayName } from '../lib/agentDisplay';
+
 
 interface AgentSession {
   id: string;
@@ -91,15 +91,43 @@ export function AgentDetail() {
         ← Agents
       </button>
 
-      {/* Header */}
+      {/* Header — editable name + budget */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <div style={{
           width: 14, height: 14, background: agent.color,
           boxShadow: `0 0 10px ${agent.color}`,
         }} />
         <div>
-          <div style={{ fontSize: 'var(--font-lg)', color: 'var(--hud-text-h)' }}>
-            {getRoleDisplayName(agent.role, agent.id, company.employees)}
+          <div
+            style={{ fontSize: 'var(--font-lg)', color: 'var(--hud-text-h)', cursor: 'pointer', borderBottom: '1px dashed #2a3a50' }}
+            title="Click to rename"
+            onClick={async () => {
+              const newName = prompt('Agent name:', agent.name);
+              if (!newName?.trim() || newName === agent.name) return;
+              const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:3001';
+              await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName.trim() }),
+              });
+              // Refresh
+              if (isOnline()) {
+                const apiCompanies = await api.fetchCompanies();
+                const store = useDashboardStore.getState();
+                useDashboardStore.setState({
+                  companies: store.companies.map(co => {
+                    const updated = apiCompanies.find(c => c.id === co.id);
+                    if (!updated) return co;
+                    return { ...co, employees: updated.agents.map(a => ({
+                      id: a.id, name: a.name, role: a.role as any, status: a.status as any,
+                      col: a.tileCol, row: a.tileRow, color: a.color,
+                      assignedTask: a.assignedTask, progress: a.progress,
+                    })) };
+                  }),
+                });
+              }
+            }}
+          >
+            {agent.name}
           </div>
           <div style={{ fontSize: 'var(--font-md)', color: agent.color, textTransform: 'uppercase' }}>{agent.role}</div>
         </div>

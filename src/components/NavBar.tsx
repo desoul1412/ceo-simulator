@@ -1,6 +1,8 @@
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import { InboxPanel } from './InboxPanel';
+import { fetchTicketStatus } from '../lib/orchestratorApi';
 
 function Tab({ label, to, active }: { label: string; to: string; active: boolean }) {
   const navigate = useNavigate();
@@ -40,6 +42,17 @@ export function NavBar() {
   const isHome = path === '/';
   const isCompanyView = !!companyId;
   const company = companies.find(c => c.id === companyId);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (!companyId || !orchestratorConnected) return;
+    const poll = () => fetchTicketStatus(companyId).then(s => {
+      setPendingCount((s.awaiting_approval ?? 0) + (s.open ?? 0));
+    }).catch(() => {});
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => clearInterval(interval);
+  }, [companyId, orchestratorConnected]);
 
   return (
     <nav style={{
@@ -90,7 +103,21 @@ export function NavBar() {
           <Tab label="Office" to={`/company/${companyId}`} active={path === `/company/${companyId}`} />
           <Tab label="Agents" to={`/company/${companyId}/agents`} active={path.includes('/agents')} />
           <Tab label="Goals" to={`/company/${companyId}/goals`} active={path.includes('/goals')} />
-          <Tab label="Board" to={`/company/${companyId}/board`} active={path.includes('/board')} />
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <Tab label="Board" to={`/company/${companyId}/board`} active={path.includes('/board')} />
+            {pendingCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: 0,
+                background: '#ff2244', color: '#fff',
+                fontSize: 8, fontWeight: 700,
+                width: 14, height: 14, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 0 4px #ff2244',
+              }}>
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            )}
+          </span>
           <Tab label="Docs" to={`/company/${companyId}/documents`} active={path.includes('/documents')} />
           <Tab label="Costs" to={`/company/${companyId}/costs`} active={path.includes('/costs')} />
           <Tab label="Org" to={`/company/${companyId}/org-chart`} active={path.includes('/org-chart')} />

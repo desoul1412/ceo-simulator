@@ -149,6 +149,9 @@ function NewCompanyTile() {
     const name = prompt('Company / Project name:');
     if (!name?.trim()) return;
 
+    const weeklyLimitStr = prompt('Weekly usage limit in USD (default: 23):', '23');
+    const weeklyLimit = parseFloat(weeklyLimitStr || '23') || 23;
+
     const repoUrl = prompt('Git repo URL (leave empty for local-only):', '');
 
     let branch: string | null = null;
@@ -163,7 +166,7 @@ function NewCompanyTile() {
     // Create company in Supabase and get the real UUID back
     if (isOnline()) {
       try {
-        const newCompany = await api.createCompany(name.trim(), 100000);
+        const newCompany = await api.createCompany(name.trim(), weeklyLimit);
         const localCompany = {
           id: newCompany.id, name: newCompany.name, budget: newCompany.budget,
           budgetSpent: newCompany.budgetSpent, status: newCompany.status as any,
