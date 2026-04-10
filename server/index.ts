@@ -817,19 +817,166 @@ app.patch('/api/plans/:id', async (req, res) => {
 app.post('/api/plans/:id/approve', async (req, res) => {
   const { data: plan, error } = await supabase
     .from('project_plans')
-    .update({ status: 'approved', approved_at: new Date().toISOString() })
+    .update({ status: 'approved', updated_at: new Date().toISOString() })
     .eq('id', req.params.id)
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
   const p = plan as any;
+
   await supabase.from('notifications').insert({
     company_id: p.company_id,
-    type: 'plan_approved',
+    type: 'plan_submitted',
     title: `Plan approved: ${p.title}`,
     message: `${p.type} plan "${p.title}" was approved`,
     link: `/company/${p.company_id}/overview`,
   });
+
+  // ── Autonomous execution triggers based on plan type ──────────────────
+  try {
+    if (p.type === 'hiring_plan') {
+      // Parse hiring plan table and auto-hire agents
+      const lines = (p.content as string).split('\n').filter((l: string) => l.startsWith('|') && !l.includes('---') && !l.toLowerCase().includes('role'));
+      for (const line of lines) {
+        const cols = line.split('|').map((c: string) => c.trim()).filter(Boolean);
+        if (cols.length >= 2) {
+          const role = cols[0];
+          const model = cols[1] || 'sonnet';
+          const budgetStr = cols[2] || '$10';
+          const budget = parseFloat(budgetStr.replace('$', '')) || 10;
+
+          // Check if this role already exists for this company
+          const { data: existing } = await supabase
+            .from('agents').select('id').eq('company_id', p.company_id).eq('role', role);
+          if (existing?.length) continue; // already hired
+
+          // Auto-hire via the existing hire logic
+          const namePool = AUTO_NAMES[role] ?? ['Agent'];
+          const agentName = namePool[Math.floor(Math.random() * namePool.length)];
+          const color = ROLE_COLORS[role] ?? '#6a7a90';
+          const sprite = ROLE_SPRITES[role] ?? 0;
+          const prompt = DEFAULT_SYSTEM_PROMPTS[role] ?? `You are a ${role}.`;
+          const skills = DEFAULT_SKILLS[role] ?? [];
+
+          const DESK_POSITIONS = [
+            { col: 4, row: 3 }, { col: 18, row: 3 }, { col: 4, row: 14 },
+            { col: 9, row: 3 }, { col: 24, row: 3 }, { col: 9, row: 14 },
+            { col: 13, row: 3 }, { col: 13, row: 14 }, { col: 18, row: 14 },
+          ];
+          const { data: allAgents } = await supabase.from('agents').select('tile_col, tile_row').eq('company_id', p.company_id);
+          const used = new Set((allAgents ?? []).map((a: any) => `${a.tile_col},${a.tile_row}`));
+          const desk = DESK_POSITIONS.find(d => !used.has(`${d.col},${d.row}`)) ?? { col: 5, row: 15 };
+
+          const ceo = (allAgents as any[])?.find?.((a: any) => a.role === 'CEO');
+
+          await supabase.from('agents').insert({
+            company_id: p.company_id, name: agentName, role, color,
+            sprite_index: sprite, tile_col: desk.col, tile_row: desk.row,
+            system_prompt: prompt, skills, budget_limit: budget,
+            reports_to: ceo?.id ?? null, memory: {},
+          } as any);
+
+          await supabase.from('activity_log').insert({
+            company_id: p.company_id, type: 'agent-hired',
+            message: `Auto-hired ${agentName} as ${role} (from approved hiring plan)`,
+          });
+        }
+      }
+
+      await supabase.from('notifications').insert({
+        company_id: p.company_id, type: 'system',
+        title: 'Agents hired from plan',
+        message: 'Hiring plan approved — agents auto-hired.',
+        link: `/company/${p.company_id}/agents`,
+      });
+    }
+
+    if (p.type === 'master_plan') {
+      // Parse phases into a sprint + tickets
+      const phases = (p.content as string).match(/###\s+(.+)/g) ?? [];
+      const tasks = (p.content as string).match(/- \[ \]\s+(.+)/g) ?? [];
+
+      if (phases.length > 0 || tasks.length > 0) {
+        // Create Sprint 1
+        const { data: sprint } = await supabase.from('sprints').insert({
+          company_id: p.company_id,
+          name: 'Sprint 1',
+          goal: phases[0]?.replace('### ', '') ?? 'Phase 1',
+          status: 'planning',
+        } as any).select().single();
+
+        // Create tickets from tasks
+        if (sprint && tasks.length > 0) {
+          const { data: agents } = await supabase.from('agents')
+            .select('id, role').eq('company_id', p.company_id);
+
+          for (let i = 0; i < tasks.length; i++) {
+            const taskText = tasks[i].replace(/- \[ \]\s+/, '');
+            // Try to match task to an agent role
+            const agent = (agents ?? []).find((a: any) => {
+              const r = (a.role as string).toLowerCase();
+              return taskText.toLowerCase().includes(r);
+            }) ?? (agents ?? [])[i % (agents ?? []).length];
+
+            await supabase.from('tickets').insert({
+              company_id: p.company_id,
+              agent_id: (agent as any)?.id ?? null,
+              title: taskText,
+              status: 'open',
+              sprint_id: (sprint as any).id,
+              board_column: 'backlog',
+              story_points: 1,
+              priority: i,
+            } as any);
+          }
+        }
+
+        await supabase.from('notifications').insert({
+          company_id: p.company_id, type: 'system',
+          title: 'Sprint created from master plan',
+          message: `Sprint 1 created with ${tasks.length} tickets.`,
+          link: `/company/${p.company_id}/board`,
+        });
+      }
+    }
+
+    if (p.type === 'daily_plan') {
+      // Auto-approve all 'awaiting_approval' tickets for this company
+      const { data: pendingTickets } = await supabase.from('tickets')
+        .select('id, agent_id, title')
+        .eq('company_id', p.company_id)
+        .eq('status', 'awaiting_approval');
+
+      if (pendingTickets?.length) {
+        for (const t of pendingTickets as any[]) {
+          await supabase.from('tickets').update({
+            status: 'approved', board_column: 'todo',
+          }).eq('id', t.id);
+          if (t.agent_id) {
+            await supabase.from('agents').update({
+              status: 'working', assigned_task: t.title,
+            }).eq('id', t.agent_id);
+          }
+        }
+
+        await supabase.from('notifications').insert({
+          company_id: p.company_id, type: 'system',
+          title: 'Daily plan approved — execution started',
+          message: `${pendingTickets.length} tickets approved. Heartbeat daemon will process them.`,
+          link: `/company/${p.company_id}/board`,
+        });
+      }
+
+      // Also approve 'open' tickets to 'approved' so heartbeat picks them up
+      await supabase.from('tickets')
+        .update({ status: 'approved', board_column: 'todo' })
+        .eq('company_id', p.company_id)
+        .eq('status', 'open');
+    }
+  } catch (execErr: any) {
+    console.error('[approve] Execution trigger error:', execErr.message);
+  }
+
   res.json(plan);
 });
 

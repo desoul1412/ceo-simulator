@@ -212,9 +212,22 @@ export function ProjectOverview() {
               <span style={labelStyle}>{PLAN_LABELS[type]}</span>
               <div style={{ display: 'flex', gap: 6 }}>
                 {plan && plan.status !== 'approved' && (
-                  <button onClick={() => handleApprove(plan.id)} style={{
+                  <button onClick={async () => {
+                    const actions: Record<string, string> = {
+                      summary: 'Mark summary as approved',
+                      master_plan: 'Approve → auto-create Sprint 1 + tickets from phases',
+                      hiring_plan: 'Approve → auto-hire all listed agents',
+                      daily_plan: 'Approve → auto-approve all tickets → agents start working',
+                    };
+                    if (!confirm(`${actions[type] ?? 'Approve this plan'}?`)) return;
+                    await handleApprove(plan.id);
+                  }} style={{
                     ...btnStyle, background: '#00ff8810', borderColor: '#00ff8840', color: 'var(--neon-green)',
-                  }}>Approve</button>
+                  }}>
+                    {type === 'hiring_plan' ? 'Approve & Hire' :
+                     type === 'master_plan' ? 'Approve & Create Sprint' :
+                     type === 'daily_plan' ? 'Approve & Execute' : 'Approve'}
+                  </button>
                 )}
                 {plan && !isEditing && (
                   <button onClick={() => { setEditingPlan(plan.id); setEditContent(plan.content); }} style={btnStyle}>
