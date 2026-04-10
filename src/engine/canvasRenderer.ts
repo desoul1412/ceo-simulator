@@ -43,6 +43,7 @@ export interface CharacterRenderState {
   label: string;          // role name shown above
   labelColor: string;     // role neon color
   speechBubble: string | null;
+  heartbeat: 'alive' | 'stale' | 'dead';
 }
 
 // ── HSB Color Application ────────────────────────────────────────────────────

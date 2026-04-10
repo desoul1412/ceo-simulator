@@ -1,6 +1,9 @@
 import { useState } from 'react';
 
-const ROLES = ['PM', 'DevOps', 'Frontend', 'Backend', 'QA', 'Designer'];
+const ENGINEERING_ROLES = ['PM', 'DevOps', 'Frontend', 'Backend', 'QA', 'Designer', 'Data Engineer'];
+const BUSINESS_ROLES = ['Marketing', 'Data Analyst', 'Operations', 'Sales', 'Content Writer', 'Growth', 'Finance', 'SEO'];
+// All available roles (engineering + business)
+const _ALL_ROLES = [...ENGINEERING_ROLES, ...BUSINESS_ROLES]; void _ALL_ROLES;
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   PM: 'Writes specs, user stories, acceptance criteria',
@@ -9,6 +12,15 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
   Backend: 'API endpoints, database, server logic, tests',
   QA: 'Test suites, bug triage, coverage reports',
   Designer: 'Design specs, mockups, color schemes, CSS',
+  'Data Engineer': 'Data pipelines, ETL, SQL, pandas validation',
+  Marketing: 'Content strategy, SEO audits, email sequences, social media',
+  'Data Analyst': 'KPI dashboards, cohort analysis, financial models, A/B tests',
+  Operations: 'SOPs, workflow maps, onboarding, OKRs, knowledge base',
+  Sales: 'Customer personas, funnels, pricing, competitor analysis',
+  'Content Writer': 'Blog posts, case studies, landing pages, newsletters',
+  Growth: 'Onboarding flows, referrals, A/B tests, churn prevention',
+  Finance: 'Financial models, cash flow, P&L, pricing strategy',
+  SEO: 'SEO audits, keyword research, link building, schema markup',
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -153,17 +165,35 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
         <div style={{ padding: '12px 14px' }}>
           {/* Role selector */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Role</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {ROLES.map(r => (
+            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Engineering Roles</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+              {ENGINEERING_ROLES.map(r => (
                 <button
                   key={r}
                   onClick={() => { setRole(r); setCustomRole(''); setSelectedSkills(DEFAULT_SKILLS[r] ?? []); }}
                   style={{
                     padding: '4px 10px', fontSize: 9,
-                    background: role === r && !customRole ? `${ROLE_COLORS[r]}18` : 'transparent',
-                    border: `1px solid ${role === r && !customRole ? ROLE_COLORS[r] + '60' : '#1b2030'}`,
-                    color: role === r && !customRole ? ROLE_COLORS[r] : '#4a5568',
+                    background: role === r && !customRole ? `${ROLE_COLORS[r] ?? '#6a7a90'}18` : 'transparent',
+                    border: `1px solid ${role === r && !customRole ? (ROLE_COLORS[r] ?? '#6a7a90') + '60' : '#1b2030'}`,
+                    color: role === r && !customRole ? ROLE_COLORS[r] ?? '#6a7a90' : '#4a5568',
+                    cursor: 'pointer', fontFamily: 'var(--font-hud)',
+                  }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Business Roles</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {BUSINESS_ROLES.map(r => (
+                <button
+                  key={r}
+                  onClick={() => { setRole(r); setCustomRole(''); setSelectedSkills(DEFAULT_SKILLS[r] ?? []); }}
+                  style={{
+                    padding: '4px 10px', fontSize: 9,
+                    background: role === r && !customRole ? `${ROLE_COLORS[r] ?? '#6a7a90'}18` : 'transparent',
+                    border: `1px solid ${role === r && !customRole ? (ROLE_COLORS[r] ?? '#6a7a90') + '60' : '#1b2030'}`,
+                    color: role === r && !customRole ? ROLE_COLORS[r] ?? '#6a7a90' : '#4a5568',
                     cursor: 'pointer', fontFamily: 'var(--font-hud)',
                   }}
                 >
