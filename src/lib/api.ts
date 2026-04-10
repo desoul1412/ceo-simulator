@@ -127,25 +127,24 @@ export async function fetchCompanies(): Promise<ApiCompany[]> {
 
 export async function deleteCompany(companyId: string): Promise<void> {
   if (!isOnline()) throw new Error('Offline');
-  // Delete in dependency order
-  await db().from('ticket_comments').delete().in('ticket_id',
-    (await db().from('tickets').select('id').eq('company_id', companyId)).data?.map((t: any) => t.id) ?? []
-  );
-  await db().from('tickets').delete().eq('company_id', companyId);
-  await db().from('audit_log').delete().eq('company_id', companyId);
-  await db().from('token_usage').delete().in('agent_id',
-    (await db().from('agents').select('id').eq('company_id', companyId)).data?.map((a: any) => a.id) ?? []
-  );
-  await db().from('agent_sessions').delete().in('agent_id',
-    (await db().from('agents').select('id').eq('company_id', companyId)).data?.map((a: any) => a.id) ?? []
-  );
-  await db().from('task_queue').delete().eq('company_id', companyId);
-  await db().from('activity_log').delete().eq('company_id', companyId);
-  await db().from('delegations').delete().eq('company_id', companyId);
-  await db().from('goals').delete().eq('company_id', companyId);
-  await db().from('configs').delete().eq('scope_id', companyId);
+  // Soft delete: remove agents and company, but KEEP tickets, goals, plans, docs, audit trail
+  // 1. Nullify agent references on tickets (so tickets survive agent deletion)
+  await db().from('tickets').update({ agent_id: null } as any).eq('company_id', companyId);
+  // 2. Delete agent-dependent data
+  const agentIds = (await db().from('agents').select('id').eq('company_id', companyId)).data?.map((a: any) => a.id) ?? [];
+  if (agentIds.length > 0) {
+    await db().from('token_usage').delete().in('agent_id', agentIds);
+    await db().from('agent_sessions').delete().in('agent_id', agentIds);
+  }
+  // 3. Delete agents, configs, delegations, task_queue
   await db().from('agents').delete().eq('company_id', companyId);
+  await db().from('configs').delete().eq('scope_id', companyId);
+  await db().from('delegations').delete().eq('company_id', companyId);
+  await db().from('task_queue').delete().eq('company_id', companyId);
+  // 4. Delete the company itself
   await db().from('companies').delete().eq('id', companyId);
+  // PRESERVED: tickets, ticket_comments, goals, project_plans, plan_comments,
+  //            activity_log, audit_log, merge_requests, sprints, notifications, env_vars
 }
 
 export async function createCompany(name: string, budget: number): Promise<ApiCompany> {

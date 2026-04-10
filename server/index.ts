@@ -281,6 +281,13 @@ app.delete('/api/agents/:agentId', async (req, res) => {
 
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
+    // Nullify agent references on tickets (preserve ticket history)
+    await supabase.from('tickets').update({ agent_id: null }).eq('agent_id', req.params.agentId);
+    await supabase.from('merge_requests').update({ agent_id: null }).eq('agent_id', req.params.agentId);
+    // Delete agent sessions + token usage
+    await supabase.from('token_usage').delete().eq('agent_id', req.params.agentId);
+    await supabase.from('agent_sessions').delete().eq('agent_id', req.params.agentId);
+    // Delete the agent
     await supabase.from('agents').delete().eq('id', req.params.agentId);
 
     await supabase.from('activity_log').insert({
