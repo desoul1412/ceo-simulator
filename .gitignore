@@ -34,3 +34,5 @@ server/.env
 
 .vercel
 .claude/settings.local.json
+.company-repos
+.agent-worktrees

@@ -5,6 +5,7 @@ import { processNextTask, getQueueStatus } from './taskProcessor';
 import { processNextTicket, getTicketQueueStatus } from './ticketProcessor';
 import { startHeartbeatDaemon, stopHeartbeatDaemon, isDaemonRunning } from './heartbeatDaemon';
 import { listWorktrees } from './worktreeManager';
+import { getCompanyCwd, ensureRepo, syncRepo, listRepos } from './repoManager';
 import { supabase } from './supabaseAdmin';
 
 const app = express();
@@ -51,8 +52,8 @@ app.post('/api/assign-goal', async (req, res) => {
       });
     };
 
-    // Get the project working directory (where code lives)
-    const cwd = process.cwd();
+    // Get the project working directory for THIS company's repo
+    const cwd = await getCompanyCwd(companyId);
 
     const result = await executeCeoGoal(companyId, goal, cwd, logActivity);
 
@@ -112,9 +113,10 @@ app.get('/api/costs/:companyId', async (req, res) => {
 
 // ── Process Task Queue ───────────────────────────────────────────────────────
 
-app.post('/api/process-queue', async (_req, res) => {
+app.post('/api/process-queue', async (req, res) => {
   try {
-    const cwd = process.cwd();
+    const companyId = req.body?.companyId;
+    const cwd = companyId ? await getCompanyCwd(companyId) : process.cwd();
     const result = await processNextTask(cwd);
     res.json(result);
   } catch (err: any) {
@@ -375,6 +377,72 @@ app.delete('/api/configs/:id', async (req, res) => {
   const { error } = await supabase.from('configs').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
+});
+
+// ── Repository Management ────────────────────────────────────────────────────
+
+// Connect a company to a Git repo
+app.post('/api/companies/:companyId/repo', async (req, res) => {
+  const { repoUrl, branch, authMethod, token } = req.body;
+  if (!repoUrl) return res.status(400).json({ error: 'Missing repoUrl' });
+
+  try {
+    await supabase.from('companies').update({
+      repo_url: repoUrl,
+      repo_branch: branch || 'main',
+      git_auth_method: authMethod || (token ? 'pat' : 'none'),
+      git_token_encrypted: token || null,
+      repo_status: 'not_connected',
+    }).eq('id', req.params.companyId);
+
+    // Clone immediately
+    const repoPath = await ensureRepo(req.params.companyId);
+
+    await supabase.from('activity_log').insert({
+      company_id: req.params.companyId,
+      type: 'status-change',
+      message: `Connected to repo: ${repoUrl} (branch: ${branch || 'main'})`,
+    });
+
+    res.json({ success: true, repoPath });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync (pull latest) a company's repo
+app.post('/api/companies/:companyId/repo/sync', async (req, res) => {
+  const result = await syncRepo(req.params.companyId);
+  res.json(result);
+});
+
+// Get repo status for a company
+app.get('/api/companies/:companyId/repo', async (req, res) => {
+  const { data } = await supabase
+    .from('companies')
+    .select('repo_url, repo_branch, repo_path, repo_status, repo_error, repo_last_synced_at, git_auth_method')
+    .eq('id', req.params.companyId)
+    .single();
+  res.json(data ?? {});
+});
+
+// Disconnect repo
+app.delete('/api/companies/:companyId/repo', async (req, res) => {
+  await supabase.from('companies').update({
+    repo_url: null,
+    repo_branch: 'main',
+    repo_path: null,
+    git_auth_method: 'none',
+    git_token_encrypted: null,
+    repo_status: 'not_connected',
+    repo_error: null,
+  }).eq('id', req.params.companyId);
+  res.json({ success: true });
+});
+
+// List all managed repos
+app.get('/api/repos', (_req, res) => {
+  res.json(listRepos());
 });
 
 // ── Tickets ──────────────────────────────────────────────────────────────────

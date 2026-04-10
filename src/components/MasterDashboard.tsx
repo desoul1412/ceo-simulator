@@ -130,18 +130,38 @@ function CompanyTile({ company }: { company: Company }) {
 
 function NewCompanyTile() {
   const addCompany = useDashboardStore(s => s.addCompany);
+  const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
   const navigate = useNavigate();
 
-  const handleCreate = () => {
-    const name = prompt('Company name:');
+  const handleCreate = async () => {
+    const name = prompt('Company / Project name:');
     if (!name?.trim()) return;
-    addCompany(name.trim(), 100000); // Budget is internal tracking, UI shows % of session limits
-    // Navigate after a tick to let the store update
-    setTimeout(() => {
+
+    const repoUrl = prompt('Git repo URL (leave empty for local-only):', '');
+
+    let token: string | null = null;
+    if (repoUrl?.includes('github.com')) {
+      token = prompt('GitHub PAT (leave empty for public repos):', '') || null;
+    }
+
+    addCompany(name.trim(), 100000);
+
+    // Wait for company to be created, then connect repo
+    setTimeout(async () => {
       const companies = useDashboardStore.getState().companies;
       const newest = companies[companies.length - 1];
-      if (newest) navigate(`/company/${newest.id}`);
-    }, 500);
+      if (!newest) return;
+
+      if (repoUrl?.trim() && orchestratorConnected) {
+        const { connectRepo } = await import('../lib/orchestratorApi');
+        await connectRepo(newest.id, {
+          repoUrl: repoUrl.trim(),
+          token: token || undefined,
+        }).catch(err => console.error('[repo] Connect failed:', err));
+      }
+
+      navigate(`/company/${newest.id}`);
+    }, 800);
   };
 
   return (

@@ -94,6 +94,48 @@ export async function fireAgent(agentId: string): Promise<{ success: boolean }> 
   return res.json();
 }
 
+// ── Repository Management ────────────────────────────────────────────────────
+
+export interface RepoStatus {
+  repo_url: string | null;
+  repo_branch: string;
+  repo_path: string | null;
+  repo_status: string;
+  repo_error: string | null;
+  repo_last_synced_at: string | null;
+  git_auth_method: string;
+}
+
+export async function connectRepo(companyId: string, config: {
+  repoUrl: string;
+  branch?: string;
+  authMethod?: string;
+  token?: string;
+}): Promise<{ success: boolean; repoPath?: string; error?: string }> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  return res.json();
+}
+
+export async function getRepoStatus(companyId: string): Promise<RepoStatus> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`);
+  if (!res.ok) return { repo_url: null, repo_branch: 'main', repo_path: null, repo_status: 'not_connected', repo_error: null, repo_last_synced_at: null, git_auth_method: 'none' };
+  return res.json();
+}
+
+export async function syncRepoApi(companyId: string): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo/sync`, { method: 'POST' });
+  return res.json();
+}
+
+export async function disconnectRepo(companyId: string): Promise<boolean> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`, { method: 'DELETE' });
+  return res.ok;
+}
+
 // ── Configs CRUD ─────────────────────────────────────────────────────────────
 
 export interface ConfigRow {

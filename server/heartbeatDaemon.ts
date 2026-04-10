@@ -1,5 +1,6 @@
 import { supabase } from './supabaseAdmin';
 import { processNextTicket } from './ticketProcessor';
+import { getCompanyCwd } from './repoManager';
 
 let daemonInterval: ReturnType<typeof setInterval> | null = null;
 let isRunning = false;
@@ -34,7 +35,9 @@ export function startHeartbeatDaemon(cwd: string, intervalMs = 30_000) {
 
         if ((count ?? 0) === 0) continue; // skip — no approved tickets to process
 
-        const result = await processNextTicket(co.id, cwd);
+        // Get THIS company's repo cwd
+        const companyCwd = await getCompanyCwd(co.id).catch(() => cwd);
+        const result = await processNextTicket(co.id, companyCwd);
         if (result.processed) {
           console.log(`[heartbeat] Processed ticket ${result.ticketId} for company ${co.id}`);
         }
