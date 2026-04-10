@@ -732,6 +732,62 @@ app.post('/api/merge-requests/:id/reject', async (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/merge-requests/:id/revert', async (req, res) => {
+  try {
+    const { data: mr } = await supabase
+      .from('merge_requests').select('*').eq('id', req.params.id).single();
+    if (!mr) return res.status(404).json({ error: 'MR not found' });
+    const m = mr as any;
+    if (m.status !== 'merged') return res.status(400).json({ error: 'Can only revert merged MRs' });
+
+    const cwd = await getCompanyCwd(m.company_id);
+    const { execSync } = await import('child_process');
+
+    // Find the merge commit and revert it
+    try {
+      // Get the merge commit hash
+      const mergeLog = execSync(
+        `git log --oneline --all --grep="Merge ${m.branch_name}" -1`,
+        { cwd, encoding: 'utf8' }
+      ).trim();
+      const mergeHash = mergeLog.split(' ')[0];
+
+      if (mergeHash) {
+        execSync(`git revert --no-edit ${mergeHash}`, { cwd, stdio: 'pipe' });
+      } else {
+        // Fallback: revert the branch tip
+        execSync(`git revert --no-edit HEAD`, { cwd, stdio: 'pipe' });
+      }
+
+      // Update MR status
+      await supabase.from('merge_requests').update({
+        status: 'rejected',
+        diff_summary: `Reverted at ${new Date().toISOString()}`,
+      }).eq('id', req.params.id);
+
+      await supabase.from('notifications').insert({
+        company_id: m.company_id,
+        type: 'merge_request',
+        title: `Reverted: ${m.branch_name}`,
+        message: `MR "${m.title}" was reverted on main.`,
+        link: `/company/${m.company_id}/merge-requests`,
+      });
+
+      await supabase.from('activity_log').insert({
+        company_id: m.company_id,
+        type: 'status-change',
+        message: `Reverted merge: ${m.branch_name} (${m.title})`,
+      });
+
+      res.json({ success: true });
+    } catch (revertErr: any) {
+      res.status(409).json({ error: `Revert failed: ${revertErr.message}` });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/merge-requests/:id/diff', async (req, res) => {
   try {
     const { data: mr } = await supabase

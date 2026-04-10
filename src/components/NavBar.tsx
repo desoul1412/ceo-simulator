@@ -118,6 +118,7 @@ export function NavBar() {
               </span>
             )}
           </span>
+          <Tab label="MRs" to={`/company/${companyId}/merge-requests`} active={path.includes('/merge-requests')} />
           <Tab label="Docs" to={`/company/${companyId}/documents`} active={path.includes('/documents')} />
           <Tab label="Costs" to={`/company/${companyId}/costs`} active={path.includes('/costs')} />
           <Tab label="Org" to={`/company/${companyId}/org-chart`} active={path.includes('/org-chart')} />
