@@ -106,67 +106,72 @@ export function ProjectOverview() {
     if (!companyId) return;
     setLoading(true);
 
-    // Try CEO agent first — use response to populate plans
+    const { supabase, isOnline } = await import('../lib/supabase');
+    if (!isOnline() || !supabase) { setLoading(false); return; }
+
+    // Step 1: Call CEO agent to analyze the project
     let ceoReasoning = '';
     let ceoSubtasks: { role: string; task: string }[] = [];
     try {
       const result = await assignGoalToOrchestrator(companyId,
-        'Review this project. Analyze the codebase, tech stack, and current state. Produce a project overview with: 1) Summary of what this project is. 2) A phased master execution plan. 3) Which agent roles should be hired and why. 4) Key environment variables needed.');
+        'Review this project. Analyze the codebase, tech stack, and current state. Produce a project overview.');
       ceoReasoning = result?.plan?.reasoning ?? '';
       ceoSubtasks = result?.plan?.subtasks ?? [];
     } catch {
-      // Orchestrator offline — that's fine, we'll create templates
+      // Orchestrator offline — will use templates
     }
 
-    // Create plans from CEO reasoning or templates
-    const { supabase, isOnline } = await import('../lib/supabase');
-    if (isOnline() && supabase) {
-      const planTemplates = [
-        {
-          type: 'summary', title: 'Project Summary',
-          content: ceoReasoning
-            ? `## Project Summary\n\n${ceoReasoning}\n\n_CEO analysis generated automatically. Edit to refine._`
-            : '## Project Summary\n\n**Name:** \n**Stack:** \n**Repo:** \n**Current State:** \n**Goal:** \n\n_Edit this with your project details._',
-        },
-        {
-          type: 'master_plan', title: 'Master Execution Plan',
-          content: ceoSubtasks.length > 0
-            ? `## Master Execution Plan\n\n${ceoSubtasks.map((s, i) => `### Phase ${i + 1}: ${s.role}\n- [ ] ${s.task}`).join('\n\n')}\n\n_Generated from CEO delegation plan. Edit to refine._`
-            : '## Master Execution Plan\n\n### Phase 1: Setup & Planning\n- [ ] Review codebase and architecture\n- [ ] Define requirements\n- [ ] Set up CI/CD\n\n### Phase 2: Core Features\n- [ ] Feature A\n- [ ] Feature B\n\n### Phase 3: Polish & Launch\n- [ ] Testing & QA\n- [ ] Documentation\n- [ ] Deploy\n\n_Edit phases to match your project._',
-        },
-        {
-          type: 'hiring_plan', title: 'Hiring Plan',
-          content: ceoSubtasks.length > 0
-            ? `## Hiring Plan\n\n| Role | Reason |\n|------|--------|\n${ceoSubtasks.map(s => `| ${s.role} | ${s.task} |`).join('\n')}\n\n_Based on CEO analysis. Edit roles then approve to hire._`
-            : '## Hiring Plan\n\n| Role | Model | Budget | Reason |\n|------|-------|--------|--------|\n| PM | sonnet | $15 | Requirements & specs |\n| Frontend | sonnet | $15 | UI implementation |\n| Backend | sonnet | $15 | API & database |\n| QA | haiku | $5 | Testing |\n\n_Edit roles based on your project needs._',
-        },
-        {
-          type: 'daily_plan', title: "Today's Plan",
-          content: "## Today's Plan\n\nNo tasks scheduled yet. Approve the hiring plan first, then create a sprint from the Board tab.\n\n_Edit to add today's priorities._",
-        },
-      ];
+    // Step 2: Fetch FRESH plans from DB to check for existing ones
+    const { data: existingPlans } = await supabase
+      .from('project_plans')
+      .select('id, type')
+      .eq('company_id', companyId);
+    const existingByType = new Map((existingPlans ?? []).map((p: any) => [p.type, p.id]));
 
-      for (const t of planTemplates) {
-        const existing = planByType(t.type);
-        if (existing) {
-          // Update existing plan
-          await supabase.from('project_plans').update({
-            content: t.content,
-            updated_at: new Date().toISOString(),
-          } as any).eq('id', existing.id);
-        } else {
-          // Create new plan
-          await supabase.from('project_plans').insert({
-            company_id: companyId,
-            type: t.type,
-            title: t.title,
-            content: t.content,
-            status: 'draft',
-            author_type: ceoReasoning ? 'ceo' : 'human',
-          } as any);
-        }
+    // Step 3: Upsert each plan type (update if exists, create if not)
+    const templates: { type: string; title: string; content: string }[] = [
+      {
+        type: 'summary', title: 'Project Summary',
+        content: ceoReasoning
+          ? `## Project Summary\n\n${ceoReasoning}\n\n_CEO analysis. Edit to refine._`
+          : '## Project Summary\n\n**Name:** \n**Stack:** \n**Repo:** \n**Current State:** \n**Goal:** \n\n_Edit this with your project details._',
+      },
+      {
+        type: 'master_plan', title: 'Master Execution Plan',
+        content: ceoSubtasks.length > 0
+          ? `## Master Execution Plan\n\n${ceoSubtasks.map((s, i) => `### Phase ${i + 1}: ${s.role}\n- [ ] ${s.task}`).join('\n\n')}`
+          : '## Master Execution Plan\n\n### Phase 1: Setup & Planning\n- [ ] Review codebase\n- [ ] Define requirements\n\n### Phase 2: Core Features\n- [ ] Feature A\n- [ ] Feature B\n\n### Phase 3: Launch\n- [ ] Testing\n- [ ] Deploy',
+      },
+      {
+        type: 'hiring_plan', title: 'Hiring Plan',
+        content: ceoSubtasks.length > 0
+          ? `## Hiring Plan\n\n| Role | Reason |\n|------|--------|\n${ceoSubtasks.map(s => `| ${s.role} | ${s.task} |`).join('\n')}`
+          : '## Hiring Plan\n\n| Role | Model | Budget | Reason |\n|------|-------|--------|--------|\n| PM | sonnet | $15 | Specs |\n| Frontend | sonnet | $15 | UI |\n| Backend | sonnet | $15 | API |\n| QA | haiku | $5 | Tests |',
+      },
+      {
+        type: 'daily_plan', title: "Today's Plan",
+        content: "## Today's Plan\n\nApprove the hiring plan first, then create a sprint.",
+      },
+    ];
+
+    for (const t of templates) {
+      const existingId = existingByType.get(t.type);
+      if (existingId) {
+        await supabase.from('project_plans').update({
+          content: t.content, updated_at: new Date().toISOString(),
+        } as any).eq('id', existingId);
+      } else {
+        await supabase.from('project_plans').insert({
+          company_id: companyId, type: t.type, title: t.title,
+          content: t.content, status: 'draft',
+          author_type: ceoReasoning ? 'ceo' : 'human',
+        } as any);
       }
     }
+
+    // Step 4: Reset company ceo_goal so it can be called again later
+    await supabase.from('companies').update({ ceo_goal: null, status: 'bootstrapping' } as any)
+      .eq('id', companyId);
 
     await load();
     setLoading(false);
