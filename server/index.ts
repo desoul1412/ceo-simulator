@@ -164,6 +164,11 @@ const AUTO_NAMES: Record<string, string[]> = {
   Finance:         ['Atlas Ledger', 'Harper Cent', 'Quinn Numbers'],
   SEO:             ['Serp Walker', 'Delta Rank', 'Echo Page'],
   'Data Engineer': ['Pipe Strom', 'River Query', 'Lake Schema'],
+  'Data Architect': ['Atlas Schema', 'Terra Model', 'Nova Vault'],
+  'Data Scientist': ['Iris Hypothesis', 'Sage Bayes', 'Pearl Tensor'],
+  'AI Engineer':    ['Neo Prompt', 'Vector Lane', 'Agent Flux'],
+  Automation:       ['Cron Webb', 'Flow Trigger', 'Hook Runner'],
+  'Full-Stack':     ['Apex Coder', 'Stack Weaver', 'Forge Builder'],
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -172,12 +177,16 @@ const ROLE_COLORS: Record<string, string> = {
   Marketing: '#ec4899', 'Data Analyst': '#06b6d4', Operations: '#84cc16',
   Sales: '#f97316', 'Content Writer': '#a78bfa', Growth: '#14b8a6',
   Finance: '#eab308', SEO: '#22d3ee', 'Data Engineer': '#8b5cf6',
+  'Data Architect': '#0ea5e9', 'Data Scientist': '#d946ef',
+  'AI Engineer': '#f43f5e', Automation: '#10b981', 'Full-Stack': '#6366f1',
 };
 
 const ROLE_SPRITES: Record<string, number> = {
   CEO: 0, PM: 1, DevOps: 2, Frontend: 3, Backend: 4, QA: 5, Designer: 5,
   Marketing: 1, 'Data Analyst': 4, Operations: 2, Sales: 3,
   'Content Writer': 1, Growth: 0, Finance: 2, SEO: 4, 'Data Engineer': 5,
+  'Data Architect': 4, 'Data Scientist': 5, 'AI Engineer': 0,
+  Automation: 2, 'Full-Stack': 3,
 };
 
 const DEFAULT_SYSTEM_PROMPTS: Record<string, string> = {
@@ -196,6 +205,11 @@ const DEFAULT_SYSTEM_PROMPTS: Record<string, string> = {
   Finance: 'You are a Finance Controller. Build financial models, cash flow forecasts, P&L reports, pricing strategies, investor updates.',
   SEO: 'You are an SEO Specialist. Conduct SEO audits, keyword research, site architecture planning, schema markup, link building strategies.',
   'Data Engineer': 'You are a Data Engineer. Build data pipelines, ETL processes, database schemas. Validate each step: print df.shape after every transform.',
+  'Data Architect': 'You are a Data Architect. Design database schemas, data models (star/snowflake), partition strategies, and migration plans. Ensure normalization, referential integrity, and query performance.',
+  'Data Scientist': 'You are a Data Scientist. Run hypothesis-driven analysis, design experiments, build ML pipelines, and produce reproducible notebooks. Always state assumptions and validate with statistical tests.',
+  'AI Engineer': 'You are an AI Engineer. Build LLM integrations, design prompts, orchestrate agents (Claude Agent SDK), implement RAG systems, and optimize for cost/latency. Use structured output where possible.',
+  Automation: 'You are an Automation Engineer. Build n8n workflows, scheduled tasks, ETL pipelines, and webhook integrations. Ensure idempotency, error handling, and retry logic.',
+  'Full-Stack': 'You are a Full-Stack Developer. Build end-to-end features across React 19 + Vite + Supabase. TDD-first: write tests before implementation. Read existing code before writing.',
 };
 
 const DEFAULT_SKILLS: Record<string, string[]> = {
@@ -214,6 +228,11 @@ const DEFAULT_SKILLS: Record<string, string[]> = {
   Finance: ['Financial Modeling', 'Cash Flow', 'Pricing', 'Unit Economics'],
   SEO: ['Technical SEO', 'Keyword Research', 'Link Building', 'Schema Markup'],
   'Data Engineer': ['Data Pipelines', 'SQL', 'Python/Pandas', 'ETL'],
+  'Data Architect': ['Data Modeling', 'ETL Architecture', 'Migration Safety', 'Schema Design'],
+  'Data Scientist': ['ML Pipelines', 'Experiment Design', 'Statistical Analysis', 'Python'],
+  'AI Engineer': ['LLM Integration', 'Prompt Engineering', 'Agent Orchestration', 'RAG Systems'],
+  Automation: ['n8n Workflows', 'Pipeline Automation', 'Webhook Integration', 'ETL'],
+  'Full-Stack': ['React', 'TypeScript', 'API Design', 'Database', 'TDD'],
 };
 
 app.post('/api/hire-agent', async (req, res) => {

@@ -6,6 +6,56 @@ status: active
 
 # Changelog
 
+## 2026-04-10 — New Role Presets & Skill Libraries (5 roles, 16 skills)
+
+### Agent Presets Created (5 files)
+`brain/library/agent-presets/`:
+- **data-architect.md** — Database schema design, data modeling, ETL architecture, migration safety. Maps: superpowers (writing-plans, verification), project-planning (kpi-dashboard, cohort-analysis).
+- **data-scientist.md** — ML pipelines, statistical analysis, experiment design, feature engineering. Maps: project-planning (cohort-analysis, kpi-dashboard), superpowers (verification, writing-plans).
+- **ai-engineer.md** — LLM integration, prompt engineering, agent orchestration, RAG systems. Maps: superpowers (subagent-driven-development, dispatching-parallel-agents), project-planning (automation-workflow).
+- **automation-engineer.md** — n8n workflows, scheduled tasks, data pipelines, process automation. Maps: superpowers (executing-plans), project-planning (sop-builder, automation-workflow).
+- **full-stack-developer.md** — End-to-end features, React + API + DB, rapid prototyping. Maps: superpowers (test-driven-development, systematic-debugging, subagent-driven-development).
+
+### Skill Files Created (16 files across 5 roles)
+`brain/library/skills/`:
+- **data-architect/** (3): data-modeling, etl-architecture, migration-safety
+- **data-scientist/** (3): ml-pipelines, experiment-design, statistical-analysis
+- **ai-engineer/** (4): llm-integration, prompt-engineering, agent-orchestration, rag-systems
+- **automation/** (3): n8n-workflows, pipeline-automation, webhook-integration
+- **full-stack/** (3): rapid-prototyping, end-to-end-features, tdd-full-stack
+
+Skills synthesized from:
+- 8 superpowers skills (brainstorming, TDD, systematic-debugging, subagent-driven-dev, dispatching-parallel-agents, verification-before-completion, writing-plans, executing-plans)
+- 1 frontend-design skill
+- 4 project-planning skills (kpi-dashboard, cohort-analysis, automation-workflow, sop-builder)
+
+---
+
+## 2026-04-08 — Per-Role Skill Library Expansion
+
+### Comprehensive Skill Files (27 files across 8 roles)
+Created `brain/library/skills/[role]/` directories with detailed skill files for each role:
+- **CEO** (3): strategic-planning, budget-management, team-orchestration
+- **PM** (3): requirements-engineering, sprint-planning, risk-assessment
+- **Frontend** (4): react-mastery, ui-ux-design-system, frontend-tdd, canvas-rendering
+- **Backend** (4): api-architecture, database-engineering, backend-tdd, agent-sdk-integration
+- **DevOps** (4): deployment-verification, docker-infrastructure, ci-cd-pipelines, environment-management
+- **QA** (3): test-strategy, automated-testing, data-validation
+- **Designer** (3): pixel-art-hud, responsive-design, design-tokens
+- **Data Engineer** (3): pipeline-debugging, pandas-mastery, data-quality
+
+Each file includes: YAML frontmatter, description, tools, system prompt injection text, anti-patterns (based on usage report friction), and verification steps.
+
+Key friction points addressed:
+- TDD-first enforcement (16 buggy first-pass incidents) → frontend-tdd, backend-tdd skills
+- Deployment verification (3+ wrong Vercel targets) → deployment-verification skill
+- Spec-first coding (14 wrong-approach pivots) → requirements-engineering skill
+- Data pipeline debugging (pandas/groupby issues) → pipeline-debugging, pandas-mastery, data-quality skills
+
+Updated `brain/library/00-Library-Index.md` with per-role skill references.
+
+---
+
 ## 2026-04-08 — Wave 2: Agent-Agnostic Runtimes + Session Resume + Skill Injection + Mobile UI
 
 ### Agent-Agnostic Runtime Abstraction (W2.1)

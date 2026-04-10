@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-const ENGINEERING_ROLES = ['PM', 'DevOps', 'Frontend', 'Backend', 'QA', 'Designer', 'Data Engineer'];
+const ENGINEERING_ROLES = ['PM', 'DevOps', 'Frontend', 'Backend', 'QA', 'Designer', 'Full-Stack'];
+const DATA_AI_ROLES = ['Data Engineer', 'Data Architect', 'Data Scientist', 'AI Engineer', 'Automation'];
 const BUSINESS_ROLES = ['Marketing', 'Data Analyst', 'Operations', 'Sales', 'Content Writer', 'Growth', 'Finance', 'SEO'];
-// All available roles (engineering + business)
-const _ALL_ROLES = [...ENGINEERING_ROLES, ...BUSINESS_ROLES]; void _ALL_ROLES;
+// All available roles
+const _ALL_ROLES = [...ENGINEERING_ROLES, ...DATA_AI_ROLES, ...BUSINESS_ROLES]; void _ALL_ROLES;
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   PM: 'Writes specs, user stories, acceptance criteria',
@@ -13,6 +14,11 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
   QA: 'Test suites, bug triage, coverage reports',
   Designer: 'Design specs, mockups, color schemes, CSS',
   'Data Engineer': 'Data pipelines, ETL, SQL, pandas validation',
+  'Data Architect': 'Schema design, data modeling, star/snowflake, migrations',
+  'Data Scientist': 'ML pipelines, experiment design, statistical analysis',
+  'AI Engineer': 'LLM integration, prompt engineering, agent orchestration, RAG',
+  Automation: 'n8n workflows, scheduled tasks, ETL, webhook integration',
+  'Full-Stack': 'End-to-end features, React + API + DB, TDD-first',
   Marketing: 'Content strategy, SEO audits, email sequences, social media',
   'Data Analyst': 'KPI dashboards, cohort analysis, financial models, A/B tests',
   Operations: 'SOPs, workflow maps, onboarding, OKRs, knowledge base',
@@ -168,6 +174,24 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
             <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Engineering Roles</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
               {ENGINEERING_ROLES.map(r => (
+                <button
+                  key={r}
+                  onClick={() => { setRole(r); setCustomRole(''); setSelectedSkills(DEFAULT_SKILLS[r] ?? []); }}
+                  style={{
+                    padding: '4px 10px', fontSize: 9,
+                    background: role === r && !customRole ? `${ROLE_COLORS[r] ?? '#6a7a90'}18` : 'transparent',
+                    border: `1px solid ${role === r && !customRole ? (ROLE_COLORS[r] ?? '#6a7a90') + '60' : '#1b2030'}`,
+                    color: role === r && !customRole ? ROLE_COLORS[r] ?? '#6a7a90' : '#4a5568',
+                    cursor: 'pointer', fontFamily: 'var(--font-hud)',
+                  }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Data & AI Roles</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+              {DATA_AI_ROLES.map(r => (
                 <button
                   key={r}
                   onClick={() => { setRole(r); setCustomRole(''); setSelectedSkills(DEFAULT_SKILLS[r] ?? []); }}
