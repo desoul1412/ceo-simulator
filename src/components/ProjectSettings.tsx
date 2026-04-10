@@ -217,6 +217,51 @@ function RepoPanel({ companyId }: { companyId: string }) {
               Disconnect
             </button>
           </div>
+
+          {/* PAT update (always visible when connected) */}
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', marginBottom: 3 }}>
+                GITHUB PAT {repo?.git_auth_method === 'pat' ? '(configured)' : '(not set — agents cannot push)'}
+              </div>
+              <input
+                type="password"
+                value={token}
+                onChange={e => setToken(e.target.value)}
+                placeholder={repo?.git_auth_method === 'pat' ? '●●●●●●●● (enter new to update)' : 'ghp_xxxxx (required for push)'}
+                style={{
+                  width: '100%', padding: '6px 10px', fontSize: 'var(--font-sm)',
+                  background: '#0d1117', border: `1px solid ${repo?.git_auth_method === 'pat' ? '#00ff8840' : '#ff884040'}`,
+                  color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)',
+                }}
+              />
+            </div>
+            <button
+              onClick={async () => {
+                if (!token.trim()) return;
+                setLoading(true);
+                await connectRepo(companyId, {
+                  repoUrl: repo?.repo_url ?? repoUrl,
+                  branch: repo?.repo_branch ?? 'main',
+                  token: token.trim(),
+                });
+                setToken('');
+                await loadRepo();
+                setLoading(false);
+              }}
+              disabled={loading || !token.trim()}
+              style={{
+                padding: '6px 14px', fontSize: 'var(--font-xs)',
+                background: token.trim() ? '#00ff8810' : '#1b2030',
+                border: `1px solid ${token.trim() ? '#00ff8840' : '#1b2030'}`,
+                color: token.trim() ? 'var(--neon-green)' : '#2a3a50',
+                cursor: token.trim() ? 'pointer' : 'default',
+                fontFamily: 'var(--font-hud)',
+              }}
+            >
+              {loading ? '...' : 'Update PAT'}
+            </button>
+          </div>
         </div>
       )}
 
