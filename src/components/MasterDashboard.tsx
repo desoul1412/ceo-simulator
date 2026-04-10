@@ -156,24 +156,42 @@ function NewCompanyTile() {
       token = prompt('GitHub PAT (leave empty for public repos):', '') || null;
     }
 
-    addCompany(name.trim(), 100000);
+    // Create company in Supabase and get the real UUID back
+    if (isOnline()) {
+      try {
+        const newCompany = await api.createCompany(name.trim(), 100000);
+        const localCompany = {
+          id: newCompany.id, name: newCompany.name, budget: newCompany.budget,
+          budgetSpent: newCompany.budgetSpent, status: newCompany.status as any,
+          ceoGoal: newCompany.ceoGoal,
+          employees: newCompany.agents.map((a: any) => ({
+            id: a.id, name: a.name, role: a.role, status: a.status,
+            col: a.tileCol, row: a.tileRow, color: a.color,
+            assignedTask: a.assignedTask, progress: a.progress,
+          })),
+          delegations: [],
+        };
+        useDashboardStore.setState(state => ({
+          companies: [...state.companies, localCompany],
+        }));
 
-    // Wait for company to be created, then connect repo
-    setTimeout(async () => {
-      const companies = useDashboardStore.getState().companies;
-      const newest = companies[companies.length - 1];
-      if (!newest) return;
+        // Connect repo with the REAL Supabase UUID
+        if (repoUrl?.trim() && orchestratorConnected) {
+          const { connectRepo } = await import('../lib/orchestratorApi');
+          await connectRepo(newCompany.id, {
+            repoUrl: repoUrl.trim(),
+            token: token || undefined,
+          }).catch(err => console.error('[repo] Connect failed:', err));
+        }
 
-      if (repoUrl?.trim() && orchestratorConnected) {
-        const { connectRepo } = await import('../lib/orchestratorApi');
-        await connectRepo(newest.id, {
-          repoUrl: repoUrl.trim(),
-          token: token || undefined,
-        }).catch(err => console.error('[repo] Connect failed:', err));
+        navigate(`/company/${newCompany.id}`);
+      } catch (err) {
+        console.error('[create] Failed:', err);
+        addCompany(name.trim(), 100000); // fallback to local
       }
-
-      navigate(`/company/${newest.id}`);
-    }, 800);
+    } else {
+      addCompany(name.trim(), 100000);
+    }
   };
 
   return (
