@@ -94,16 +94,47 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
       : '';
     const fullTask = `${t.title}${t.description ? '\n\n' + t.description : ''}${ancestryContext}`;
 
-    // Create worktree branch for isolated execution
-    const branchName = taskBranchName(agentData.role, t.title);
+    // ── Persistent agent branch strategy ─────────────────────────────────
+    // Each agent has ONE branch: agent/{name-slug}
+    // Flow: checkout branch → pull main → work → commit → push → create MR
+    const agentSlug = (agentData.name ?? agentData.role ?? 'agent')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const branchName = `agent/${agentSlug}`;
+
+    // Create worktree for this agent's persistent branch
     const worktreePath = createWorktree(cwd, branchName);
 
-    // Execute via universal agent runner (dispatches to correct runtime)
+    // Pull latest from main into agent branch (rebase to stay clean)
+    try {
+      execSync(`git fetch origin main 2>/dev/null; git rebase origin/main 2>/dev/null || git merge origin/main --no-edit 2>/dev/null || true`, {
+        cwd: worktreePath, stdio: 'pipe',
+      });
+    } catch { /* first time — no origin/main yet */ }
+
+    // Conflict avoidance: check if other agents have open MRs touching same files
+    // If so, add a warning to the task context
+    let conflictWarning = '';
+    try {
+      const { data: openMRs } = await supabase.from('merge_requests')
+        .select('branch_name, agent_id, diff_summary')
+        .eq('company_id', t.company_id)
+        .eq('status', 'open');
+      if (openMRs?.length) {
+        const otherBranches = (openMRs as any[])
+          .filter(m => m.branch_name !== branchName)
+          .map(m => m.branch_name);
+        if (otherBranches.length > 0) {
+          conflictWarning = `\n\n⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: ${otherBranches.join(', ')}. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.`;
+        }
+      }
+    } catch { /* non-critical */ }
+
+    // Execute via universal agent runner
     const ctx: AgentContext = {
       agentId: t.agent_id,
       companyId: t.company_id,
       role: agentData.role,
-      task: fullTask,
+      task: fullTask + conflictWarning,
       cwd: worktreePath,
       systemPrompt: agentData.system_prompt ?? '',
       memory: agentData.memory ?? {},
@@ -117,69 +148,92 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
 
     const result = await executeAgent(ctx);
 
-    // Post-execution: commit, push, create merge request
+    // ── Post-execution: commit → push → create MR ────────────────────────
     let mrId: string | null = null;
+    const role = agentData.role ?? 'agent';
+    const title = t.title ?? 'task';
+
     try {
-      // Stage and get diff stats
-      execSync('git add -A && git diff --cached --stat', { cwd: worktreePath, stdio: 'pipe' });
+      // Check if there are actual changes
+      const statusOut = execSync('git status --porcelain', { cwd: worktreePath, encoding: 'utf8' }).trim();
+      if (!statusOut) {
+        console.log(`[git] No changes from ${role} on "${title}"`);
+      } else {
+        // Stage all changes
+        execSync('git add -A', { cwd: worktreePath, stdio: 'pipe' });
 
-      // Commit
-      const role = agentData.role ?? 'agent';
-      const title = t.title ?? 'task';
-      execSync(`git commit -m "agent/${role}: ${title}" --allow-empty`, { cwd: worktreePath, stdio: 'pipe' });
+        // Commit with descriptive message
+        const commitMsg = `${role}: ${title}`.replace(/"/g, '\\"');
+        execSync(`git commit -m "${commitMsg}"`, { cwd: worktreePath, stdio: 'pipe' });
 
-      // Push (catch errors — remote may not be configured)
-      try {
-        execSync(`git push origin ${branchName}`, { cwd: worktreePath, stdio: 'pipe' });
-      } catch (pushErr: any) {
-        console.warn(`[worktree] Push failed for ${branchName}: ${pushErr.message}`);
-      }
+        // Push to agent's persistent branch
+        try {
+          execSync(`git push origin ${branchName}`, { cwd: worktreePath, stdio: 'pipe' });
+        } catch {
+          // First push — set upstream
+          try {
+            execSync(`git push -u origin ${branchName}`, { cwd: worktreePath, stdio: 'pipe' });
+          } catch (pushErr: any) {
+            console.warn(`[git] Push failed for ${branchName}: ${pushErr.message}`);
+          }
+        }
 
-      // Get diff stats from last commit
-      let filesChanged = 0, insertions = 0, deletions = 0;
-      try {
-        const diffOut = execSync('git diff --stat HEAD~1', { cwd: worktreePath, encoding: 'utf8' });
-        const statLine = diffOut.trim().split('\n').pop() ?? '';
-        const fcMatch = statLine.match(/(\d+)\s+file/);
-        const insMatch = statLine.match(/(\d+)\s+insertion/);
-        const delMatch = statLine.match(/(\d+)\s+deletion/);
-        if (fcMatch) filesChanged = parseInt(fcMatch[1], 10);
-        if (insMatch) insertions = parseInt(insMatch[1], 10);
-        if (delMatch) deletions = parseInt(delMatch[1], 10);
-      } catch { /* no diff stats available */ }
+        // Get diff stats
+        let filesChanged = 0, insertions = 0, deletions = 0;
+        try {
+          const diffOut = execSync(`git diff --stat origin/main...${branchName}`, { cwd: worktreePath, encoding: 'utf8' });
+          const statLine = diffOut.trim().split('\n').pop() ?? '';
+          const fcMatch = statLine.match(/(\d+)\s+file/);
+          const insMatch = statLine.match(/(\d+)\s+insertion/);
+          const delMatch = statLine.match(/(\d+)\s+deletion/);
+          if (fcMatch) filesChanged = parseInt(fcMatch[1], 10);
+          if (insMatch) insertions = parseInt(insMatch[1], 10);
+          if (delMatch) deletions = parseInt(delMatch[1], 10);
+        } catch { /* diff stats not critical */ }
 
-      // Create merge_request in supabase
-      const { data: mr } = await supabase.from('merge_requests').insert({
-        company_id: t.company_id,
-        ticket_id: ticketId,
-        agent_id: t.agent_id,
-        branch_name: branchName,
-        target_branch: 'main',
-        status: 'open',
-        files_changed: filesChanged,
-        insertions,
-        deletions,
-        title: `agent/${role}: ${title}`,
-      }).select().single();
+        // Get changed file list for conflict tracking
+        let changedFiles = '';
+        try {
+          changedFiles = execSync(`git diff --name-only origin/main...${branchName}`, { cwd: worktreePath, encoding: 'utf8' }).trim();
+        } catch { /* non-critical */ }
 
-      if (mr) {
-        mrId = (mr as any).id;
-
-        // Create notification
-        await supabase.from('notifications').insert({
+        // Create merge request
+        const { data: mr } = await supabase.from('merge_requests').insert({
           company_id: t.company_id,
-          type: 'merge_request',
-          title: `New MR: ${branchName}`,
-          message: `${role} completed "${title}" — ${filesChanged} files, +${insertions}/-${deletions}`,
-          link: `/company/${t.company_id}/board`,
-        });
+          ticket_id: ticketId,
+          agent_id: t.agent_id,
+          branch_name: branchName,
+          target_branch: 'main',
+          status: 'open',
+          files_changed: filesChanged,
+          insertions,
+          deletions,
+          diff_summary: changedFiles,
+          title: `${role}: ${title}`,
+        }).select().single();
+
+        if (mr) {
+          mrId = (mr as any).id;
+          await supabase.from('notifications').insert({
+            company_id: t.company_id,
+            type: 'merge_request',
+            title: `MR from ${agentSlug}: ${title}`,
+            message: `${role} completed "${title}" — ${filesChanged} files, +${insertions}/-${deletions}`,
+            link: `/company/${t.company_id}/merge-requests`,
+          });
+        }
       }
     } catch (gitErr: any) {
-      console.warn(`[worktree] Git post-processing failed: ${gitErr.message}`);
+      console.warn(`[git] Post-processing failed: ${gitErr.message}`);
     }
 
-    // Remove worktree (keep remote branch)
-    removeWorktree(cwd, branchName);
+    // Keep worktree alive (persistent branch) — only remove if no more tasks pending
+    const { data: moreTasks } = await supabase.from('tickets')
+      .select('id').eq('company_id', t.company_id).eq('agent_id', t.agent_id)
+      .in('status', ['approved', 'open']).limit(1);
+    if (!(moreTasks?.length)) {
+      removeWorktree(cwd, branchName);
+    }
 
     // Mark ticket completed
     const ticketUpdate: any = {
