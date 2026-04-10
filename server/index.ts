@@ -13,8 +13,7 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors({
   origin: [
-    'http://localhost:5173',     // Vite dev server
-    'http://localhost:4173',     // Vite preview
+    /^http:\/\/localhost:\d+$/,  // Any localhost port (Vite dev server)
     /\.vercel\.app$/,            // Vercel deployments
   ],
 }));
