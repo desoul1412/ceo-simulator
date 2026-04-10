@@ -151,9 +151,13 @@ function NewCompanyTile() {
 
     const repoUrl = prompt('Git repo URL (leave empty for local-only):', '');
 
+    let branch: string | null = null;
     let token: string | null = null;
-    if (repoUrl?.includes('github.com')) {
-      token = prompt('GitHub PAT (leave empty for public repos):', '') || null;
+    if (repoUrl?.trim()) {
+      branch = prompt('Branch (default: main):', 'main') || 'main';
+      if (repoUrl.includes('github.com')) {
+        token = prompt('GitHub PAT (leave empty for public repos):', '') || null;
+      }
     }
 
     // Create company in Supabase and get the real UUID back
@@ -180,6 +184,7 @@ function NewCompanyTile() {
           const { connectRepo } = await import('../lib/orchestratorApi');
           await connectRepo(newCompany.id, {
             repoUrl: repoUrl.trim(),
+            branch: branch || 'main',
             token: token || undefined,
           }).catch(err => console.error('[repo] Connect failed:', err));
         }
