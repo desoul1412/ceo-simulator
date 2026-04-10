@@ -156,13 +156,21 @@ async function checkSprintCompletion(sprintId: string): Promise<void> {
     // 11. Create tickets from the phase's tasks
     const { data: agents } = await supabase.from('agents')
       .select('id, role').eq('company_id', s.company_id);
+    const workers = (agents ?? []).filter((a: any) => (a.role as string).toLowerCase() !== 'ceo');
 
     for (let i = 0; i < nextPhase.tasks.length; i++) {
       const taskText = nextPhase.tasks[i];
-      const agent = (agents ?? []).find((a: any) => {
-        const r = (a.role as string).toLowerCase();
-        return taskText.toLowerCase().includes(r);
-      }) ?? (agents ?? [])[i % Math.max((agents ?? []).length, 1)];
+      const taskLower = taskText.toLowerCase();
+      const prefixMatch = taskText.match(/^(\w[\w\s-]*?):\s/);
+      let agent = prefixMatch
+        ? workers.find((a: any) => {
+            const role = (a.role as string).toLowerCase();
+            const prefix = prefixMatch[1].toLowerCase().trim();
+            return prefix.includes(role) || role.includes(prefix);
+          })
+        : null;
+      if (!agent) agent = workers.find((a: any) => taskLower.includes((a.role as string).toLowerCase())) ?? null;
+      if (!agent && workers.length > 0) agent = workers[i % workers.length];
 
       await supabase.from('tickets').insert({
         company_id: s.company_id,
@@ -170,7 +178,7 @@ async function checkSprintCompletion(sprintId: string): Promise<void> {
         title: taskText,
         status: 'open',
         sprint_id: (newSprint as any).id,
-        board_column: 'backlog',
+        board_column: 'todo',
         story_points: 1,
         priority: i,
       } as any);
@@ -1376,13 +1384,35 @@ app.post('/api/plans/:id/approve', async (req, res) => {
           const { data: agents } = await supabase.from('agents')
             .select('id, role').eq('company_id', p.company_id);
 
+          // Exclude CEO from task assignment — CEO delegates, doesn't execute
+          const workers = (agents ?? []).filter((a: any) => (a.role as string).toLowerCase() !== 'ceo');
+
           for (let i = 0; i < tasks.length; i++) {
             const taskText = tasks[i].replace(/- \[ \]\s+/, '');
-            // Try to match task to an agent role
-            const agent = (agents ?? []).find((a: any) => {
-              const r = (a.role as string).toLowerCase();
-              return taskText.toLowerCase().includes(r);
-            }) ?? (agents ?? [])[i % (agents ?? []).length];
+            const taskLower = taskText.toLowerCase();
+
+            // 1. Match "Role: task description" prefix pattern
+            const prefixMatch = taskText.match(/^(\w[\w\s-]*?):\s/);
+            let agent = prefixMatch
+              ? (workers).find((a: any) => {
+                  const role = (a.role as string).toLowerCase();
+                  const prefix = prefixMatch[1].toLowerCase().trim();
+                  return prefix.includes(role) || role.includes(prefix)
+                    || prefix.replace(/[-\s]/g, '').includes(role.replace(/[-\s]/g, ''));
+                })
+              : null;
+
+            // 2. Fallback: role name appears anywhere in task text
+            if (!agent) {
+              agent = (workers).find((a: any) =>
+                taskLower.includes((a.role as string).toLowerCase())
+              ) ?? null;
+            }
+
+            // 3. Fallback: round-robin across workers (never CEO)
+            if (!agent && workers.length > 0) {
+              agent = workers[i % workers.length];
+            }
 
             await supabase.from('tickets').insert({
               company_id: p.company_id,
@@ -1390,7 +1420,7 @@ app.post('/api/plans/:id/approve', async (req, res) => {
               title: taskText,
               status: 'open',
               sprint_id: (sprint as any).id,
-              board_column: 'backlog',
+              board_column: 'todo',
               story_points: 1,
               priority: i,
             } as any);
@@ -1520,13 +1550,21 @@ app.post('/api/sprints/:id/complete', async (req, res) => {
           if (newSprint) {
             const { data: agents } = await supabase.from('agents')
               .select('id, role').eq('company_id', s.company_id);
+            const workers = (agents ?? []).filter((a: any) => (a.role as string).toLowerCase() !== 'ceo');
 
             for (let i = 0; i < nextPhase.tasks.length; i++) {
               const taskText = nextPhase.tasks[i];
-              const agent = (agents ?? []).find((a: any) => {
-                const r = (a.role as string).toLowerCase();
-                return taskText.toLowerCase().includes(r);
-              }) ?? (agents ?? [])[i % Math.max((agents ?? []).length, 1)];
+              const taskLower = taskText.toLowerCase();
+              const prefixMatch = taskText.match(/^(\w[\w\s-]*?):\s/);
+              let agent = prefixMatch
+                ? workers.find((a: any) => {
+                    const role = (a.role as string).toLowerCase();
+                    const prefix = prefixMatch[1].toLowerCase().trim();
+                    return prefix.includes(role) || role.includes(prefix);
+                  })
+                : null;
+              if (!agent) agent = workers.find((a: any) => taskLower.includes((a.role as string).toLowerCase())) ?? null;
+              if (!agent && workers.length > 0) agent = workers[i % workers.length];
 
               await supabase.from('tickets').insert({
                 company_id: s.company_id,
@@ -1534,7 +1572,7 @@ app.post('/api/sprints/:id/complete', async (req, res) => {
                 title: taskText,
                 status: 'open',
                 sprint_id: (newSprint as any).id,
-                board_column: 'backlog',
+                board_column: 'todo',
                 story_points: 1,
                 priority: i,
               } as any);
