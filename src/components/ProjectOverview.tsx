@@ -106,12 +106,46 @@ export function ProjectOverview() {
     if (!companyId) return;
     setLoading(true);
     try {
+      // Try orchestrator first (real CEO agent reviews the repo)
       await assignGoalToOrchestrator(companyId, 'Review the project repository. Generate a project overview including: Summary, Master Execution Plan, Hiring Plan, Environment Variable requirements. Output structured plans.');
-    } catch (err) {
-      console.error('Regenerate failed:', err);
+      await load();
+    } catch {
+      // Fallback: create template plans directly via orchestrator plan API
+      try {
+        const { createPlan } = await import('../lib/orchestratorApi');
+        const templates = [
+          { type: 'summary', title: 'Project Summary', content: '## Project Summary\n\n**Name:** \n**Stack:** \n**Repo:** \n**Current State:** \n**Goal:** \n\n_Edit this section with your project details._' },
+          { type: 'master_plan', title: 'Master Execution Plan', content: '## Master Execution Plan\n\n### Phase 1: Setup & Planning\n- [ ] Review codebase\n- [ ] Define architecture\n- [ ] Set up CI/CD\n\n### Phase 2: Core Features\n- [ ] Feature A\n- [ ] Feature B\n\n### Phase 3: Polish & Launch\n- [ ] Testing\n- [ ] Documentation\n- [ ] Deploy\n\n_Edit phases and tasks to match your project._' },
+          { type: 'hiring_plan', title: 'Hiring Plan', content: '## Hiring Plan\n\n| Role | Model | Budget | Reason |\n|------|-------|--------|--------|\n| PM | sonnet | $15 | Requirements & specs |\n| Frontend | sonnet | $15 | UI implementation |\n| Backend | sonnet | $15 | API & database |\n| QA | haiku | $5 | Testing |\n\n_Edit roles based on your project needs. Approve to auto-hire._' },
+          { type: 'daily_plan', title: "Today's Plan", content: "## Today's Plan\n\nNo tasks scheduled yet. Create a sprint from the Board tab, or assign a goal from the Office view.\n\n_Edit to add today's priorities._" },
+        ];
+        for (const t of templates) {
+          // Only create if doesn't exist
+          if (!planByType(t.type)) {
+            await createPlan(companyId, t);
+          }
+        }
+        await load();
+      } catch (innerErr) {
+        // Last fallback: create plans directly in Supabase
+        const { supabase, isOnline } = await import('../lib/supabase');
+        if (isOnline() && supabase) {
+          const templates = [
+            { company_id: companyId, type: 'summary', title: 'Project Summary', content: '## Project Summary\n\nEdit this with your project details.', status: 'draft', author_type: 'human' },
+            { company_id: companyId, type: 'master_plan', title: 'Master Execution Plan', content: '## Phases\n\n### Phase 1\n- [ ] Task\n\n### Phase 2\n- [ ] Task', status: 'draft', author_type: 'human' },
+            { company_id: companyId, type: 'hiring_plan', title: 'Hiring Plan', content: '## Roles Needed\n\n- PM\n- Frontend\n- Backend', status: 'draft', author_type: 'human' },
+            { company_id: companyId, type: 'daily_plan', title: "Today's Plan", content: '## Today\n\nNo tasks yet.', status: 'draft', author_type: 'human' },
+          ];
+          for (const t of templates) {
+            if (!planByType(t.type)) {
+              await supabase.from('project_plans').insert(t as any);
+            }
+          }
+          await load();
+        }
+      }
     }
     setLoading(false);
-    await load();
   };
 
   const handleAddEnv = async () => {
