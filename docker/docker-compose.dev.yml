@@ -1,0 +1,15 @@
+# CEO Simulator — Docker Compose dev override
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: builder
+    command: npx tsx --watch server/index.ts
+    volumes:
+      - ../server:/app/server
+      - ../brain:/app/brain
+    environment:
+      NODE_ENV: development

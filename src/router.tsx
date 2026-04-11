@@ -11,6 +11,9 @@ import { ProjectSettings } from './components/ProjectSettings';
 import { SettingsPage } from './components/SettingsPage';
 import { ScrumBoard } from './components/ScrumBoard';
 import { MergeRequestsPage } from './components/MergeRequestsPage';
+import { AuditTrailPage } from './components/AuditTrailPage';
+import { CeoChat } from './components/CeoChat';
+import { ClipmartPage } from './components/ClipmartPage';
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +21,7 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <MasterDashboard /> },
+      { path: 'clipmart', element: <ClipmartPage /> },
       { path: 'company/:companyId', element: <CompanyView /> },
       { path: 'company/:companyId/agents', element: <CompanyView /> },
       { path: 'company/:companyId/agents/:agentId', element: <AgentDetail /> },
@@ -27,6 +31,8 @@ export const router = createBrowserRouter([
       { path: 'company/:companyId/org-chart', element: <OrgChartPage /> },
       { path: 'company/:companyId/board', element: <ScrumBoard /> },
       { path: 'company/:companyId/merge-requests', element: <MergeRequestsPage /> },
+      { path: 'company/:companyId/audit', element: <AuditTrailPage /> },
+      { path: 'company/:companyId/chat', element: <CeoChat /> },
       { path: 'company/:companyId/settings', element: <ProjectSettings /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'settings/:tab', element: <SettingsPage /> },

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { NavBar } from './NavBar';
+import { AuthGate } from './AuthGate';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
@@ -35,20 +36,22 @@ export function AppLayout() {
   }
 
   return (
-    <div style={{
-      width: '100%', height: '100dvh',
-      display: 'flex', flexDirection: 'column',
-      background: 'var(--hud-bg)',
-      overflow: 'hidden',
-    }}>
-      <NavBar />
+    <AuthGate>
       <div style={{
-        flex: 1,
-        overflow: 'auto',
-        minHeight: 0,
+        width: '100%', height: '100dvh',
+        display: 'flex', flexDirection: 'column',
+        background: 'var(--hud-bg)',
+        overflow: 'hidden',
       }}>
-        <Outlet />
+        <NavBar />
+        <div style={{
+          flex: 1,
+          overflow: 'auto',
+          minHeight: 0,
+        }}>
+          <Outlet />
+        </div>
       </div>
-    </div>
+    </AuthGate>
   );
 }

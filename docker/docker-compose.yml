@@ -1,0 +1,52 @@
+# CEO Simulator — Docker Compose production stack
+version: '3.8'
+
+services:
+  # PostgreSQL (for self-hosted mode without Supabase)
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ceosim
+      POSTGRES_USER: ceosim
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ceosim_dev_pass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ceosim"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # CEO Simulator server
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      PORT: 3001
+      DATABASE_MODE: ${DATABASE_MODE:-supabase}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      AUDIT_HMAC_SECRET: ${AUDIT_HMAC_SECRET:-ceosim-audit-v2}
+      SANDBOX_MODE: ${SANDBOX_MODE:-none}
+    ports:
+      - "3001:3001"
+    volumes:
+      - sessions:/app/.claude/sessions
+      - brain:/app/brain
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  sessions:
+  brain:

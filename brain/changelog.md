@@ -6,6 +6,74 @@ status: active
 
 # Changelog
 
+## 2026-04-11 — v2.0 Foundation: Full Platform Rewrite
+
+**Scope:** 6-phase transformation from single-provider monolith to open, multi-provider, self-hostable orchestration platform.
+
+### Phase 1: Server Decomposition
+- Extracted 12 DAL repos from 2481-line monolith → `server/dal/` (companyRepo, agentRepo, ticketRepo, sprintRepo, planRepo, mergeRequestRepo, notificationRepo, configRepo, auditRepo)
+- Split 11 Express route modules → `server/routes/` (companies, agents, tickets, sprints, plans, planning, mergeRequests, configs, notifications, daemon, misc)
+- Extracted constants, brain helpers → `server/constants.ts`, `server/helpers/brain.ts`
+- `server/index.ts` reduced from 2481 → 72 lines
+- Canvas 2D engine: `src/engine/CharacterSprite.ts` — RPG sprite state machine (idle→walk→sit→phone)
+
+### Phase 2: Provider Abstraction + Tool Provisioning
+- `server/providers/` — ProviderRegistry with auto-failover (Anthropic → OpenRouter)
+- `server/providers/types.ts` — `UnifiedResponse`, `ModelTier`, `Provider` interface
+- `server/tools/` — ToolRegistry with tiered loading (Core 7 / Standard 11 / Full + MCP)
+- `server/tools/schemas.ts` — Input validation: path traversal blocking, secret detection, dangerous command blocking
+
+### Phase 3: Execution Pipeline + Replay + ReasoningBank
+- `server/pipeline/` — Staged execution: plan→exec→verify→fix→done (SP-based eligibility)
+- `server/replay/` — Append-only JSONL session recording for agent audit
+- `server/reasoning/` — ReasoningBank: keyword-matched trajectory retrieval for context injection
+
+### Phase 4: Auth + Audit Trail
+- `server/middleware/auth.ts` — JWT extraction/verification, `requireAuth`, `requireCompanyAccess`
+- `server/middleware/errorHandler.ts` — Centralized Express error handler
+- `server/middleware/validate.ts` — Request validation middleware
+- `server/routes/auth.ts` — Signup, login, refresh, user-company membership
+- `server/audit/toolAuditor.ts` — HMAC-SHA256 proof chain for tool call audit trail
+- `server/routes/audit.ts` — Audit log query + proof chain verification endpoints
+- `src/hooks/useAuth.ts`, `src/components/AuthGate.tsx`, `src/components/LoginPage.tsx` — Frontend auth
+- `src/components/AuditTrailPage.tsx` — Pixel RPG audit log viewer with pagination + filters
+- `server/dal/db.ts` — Now supports JWT-scoped user clients for RLS
+
+### Phase 5: Docker Self-Hosting + Sandboxes
+- `docker/Dockerfile` — Multi-stage build (node:22-alpine)
+- `docker/docker-compose.yml` — server + postgres stack with health checks
+- `server/sandbox/` — Execution environment abstraction (none/docker/e2b modes)
+- `server/sandbox/noneSandbox.ts` — Pass-through (current behavior)
+- `server/sandbox/dockerSandbox.ts` — Container-per-company isolation
+- `server/sandbox/e2bSandbox.ts` — Stub for E2B cloud micro-VMs
+
+### Phase 6: Vision Features
+- `server/routes/ceoChat.ts` — SSE streaming CEO chat endpoint
+- `src/components/CeoChat.tsx` — Pixel RPG streaming chat interface
+- `server/clipmart/index.ts` — Template marketplace: export/import with secret scrubbing
+- `server/routes/clipmart.ts` — Template CRUD endpoints
+- `src/components/ClipmartPage.tsx` — Pixel RPG template marketplace UI
+
+### DB Migrations (9 files in `supabase/migrations/`)
+- 002: provider tracking columns on token_usage
+- 003: pipeline_stage + pipeline_artifacts on tickets
+- 005: reasoning_trajectories table
+- 006: user_companies table + RLS policies
+- 007: tool_audit_log table with HMAC proof
+- 008: sandbox_mode + sandbox_config on companies
+- 009: ceo_chat_messages table
+- 010: company_templates table
+
+### Routes Added
+- `/auth/*` — signup, login, refresh, me, join-company
+- `/company/:id/audit` — tool call audit trail
+- `/company/:id/chat` — CEO streaming chat
+- `/clipmart` — template marketplace
+
+**Verification:** All phases pass `tsc --noEmit` and `vite build` (477KB JS, 27KB CSS).
+
+---
+
 ## 2026-04-11 — Git Worktree Conflict Prevention
 
 **Problem:** Merge conflicts when CEO manually merged agent MRs. Root causes:

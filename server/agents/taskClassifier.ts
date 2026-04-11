@@ -3,22 +3,26 @@
  * Reduces token costs ~30-40% on simple tasks while improving quality on complex ones.
  */
 
+import type { ModelTier } from '../providers/types';
+import { providerRegistry } from '../providers/registry';
+
 const COMPLEX_KEYWORDS = /architect|refactor|migration|redesign|overhaul|rewrite|security|audit/i;
 
-type Model = 'haiku' | 'sonnet' | 'opus';
+// Re-export ModelTier for external consumers
+export type { ModelTier };
 type Effort = 'low' | 'medium' | 'high';
 
-/** Model ID strings for the DB */
-export const MODEL_IDS: Record<Model, string> = {
-  haiku: 'claude-haiku-4-5',
-  sonnet: 'claude-sonnet-4-6',
-  opus: 'claude-opus-4-6',
+/** Model ID strings for the DB — now resolved through provider registry */
+export const MODEL_IDS: Record<ModelTier, string> = {
+  haiku: providerRegistry.getModelId('haiku'),
+  sonnet: providerRegistry.getModelId('sonnet'),
+  opus: providerRegistry.getModelId('opus'),
 };
 
 /**
  * Select the optimal model for a task based on role, story points, and task description.
  */
-export function selectModel(role: string, storyPoints: number, task: string): Model {
+export function selectModel(role: string, storyPoints: number, task: string): ModelTier {
   // CEO planning always gets the best model
   if (role === 'CEO') return 'opus';
 
