@@ -10,7 +10,6 @@ import { OrgChartPage } from './components/OrgChartPage';
 import { ProjectSettings } from './components/ProjectSettings';
 import { SettingsPage } from './components/SettingsPage';
 import { ScrumBoard } from './components/ScrumBoard';
-import { ProjectOverview } from './components/ProjectOverview';
 import { MergeRequestsPage } from './components/MergeRequestsPage';
 
 export const router = createBrowserRouter([
@@ -28,7 +27,6 @@ export const router = createBrowserRouter([
       { path: 'company/:companyId/org-chart', element: <OrgChartPage /> },
       { path: 'company/:companyId/board', element: <ScrumBoard /> },
       { path: 'company/:companyId/merge-requests', element: <MergeRequestsPage /> },
-      { path: 'company/:companyId/overview', element: <ProjectOverview /> },
       { path: 'company/:companyId/settings', element: <ProjectSettings /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'settings/:tab', element: <SettingsPage /> },

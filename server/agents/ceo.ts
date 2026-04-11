@@ -1,6 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import { supabase } from '../supabaseAdmin';
+import { usdToUnits } from '../budgetUtils';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -204,7 +205,7 @@ export async function executeCeoGoal(
   await supabase.from('companies').update({
     ceo_goal: goal,
     status: 'growing',
-    budget_spent: company.budget_spent + Math.round(costUsd * 100000), // store in cents for precision
+    budget_spent: company.budget_spent + usdToUnits(costUsd),
   }).eq('id', companyId);
 
   // Create delegations from CEO's plan

@@ -48,7 +48,7 @@ export function NavBar() {
     if (!companyId || !orchestratorConnected) return;
     const poll = () => fetchTicketStatus(companyId).then(s => {
       setPendingCount((s.awaiting_approval ?? 0) + (s.open ?? 0));
-    }).catch(() => {});
+    }).catch(err => console.warn('[NavBar] ticket status poll failed:', err));
     poll();
     const interval = setInterval(poll, 15000);
     return () => clearInterval(interval);
@@ -99,7 +99,6 @@ export function NavBar() {
           }}>
             {company.name}
           </span>
-          <Tab label="Overview" to={`/company/${companyId}/overview`} active={path.includes('/overview')} />
           <Tab label="Office" to={`/company/${companyId}`} active={path === `/company/${companyId}` || path.includes('/agents')} />
           <Tab label="Goals" to={`/company/${companyId}/goals`} active={path.includes('/goals')} />
           <span style={{ position: 'relative', display: 'inline-flex' }}>

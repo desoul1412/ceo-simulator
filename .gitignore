@@ -36,3 +36,8 @@ server/.env
 .claude/settings.local.json
 .company-repos
 .agent-worktrees
+
+# Playwright
+e2e/screenshots
+playwright-report
+test-results

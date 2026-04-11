@@ -1,10 +1,65 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { supabase } from '../supabaseAdmin';
+import { usdToUnits } from '../budgetUtils';
 import { recordTaskCompletion, extractSkills, syncMemoryToObsidian } from '../memoryManager';
+import { selectModel, selectEffort, allocateBudget, MODEL_IDS } from './taskClassifier';
+
+// ── Selective Memory Injection ───────────────────────────────────────────────
+
+/**
+ * Score memory items by relevance to the current task.
+ * Returns a memory context string with only the top-N relevant items.
+ * Avoids injecting ~150-500 tokens of irrelevant memory on every execution.
+ */
+export function buildRelevantMemoryContext(memory: any, task: string, topN = 5): string {
+  if (!memory || (!memory.shortTerm?.length && !memory.skills?.length && !memory.rules?.length)) {
+    return '';
+  }
+
+  // Extract keywords from task (lowercase words, 4+ chars, skip common words)
+  const stopWords = new Set(['this', 'that', 'with', 'from', 'have', 'will', 'your', 'task', 'make', 'file', 'code', 'work', 'read', 'write', 'then', 'into', 'each', 'also', 'when', 'what']);
+  const taskKeywords = task.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 4 && !stopWords.has(w));
+
+  const score = (item: string): number =>
+    taskKeywords.filter(kw => item.toLowerCase().includes(kw)).length;
+
+  // Score and filter skills
+  const skills: string[] = memory.skills ?? [];
+  const relevantSkills = skills
+    .map(s => ({ s, sc: score(s) }))
+    .filter(x => x.sc > 0 || skills.length <= topN)
+    .sort((a, b) => b.sc - a.sc)
+    .slice(0, topN)
+    .map(x => x.s);
+
+  // Score and filter short-term memory
+  const shortTerm: string[] = memory.shortTerm ?? [];
+  const relevantShortTerm = shortTerm
+    .slice(-10)
+    .map(s => ({ s, sc: score(s) }))
+    .filter(x => x.sc > 0)
+    .sort((a, b) => b.sc - a.sc)
+    .slice(0, 3)
+    .map(x => x.s);
+
+  // Rules are always injected (they're constraints, not knowledge)
+  const rules: string[] = (memory.rules ?? []).slice(0, 5);
+
+  if (!relevantSkills.length && !relevantShortTerm.length && !rules.length) return '';
+
+  let ctx = '\n\n## Your Memory\n';
+  if (relevantSkills.length) ctx += `Skills: ${relevantSkills.join(', ')}\n`;
+  if (relevantShortTerm.length) ctx += `Recent context: ${relevantShortTerm.join('; ')}\n`;
+  if (rules.length) ctx += `Rules: ${rules.join('; ')}\n`;
+  return ctx;
+}
 
 // ── Role-specific system prompts ─────────────────────────────────────────────
 
-const ROLE_PROMPTS: Record<string, string> = {
+export const ROLE_PROMPTS: Record<string, string> = {
   PM: `You are a Project Manager. Your job is to:
 - Break down requirements into clear, actionable user stories
 - Write specification documents in markdown
@@ -63,7 +118,8 @@ Output format: create design spec files in brain/wiki/, create CSS examples.`,
 
 // ── Tools per role ───────────────────────────────────────────────────────────
 
-const ROLE_TOOLS: Record<string, string[]> = {
+export const ROLE_TOOLS: Record<string, string[]> = {
+  CEO:      ['Read', 'Glob', 'Grep'],
   PM:       ['Read', 'Glob', 'Grep', 'Write'],
   DevOps:   ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep'],
   Frontend: ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep'],
@@ -103,16 +159,7 @@ export async function executeWorkerTask(
   const agentName = (agent as any)?.name ?? role;
   const memory = (agent as any)?.memory ?? {};
 
-  // Inject memory context if available
-  let memoryContext = '';
-  if (memory.shortTerm?.length || memory.skills?.length) {
-    memoryContext = '\n\n## Your Memory\n';
-    if (memory.skills?.length) memoryContext += `Skills: ${memory.skills.join(', ')}\n`;
-    if (memory.shortTerm?.length) memoryContext += `Recent context: ${memory.shortTerm.slice(-5).join('; ')}\n`;
-    if (memory.rules?.length) memoryContext += `Rules: ${memory.rules.join('; ')}\n`;
-  }
-
-  const fullPrompt = systemPrompt + memoryContext;
+  const memoryContext = buildRelevantMemoryContext(memory, task);
 
   // Update agent status
   await supabase.from('agents').update({
@@ -132,7 +179,10 @@ export async function executeWorkerTask(
     .single();
 
   const remainingBudget = ((company as any)?.budget ?? 100000) - ((company as any)?.budget_spent ?? 0);
-  const maxBudget = Math.min(2.0, remainingBudget / 50000); // cap at $2 or proportional
+  const storyPoints = 3; // default for worker tasks (no SP context here)
+  const model = selectModel(role, storyPoints, task);
+  const effort = selectEffort(role, storyPoints, task);
+  const maxBudget = allocateBudget(role, storyPoints, remainingBudget);
 
   let result = '';
   let costUsd = 0;
@@ -141,17 +191,16 @@ export async function executeWorkerTask(
   let sessionId = '';
 
   const q = query({
-    prompt: `Your task:\n\n${task}\n\nWork in the project directory. Read relevant files first to understand the codebase, then make your changes. Be thorough but focused.`,
+    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}Your task:\n\n${task}\n\nWork in the project directory. Read relevant files first to understand the codebase, then make your changes. Be thorough but focused.`,
     options: {
       cwd,
-      systemPrompt: fullPrompt,
+      systemPrompt: systemPrompt,
       maxTurns: 10,
       maxBudgetUsd: maxBudget,
       tools,
       allowedTools: tools,
-      model: 'sonnet',
-      persistSession: true,
-      effort: 'medium',
+      model,
+      effort,
       permissionMode: 'acceptEdits' as const,
     },
   });
@@ -185,7 +234,7 @@ export async function executeWorkerTask(
   await supabase.from('agent_sessions').insert({
     agent_id: agentId,
     company_id: companyId,
-    system_prompt: fullPrompt,
+    system_prompt: systemPrompt,
     status: 'completed',
     last_invoked_at: new Date().toISOString(),
     total_input_tokens: inputTokens,
@@ -200,20 +249,21 @@ export async function executeWorkerTask(
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     cost_usd: costUsd,
-    model: 'claude-sonnet-4-6',
+    model: MODEL_IDS[model],
   });
 
-  // Update company budget
-  const costInUnits = Math.round(costUsd * 100000);
-  await supabase.rpc('', {}).catch(() => {});  // no-op placeholder
+  // Update company budget (stored as micro-dollars: USD * 100_000)
+  const costInUnits = usdToUnits(costUsd);
   const { data: freshCo } = await supabase
     .from('companies')
     .select('budget_spent')
     .eq('id', companyId)
     .single();
-  await supabase.from('companies').update({
-    budget_spent: ((freshCo as any)?.budget_spent ?? 0) + costInUnits,
-  }).eq('id', companyId);
+  if (freshCo) {
+    await supabase.from('companies').update({
+      budget_spent: ((freshCo as any)?.budget_spent ?? 0) + costInUnits,
+    }).eq('id', companyId);
+  }
 
   // Update agent — mark task complete
   await supabase.from('agents').update({

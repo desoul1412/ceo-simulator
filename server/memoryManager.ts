@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 import { supabase } from './supabaseAdmin';
 
@@ -142,7 +142,7 @@ export async function syncMemoryToObsidian(
   const agentSlug = a.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
   const agentDir = path.join(cwd, 'brain', 'agents', agentSlug);
-  fs.mkdirSync(agentDir, { recursive: true });
+  await fs.mkdir(agentDir, { recursive: true });
 
   const content = `---
 tags: [agent, memory, ${a.role.toLowerCase()}]
@@ -168,5 +168,5 @@ ${memory.rules.map(s => `- ${s}`).join('\n') || '- Inherits global rules'}
 ${memory.completedTasks.map(t => `### ${t.date} — ${t.task}\n${t.summary}\n`).join('\n') || '- No tasks completed yet'}
 `;
 
-  fs.writeFileSync(path.join(agentDir, 'memory.md'), content, 'utf8');
+  await fs.writeFile(path.join(agentDir, 'memory.md'), content, 'utf8');
 }

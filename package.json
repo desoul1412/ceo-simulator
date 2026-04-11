@@ -11,7 +11,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "server": "tsx server/index.ts",
-    "dev:all": "concurrently \"npm run dev\" \"npm run server\""
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:api": "npx playwright test e2e/07-api-health.spec.ts",
+    "test:e2e:pipeline": "npx playwright test e2e/09-planning-execution-flow.spec.ts --headed",
+    "test:all": "vitest run && npx playwright test"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.96",
@@ -31,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

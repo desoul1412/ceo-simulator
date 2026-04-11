@@ -11,6 +11,13 @@ import {
   rejectTicket,
   completeSprint,
 } from '../lib/orchestratorApi';
+import {
+  fetchDependencyGraph,
+  fetchTicketDependencies,
+  addTicketDependency,
+  removeTicketDependency,
+  type DependencyEdge,
+} from '../lib/planningApi';
 
 interface Ticket {
   id: string;
@@ -24,6 +31,9 @@ interface Ticket {
   sprint_id: string | null;
   priority: number;
   created_at: string;
+  dependency_status?: string;
+  retry_count?: number;
+  last_error?: string;
 }
 
 interface Sprint {
@@ -80,6 +90,8 @@ export function ScrumBoard() {
   const [editDesc, setEditDesc] = useState('');
   const [editPoints, setEditPoints] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [depEdges, setDepEdges] = useState<DependencyEdge[]>([]);
+  const [ticketDeps, setTicketDeps] = useState<{ blockers: DependencyEdge[]; dependents: DependencyEdge[] }>({ blockers: [], dependents: [] });
 
   const load = useCallback(async () => {
     if (!companyId) return;
@@ -89,6 +101,10 @@ export function ScrumBoard() {
     ]);
     setTickets(t);
     setSprints(s);
+
+    // Load dependency graph
+    const graph = await fetchDependencyGraph(companyId).catch(() => ({ edges: [], tickets: [] }));
+    setDepEdges(graph.edges);
   }, [companyId]);
 
   useEffect(() => {
@@ -127,6 +143,8 @@ export function ScrumBoard() {
     setEditTitle(t.title);
     setEditDesc(t.description ?? '');
     setEditPoints(t.story_points);
+    // Load dependencies for this ticket
+    fetchTicketDependencies(t.id).then(setTicketDeps).catch(() => setTicketDeps({ blockers: [], dependents: [] }));
   };
 
   const closeModal = () => setSelectedTicketId(null);
@@ -151,16 +169,24 @@ export function ScrumBoard() {
 
   const handleApproveTicket = async () => {
     if (!selectedTicketId) return;
-    await approveTicket(selectedTicketId);
-    setTickets(prev => prev.map(t => t.id === selectedTicketId ? { ...t, status: 'approved', board_column: 'todo' } : t));
-    closeModal();
+    try {
+      await approveTicket(selectedTicketId);
+      setTickets(prev => prev.map(t => t.id === selectedTicketId ? { ...t, status: 'approved', board_column: 'todo' } : t));
+      closeModal();
+    } catch (err) {
+      console.warn('[ScrumBoard] Failed to approve ticket:', err);
+    }
   };
 
   const handleReject = async () => {
     if (!selectedTicketId) return;
-    await rejectTicket(selectedTicketId);
-    setTickets(prev => prev.map(t => t.id === selectedTicketId ? { ...t, status: 'cancelled', board_column: 'done' } : t));
-    closeModal();
+    try {
+      await rejectTicket(selectedTicketId);
+      setTickets(prev => prev.map(t => t.id === selectedTicketId ? { ...t, status: 'cancelled', board_column: 'done' } : t));
+      closeModal();
+    } catch (err) {
+      console.warn('[ScrumBoard] Failed to reject ticket:', err);
+    }
   };
 
   // Unique agents from company for the filter dropdown
@@ -297,6 +323,13 @@ export function ScrumBoard() {
             <div style={{ flex: 1, overflow: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {columnTickets(col).map(ticket => {
                 const agent = agentForTicket(ticket);
+                const depStatus = ticket.dependency_status;
+                const isBlocked = depStatus === 'blocked';
+                const isPartial = depStatus === 'partial';
+                const hasBlockers = depEdges.some(e => e.blocked_ticket_id === ticket.id);
+                const hasDependents = depEdges.some(e => e.blocker_ticket_id === ticket.id);
+                const hasRetries = (ticket.retry_count ?? 0) > 0;
+
                 return (
                   <div
                     key={ticket.id}
@@ -304,7 +337,8 @@ export function ScrumBoard() {
                     onDragStart={() => setDragId(ticket.id)}
                     onClick={() => openModal(ticket)}
                     style={{
-                      background: '#0d1117', border: '1px solid var(--hud-border)',
+                      background: isBlocked ? '#1a0a0a' : isPartial ? '#1a1500' : '#0d1117',
+                      border: `1px solid ${isBlocked ? '#ff224440' : isPartial ? '#ff880040' : 'var(--hud-border)'}`,
                       padding: '8px 10px', cursor: 'grab',
                       borderLeft: `3px solid ${ROLE_COLORS[agent?.role ?? ''] ?? '#4a5568'}`,
                     }}
@@ -329,18 +363,44 @@ export function ScrumBoard() {
                         </span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: 6, fontSize: 'var(--font-xs)', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 6, fontSize: 'var(--font-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
                       <span style={{ color: ROLE_COLORS[agent?.role ?? ''] ?? '#4a5568' }}>
                         {agent?.role ?? '?'}{agent ? ` (${agent.name})` : ''}
                       </span>
                       <span style={{ color: 'var(--hud-text-dim)', textTransform: 'uppercase' }}>{ticket.status}</span>
+                      {/* Dependency indicators */}
+                      {isBlocked && (
+                        <span style={{ color: 'var(--neon-red)', fontSize: 9 }} title="Blocked by dependencies">
+                          BLOCKED
+                        </span>
+                      )}
+                      {isPartial && (
+                        <span style={{ color: 'var(--neon-orange)', fontSize: 9 }} title="Some dependencies satisfied">
+                          PARTIAL
+                        </span>
+                      )}
+                      {hasBlockers && !isBlocked && !isPartial && (
+                        <span style={{ color: 'var(--hud-text-dim)', fontSize: 9 }} title="Has dependencies (all satisfied)">
+                          🔗
+                        </span>
+                      )}
+                      {hasRetries && (
+                        <span style={{ color: 'var(--neon-orange)', fontSize: 9 }} title={`Retried ${ticket.retry_count} time(s)`}>
+                          ↻{ticket.retry_count}
+                        </span>
+                      )}
                       {(ticket.status === 'open' || ticket.status === 'awaiting_approval') && (
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
-                            await approveTicket(ticket.id);
-                            setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'approved', board_column: 'todo' } : t));
+                            try {
+                              await approveTicket(ticket.id);
+                              setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'approved', board_column: 'todo' } : t));
+                            } catch (err) {
+                              console.warn('[ScrumBoard] Quick-approve failed:', err);
+                            }
                           }}
+                          aria-label={`Approve ticket: ${ticket.title}`}
                           style={{
                             marginLeft: 'auto', padding: '1px 8px',
                             fontSize: 'var(--font-xs)', background: '#00ff8810',
@@ -356,8 +416,8 @@ export function ScrumBoard() {
                 );
               })}
               {columnTickets(col).length === 0 && (
-                <div style={{ fontSize: 'var(--font-xs)', color: '#1b2030', textAlign: 'center', padding: 20 }}>
-                  No tickets
+                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textAlign: 'center', padding: 20, fontStyle: 'italic' }}>
+                  No tickets in {col}
                 </div>
               )}
             </div>
@@ -401,7 +461,7 @@ export function ScrumBoard() {
             onClick={e => e.stopPropagation()}
             style={{
               background: '#0a0e14', border: '1px solid var(--hud-border)',
-              width: 520, maxHeight: '80vh', overflow: 'auto',
+              width: '95vw', maxWidth: 520, maxHeight: '80vh', overflow: 'auto',
               fontFamily: 'var(--font-hud)', boxShadow: '0 0 30px rgba(0,255,255,0.08)',
             }}
           >
@@ -540,6 +600,101 @@ export function ScrumBoard() {
                   </div>
                 </div>
               </div>
+
+              {/* Dependencies section */}
+              {(ticketDeps.blockers.length > 0 || ticketDeps.dependents.length > 0) && (
+                <div>
+                  <label style={{ fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                    Dependencies
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {ticketDeps.blockers.length > 0 && (
+                      <div style={{
+                        fontSize: 'var(--font-xs)', padding: '6px 8px',
+                        background: '#05080f', border: '1px solid var(--hud-border)',
+                      }}>
+                        <span style={{ color: 'var(--neon-red)', marginRight: 6 }}>BLOCKED BY</span>
+                        {ticketDeps.blockers.map(dep => {
+                          const blocker = tickets.find(t => t.id === dep.blocker_ticket_id);
+                          return (
+                            <div key={dep.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <span style={{
+                                width: 6, height: 6, borderRadius: '50%',
+                                background: dep.status === 'satisfied' ? 'var(--neon-green)' : dep.status === 'broken' ? 'var(--neon-red)' : 'var(--neon-orange)',
+                              }} />
+                              <span style={{ color: '#a0b4c8', flex: 1 }}>
+                                {blocker?.title?.slice(0, 60) ?? dep.blocker_ticket_id.slice(0, 8)}
+                              </span>
+                              <span style={{ color: 'var(--hud-text-dim)', textTransform: 'uppercase' }}>{dep.status}</span>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await removeTicketDependency(dep.id);
+                                    setTicketDeps(prev => ({
+                                      ...prev,
+                                      blockers: prev.blockers.filter(d => d.id !== dep.id),
+                                    }));
+                                  } catch (err) {
+                                    console.warn('[ScrumBoard] Failed to remove dependency:', err);
+                                  }
+                                }}
+                                aria-label="Remove dependency"
+                                style={{
+                                  background: 'none', border: '1px solid #1b2030',
+                                  color: 'var(--hud-text-dim)', cursor: 'pointer',
+                                  fontSize: 9, padding: '0 4px',
+                                }}
+                              >
+                                x
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {ticketDeps.dependents.length > 0 && (
+                      <div style={{
+                        fontSize: 'var(--font-xs)', padding: '6px 8px',
+                        background: '#05080f', border: '1px solid var(--hud-border)',
+                      }}>
+                        <span style={{ color: 'var(--neon-cyan)', marginRight: 6 }}>BLOCKS</span>
+                        {ticketDeps.dependents.map(dep => {
+                          const blocked = tickets.find(t => t.id === dep.blocked_ticket_id);
+                          return (
+                            <div key={dep.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <span style={{
+                                width: 6, height: 6, borderRadius: '50%',
+                                background: dep.status === 'satisfied' ? 'var(--neon-green)' : 'var(--neon-cyan)',
+                              }} />
+                              <span style={{ color: '#a0b4c8' }}>
+                                {blocked?.title?.slice(0, 60) ?? dep.blocked_ticket_id.slice(0, 8)}
+                              </span>
+                              <span style={{ color: 'var(--hud-text-dim)', textTransform: 'uppercase' }}>{dep.status}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Error info if retried */}
+              {selectedTicket.last_error && (
+                <div>
+                  <label style={{ fontSize: 'var(--font-xs)', color: 'var(--neon-red)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, display: 'block' }}>
+                    Last Error {selectedTicket.retry_count ? `(retry ${selectedTicket.retry_count})` : ''}
+                  </label>
+                  <div style={{
+                    fontSize: 'var(--font-xs)', padding: '6px 8px',
+                    background: '#1a0505', border: '1px solid #ff224430',
+                    color: '#ff6677', whiteSpace: 'pre-wrap', maxHeight: 80, overflow: 'auto',
+                  }}>
+                    {selectedTicket.last_error}
+                  </div>
+                </div>
+              )}
 
               {/* MR link */}
               {selectedTicket.merge_request_id && (

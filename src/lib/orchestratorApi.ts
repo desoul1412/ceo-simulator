@@ -94,6 +94,30 @@ export async function fireAgent(agentId: string): Promise<{ success: boolean }> 
   return res.json();
 }
 
+export async function updateAgent(agentId: string, updates: {
+  name?: string;
+  role?: string;
+  system_prompt?: string;
+  budget_limit?: number;
+  skills?: string[];
+}): Promise<any> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
+export async function updateAgentLifecycle(agentId: string, status: 'active' | 'paused' | 'terminated'): Promise<any> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}/lifecycle`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  return res.json();
+}
+
 // ── Repository Management ────────────────────────────────────────────────────
 
 export interface RepoStatus {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
+import { usePlanningStore } from '../store/planningStore';
 import { PixelOfficeCanvas } from './PixelOfficeCanvas';
 import { CeoPlanFlow } from './CeoPlanFlow';
 import { AgentCard } from './AgentCard';
@@ -9,6 +10,7 @@ import { processQueue, fetchQueueStatus } from '../lib/orchestratorApi';
 import { HireAgentDialog, type HireConfig } from './HireAgentDialog';
 import { hireAgent } from '../lib/orchestratorApi';
 import { isOnline } from '../lib/supabase';
+import { PlanningPopup } from './PlanningPopup';
 import type { Company } from '../store/dashboardStore';
 
 interface CompanyDetailProps {
@@ -113,9 +115,9 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
     setShowHireDialog(false);
   };
 
-  // Usage
-  const DAILY_CAP_USD = 3.3;
-  const WEEKLY_CAP_USD = 23;
+  // Usage — configurable via env, fallback to sensible defaults
+  const DAILY_CAP_USD = Number(import.meta.env.VITE_DAILY_BUDGET_CAP) || 3.3;
+  const WEEKLY_CAP_USD = Number(import.meta.env.VITE_WEEKLY_BUDGET_CAP) || 23;
   const spent = company.budgetSpent;
   const dailyPct = Math.min(100, Math.round((spent / DAILY_CAP_USD) * 100));
   const weeklyPct = Math.min(100, Math.round((spent / WEEKLY_CAP_USD) * 100));
@@ -247,13 +249,134 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
       </div>
 
       {/* Bottom: CEO Directive */}
-      <div style={{ flexShrink: 0, maxHeight: 240, overflow: 'hidden' }}>
-        <CeoPlanFlow company={company} />
-      </div>
+      <CeoDirectiveInput companyId={company.id} />
 
       {showHireDialog && (
         <HireAgentDialog companyId={company.id} onHire={handleHire} onClose={() => setShowHireDialog(false)} />
       )}
+
+      {/* Planning Popup (overlay) */}
+      <PlanningPopup />
+    </div>
+  );
+}
+
+// ── CEO Directive Input (triggers planning flow) ─────────────────────────
+
+function CeoDirectiveInput({ companyId }: { companyId: string }) {
+  const [directive, setDirective] = useState('');
+  const [size, setSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [expanded, setExpanded] = useState(false);
+  const startPlanning = usePlanningStore(s => s.startPlanning);
+  const planningStatus = usePlanningStore(s => s.status);
+  const planningIsOpen = usePlanningStore(s => s.isOpen);
+  const openPlanning = usePlanningStore(s => s.setOpen);
+  const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
+
+  const handleSubmit = () => {
+    if (!directive.trim()) return;
+    startPlanning(companyId, directive.trim(), size);
+    setDirective('');
+    setExpanded(false);
+  };
+
+  const isPlanning = planningStatus === 'generating';
+  const canReopen = (planningStatus === 'generating' || planningStatus === 'review') && !planningIsOpen;
+
+  return (
+    <div style={{
+      flexShrink: 0, padding: '8px 12px',
+      background: '#090d14', border: '1px solid #1b2030',
+      display: 'flex', gap: 8, alignItems: expanded ? 'flex-end' : 'center',
+      transition: 'all 0.2s',
+    }}>
+      <span style={{
+        fontSize: 'var(--font-xs)', color: 'var(--neon-cyan)',
+        fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+        letterSpacing: '0.1em', whiteSpace: 'nowrap',
+        alignSelf: 'flex-start', marginTop: expanded ? 8 : 0,
+      }}>
+        CEO
+      </span>
+
+      <textarea
+        value={directive}
+        onChange={e => setDirective(e.target.value)}
+        onFocus={() => setExpanded(true)}
+        onBlur={() => { if (!directive.trim()) setExpanded(false); }}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+        placeholder={orchestratorConnected ? 'Enter directive to start planning... (Shift+Enter for new line)' : 'Orchestrator offline'}
+        disabled={!orchestratorConnected || isPlanning}
+        rows={expanded ? 4 : 1}
+        style={{
+          flex: 1, padding: '5px 8px',
+          background: '#05080f', border: '1px solid #1b2030',
+          color: '#e0eaf4', fontFamily: 'var(--font-pixel)',
+          fontSize: 'var(--font-sm)', outline: 'none',
+          opacity: orchestratorConnected ? 1 : 0.4,
+          resize: 'none',
+          lineHeight: 1.5,
+          transition: 'height 0.2s',
+        }}
+      />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* Project size selector */}
+        <select
+          value={size}
+          onChange={e => setSize(e.target.value as any)}
+          style={{
+            padding: '4px 6px', background: '#05080f',
+            border: '1px solid #1b2030', color: 'var(--hud-text-muted)',
+            fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
+            cursor: 'pointer',
+          }}
+        >
+          <option value="small">S</option>
+          <option value="medium">M</option>
+          <option value="large">L</option>
+        </select>
+
+        <button
+          onClick={handleSubmit}
+          disabled={!directive.trim() || !orchestratorConnected || isPlanning}
+          style={{
+            padding: '4px 12px',
+            background: directive.trim() ? '#001a1a' : '#0d1117',
+            border: `1px solid ${directive.trim() ? 'var(--neon-cyan)' : '#1b2030'}`,
+            color: directive.trim() ? 'var(--neon-cyan)' : 'var(--hud-text-dim)',
+            fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
+            cursor: directive.trim() && orchestratorConnected ? 'pointer' : 'default',
+            textTransform: 'uppercase', letterSpacing: '0.1em',
+            opacity: isPlanning ? 0.5 : 1,
+          }}
+        >
+          {isPlanning ? '...' : 'Plan'}
+        </button>
+
+        {/* Re-open planning window button */}
+        {canReopen && (
+          <button
+            onClick={() => openPlanning(true)}
+            style={{
+              padding: '4px 12px',
+              background: '#1a0a20', border: '1px solid var(--neon-purple)',
+              color: 'var(--neon-purple)',
+              fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)',
+              cursor: 'pointer', textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              animation: 'pulse 2s ease-in-out infinite',
+            }}
+          >
+            Open
+          </button>
+        )}
+      </div>
     </div>
   );
 }

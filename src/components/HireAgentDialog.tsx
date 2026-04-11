@@ -229,7 +229,7 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
         style={{
           background: '#0d1117',
           border: '1px solid var(--hud-border)',
-          width: 540, maxHeight: '85vh',
+          width: '95vw', maxWidth: 540, maxHeight: '85vh',
           overflow: 'auto',
           fontFamily: 'var(--font-hud)',
         }}

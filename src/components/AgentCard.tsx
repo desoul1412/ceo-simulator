@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { fetchTickets, approveTicket, updateTicket } from '../lib/orchestratorApi';
+import { fetchTickets, approveTicket, updateTicket, fireAgent, updateAgent, updateAgentLifecycle } from '../lib/orchestratorApi';
 import { fetchActivityLog } from '../lib/api';
 import { useDashboardStore } from '../store/dashboardStore';
+import { usePlanningStore } from '../store/planningStore';
 import type { Employee } from '../store/dashboardStore';
 import { getRoleDisplayName } from '../lib/agentDisplay';
 
@@ -58,8 +59,12 @@ export function PixelAvatar({ role, status, scale = 2.5 }: { role: string; statu
 
 export function AgentCard({ agent, companyId, allAgents, onTicketAction }: AgentCardProps) {
   const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
+  const planningStatus = usePlanningStore(s => s.status);
+  const planningSessionId = usePlanningStore(s => s.sessionId);
+  const setOpenPlanning = usePlanningStore(s => s.setOpen);
   const [pendingCount, setPendingCount] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const isCeo = agent.role === 'CEO';
 
   // Poll pending ticket count (lightweight)
   useEffect(() => {
@@ -70,7 +75,7 @@ export function AgentCard({ agent, companyId, allAgents, onTicketAction }: Agent
         setPendingCount(all.filter((t: any) =>
           t.agent_id === agent.id && (t.status === 'awaiting_approval' || t.status === 'open')
         ).length);
-      } catch { /* */ }
+      } catch (err) { console.warn('[AgentCard] fetch failed:', err); }
     };
     load();
     const iv = setInterval(load, 15_000);
@@ -84,7 +89,14 @@ export function AgentCard({ agent, companyId, allAgents, onTicketAction }: Agent
     <>
       {/* ── Compact Card (fits 3-col grid) ───────────────────────────── */}
       <div
-        onClick={() => setModalOpen(true)}
+        onClick={() => {
+          // CEO card: open planning popup if a session exists, otherwise open normal modal
+          if (isCeo && planningSessionId && (planningStatus === 'generating' || planningStatus === 'review')) {
+            setOpenPlanning(true);
+          } else {
+            setModalOpen(true);
+          }
+        }}
         style={{
           background: '#0d1117', border: '1px solid var(--hud-border)',
           fontFamily: 'var(--font-hud)', cursor: 'pointer',
@@ -147,11 +159,58 @@ function AgentDetailModal({
   displayName: string; onClose: () => void; onTicketAction?: () => void;
 }) {
   const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
+  const loadFromBackend = useDashboardStore(s => s.loadFromBackend);
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
+
+  // Agent config editing
+  const [showConfig, setShowConfig] = useState(false);
+  const [cfgName, setCfgName] = useState(agent.name ?? '');
+  const [cfgRole, setCfgRole] = useState<string>(agent.role);
+  const [cfgBudget, setCfgBudget] = useState((agent as any).budgetLimit ?? 10);
+  const [cfgPrompt, setCfgPrompt] = useState((agent as any).systemPrompt ?? '');
+  const [cfgSaving, setCfgSaving] = useState(false);
+  const [confirmFire, setConfirmFire] = useState(false);
+
+  const handleSaveConfig = async () => {
+    setCfgSaving(true);
+    try {
+      await updateAgent(agent.id, {
+        name: cfgName,
+        role: cfgRole,
+        budget_limit: cfgBudget,
+        system_prompt: cfgPrompt || undefined,
+      });
+      loadFromBackend();
+      setShowConfig(false);
+    } catch (err) {
+      console.warn('[AgentCard] Config save failed:', err);
+    } finally {
+      setCfgSaving(false);
+    }
+  };
+
+  const handleFire = async () => {
+    try {
+      await fireAgent(agent.id);
+      loadFromBackend();
+      onClose();
+    } catch (err) {
+      console.warn('[AgentCard] Fire failed:', err);
+    }
+  };
+
+  const handleLifecycle = async (status: 'active' | 'paused' | 'terminated') => {
+    try {
+      await updateAgentLifecycle(agent.id, status);
+      loadFromBackend();
+    } catch (err) {
+      console.warn('[AgentCard] Lifecycle update failed:', err);
+    }
+  };
 
   // Load activity
   useEffect(() => {
@@ -164,7 +223,7 @@ function AgentDetailModal({
             .slice(0, 15)
             .map((r: any) => ({ id: r.id, type: r.type, message: r.message, created_at: r.created_at }))
         );
-      } catch { /* */ }
+      } catch (err) { console.warn('[AgentCard] fetch failed:', err); }
     };
     load();
     const iv = setInterval(load, 10_000);
@@ -178,7 +237,7 @@ function AgentDetailModal({
       try {
         const all = await fetchTickets(companyId);
         setTickets(all.filter((t: any) => t.agent_id === agent.id));
-      } catch { /* */ }
+      } catch (err) { console.warn('[AgentCard] fetch failed:', err); }
     };
     load();
     const iv = setInterval(load, 12_000);
@@ -227,7 +286,7 @@ function AgentDetailModal({
         onClick={e => e.stopPropagation()}
         style={{
           background: '#0a0e14', border: '1px solid var(--hud-border)',
-          width: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+          width: '95vw', maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
           fontFamily: 'var(--font-hud)', boxShadow: `0 0 30px ${statusColor}15`,
           overflow: 'hidden',
         }}
@@ -263,6 +322,75 @@ function AgentDetailModal({
             fontSize: 16, cursor: 'pointer', padding: '4px 8px',
           }}>✕</button>
         </div>
+
+        {/* Action bar */}
+        <div style={{
+          padding: '6px 16px', borderBottom: '1px solid var(--hud-border)',
+          display: 'flex', gap: 6, alignItems: 'center', background: '#080b12', flexShrink: 0,
+        }}>
+          <button onClick={() => setShowConfig(!showConfig)} style={actionBtnStyle(showConfig ? '#00ffff' : '#4a5568')}>
+            {showConfig ? '▲ Config' : '▼ Config'}
+          </button>
+          {agent.status !== 'working' && (
+            <>
+              {(agent as any).lifecycleStatus !== 'paused' ? (
+                <button onClick={() => handleLifecycle('paused')} style={actionBtnStyle('#ff8800')}>Pause</button>
+              ) : (
+                <button onClick={() => handleLifecycle('active')} style={actionBtnStyle('#00ff88')}>Resume</button>
+              )}
+            </>
+          )}
+          {!confirmFire ? (
+            <button onClick={() => setConfirmFire(true)} style={{ ...actionBtnStyle('#ff2244'), marginLeft: 'auto' }}>Fire</button>
+          ) : (
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--neon-red)' }}>Confirm?</span>
+              <button onClick={handleFire} style={actionBtnStyle('#ff2244')}>Yes, Fire</button>
+              <button onClick={() => setConfirmFire(false)} style={actionBtnStyle('#4a5568')}>Cancel</button>
+            </div>
+          )}
+        </div>
+
+        {/* Config panel (expandable) */}
+        {showConfig && (
+          <div style={{
+            padding: '12px 16px', borderBottom: '1px solid var(--hud-border)',
+            background: '#060910', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Name</label>
+                <input value={cfgName} onChange={e => setCfgName(e.target.value)} style={inputStyle} />
+              </div>
+              <div style={{ width: 120 }}>
+                <label style={labelStyle}>Role</label>
+                <select value={cfgRole} onChange={e => setCfgRole(e.target.value)} style={inputStyle}>
+                  {['CEO', 'PM', 'Frontend', 'Backend', 'QA', 'Designer', 'DevOps'].map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ width: 100 }}>
+                <label style={labelStyle}>Budget ($)</label>
+                <input type="number" value={cfgBudget} onChange={e => setCfgBudget(Number(e.target.value))}
+                  style={inputStyle} min={0} step={1} />
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>System Prompt (optional override)</label>
+              <textarea value={cfgPrompt} onChange={e => setCfgPrompt(e.target.value)} rows={3}
+                style={{ ...inputStyle, resize: 'vertical', width: '100%' }}
+                placeholder="Leave empty to use default role prompt" />
+            </div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowConfig(false)} style={actionBtnStyle('#4a5568')}>Cancel</button>
+              <button onClick={handleSaveConfig} disabled={cfgSaving}
+                style={actionBtnStyle('#00ff88')}>
+                {cfgSaving ? 'Saving...' : 'Save Config'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Scrollable body */}
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
@@ -397,3 +525,15 @@ function actionBtnStyle(color: string): React.CSSProperties {
     flexShrink: 0,
   };
 }
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 'var(--font-xs)', color: 'var(--hud-text-dim)',
+  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3,
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '4px 8px',
+  background: '#05080f', border: '1px solid var(--hud-border)',
+  color: 'var(--hud-text)', fontFamily: 'var(--font-hud)',
+  fontSize: 'var(--font-xs)',
+};
