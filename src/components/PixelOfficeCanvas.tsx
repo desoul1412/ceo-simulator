@@ -30,13 +30,14 @@ const ROLE_CHAR_INDEX: Record<string, number> = {
 
 // ── Seat positions (col, row) for each agent role in the default layout ──────
 // Top-left: CEO Office, Top-right: Product/PM, Bottom-left: DevOps, Bottom-right: Lounge
+// Validated against default-layout-1.json furniture — see brain/wiki/Role-Seat-Validation.md
 const ROLE_SEATS: Record<string, { col: number; row: number }> = {
-  CEO:      { col: 4, row: 3 },    // CEO office (top-left)
-  PM:       { col: 18, row: 3 },   // Product room (top-right)
-  DevOps:   { col: 4, row: 14 },   // DevOps room (bottom-left)
-  Frontend: { col: 9, row: 3 },    // CEO office second desk
-  Backend:  { col: 24, row: 3 },   // Product room second desk
-  QA:       { col: 9, row: 14 },   // DevOps room second desk
+  CEO:      { col: 4, row: 3 },    // CEO office (top-left) — between PC_FRONT_OFF(4,2) and CUSHIONED_CHAIR(4,4)
+  PM:       { col: 18, row: 3 },   // Product room (top-right) — between PC_FRONT_OFF(18,2) and CUSHIONED_CHAIR(18,4)
+  DevOps:   { col: 2, row: 13 },   // DevOps room (bottom-left) — WOODEN_CHAIR_SIDE desk A [FIXED: was (4,14)]
+  Frontend: { col: 9, row: 3 },    // CEO office second desk — between PC_FRONT_OFF(9,2) and CUSHIONED_CHAIR(9,4)
+  Backend:  { col: 24, row: 3 },   // Product room second desk — between PC_FRONT_OFF(24,2) and CUSHIONED_CHAIR(24,4)
+  QA:       { col: 9, row: 13 },   // DevOps room second desk — WOODEN_CHAIR_SIDE:left desk A [FIXED: was (9,14)]
 };
 
 const BREAK_POSITIONS = [

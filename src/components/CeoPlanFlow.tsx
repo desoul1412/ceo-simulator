@@ -186,10 +186,11 @@ export function CeoPlanFlow({ company }: CeoPlanFlowProps) {
           // Direct Supabase hire (simplified)
           const { supabase } = await import('../lib/supabase');
           if (supabase) {
+            // Validated against default-layout-1.json — see brain/wiki/Role-Seat-Validation.md
             const ROLE_SEATS: Record<string, { col: number; row: number }> = {
               PM: { col: 18, row: 3 }, Frontend: { col: 9, row: 3 },
-              Backend: { col: 24, row: 3 }, DevOps: { col: 4, row: 14 },
-              QA: { col: 9, row: 14 }, Marketer: { col: 18, row: 14 },
+              Backend: { col: 24, row: 3 }, DevOps: { col: 2, row: 13 },   // FIXED: was (4,14)
+              QA: { col: 9, row: 13 }, Marketer: { col: 18, row: 14 },     // FIXED: was (9,14)
               'Content Writer': { col: 20, row: 15 }, Sales: { col: 22, row: 14 },
               Operations: { col: 6, row: 15 },
             };

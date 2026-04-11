@@ -18,6 +18,15 @@ status: active
 - Build Tools
 
 ## Short-Term Memory
+- Task 2.4 is complete. Here's the full validation report and what was done:
+
+---
+
+## Task 2.4 — `ROLE_SEATS` Reachability Validation — **COMPLETE**
+
+### Validation Results
+
+| Role | Seat | Tile | Walka
 - Both files are written. Here's the full delivery summary:
 
 ---
@@ -47,11 +56,26 @@ status: active
 ## Long-Term Knowledge
 - Frequently works with: delivery
 - Frequently works with: summary:
+- Frequently works with: here's
+- Frequently works with: validation
 
 ## Rules
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **Task 2.4**  — **Validate `ROLE_SEATS` reachability** against the actual layout. Cross-reference these 6 critical positions with the furniture placed in `default-layout-1.json`:
+Task 2.4 is complete. Here's the full validation report and what was done:
+
+---
+
+## Task 2.4 — `ROLE_SEATS` Reachability Validation — **COMPLETE**
+
+### Validation Results
+
+| Role | Seat | Tile | Walkable | Furniture Match | Verdict |
+|------|------|------|----------|-----------------|---------|
+| CE
+
 ### 2026-04-11 — **** — Write `brain/wiki/Docker-Deployment-Spec.md`: Define `docker-compose.yml` architecture: `app` (Vite SPA + Express server), `postgres` (standalone), `redis` (optional for queue). Document environment variable schema with validation rules.
 Both files are written. Here's the full delivery summary:
 

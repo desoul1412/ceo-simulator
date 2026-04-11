@@ -278,13 +278,14 @@ export async function assignGoal(companyId: string, goal: string): Promise<{
   const delegations = (delegationsData ?? []) as DelegationRow[];
 
   // Update agent statuses to working
+  // Validated against default-layout-1.json — see brain/wiki/Role-Seat-Validation.md
   const ROLE_SEATS: Record<string, { col: number; row: number }> = {
     CEO:      { col: 4, row: 3 },
     PM:       { col: 18, row: 3 },
-    DevOps:   { col: 4, row: 14 },
+    DevOps:   { col: 2, row: 13 },   // WOODEN_CHAIR_SIDE desk A [FIXED: was (4,14)]
     Frontend: { col: 9, row: 3 },
     Backend:  { col: 24, row: 3 },
-    QA:       { col: 9, row: 14 },
+    QA:       { col: 9, row: 13 },   // WOODEN_CHAIR_SIDE:left desk A [FIXED: was (9,14)]
   };
 
   await Promise.all(
