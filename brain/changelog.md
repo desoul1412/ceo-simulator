@@ -6,6 +6,62 @@ status: active
 
 # Changelog
 
+## 2026-04-11 — Migration Specification v1.0
+
+### Migration Spec — New Document
+- **File**: `brain/wiki/Migration-Spec.md` (new, active)
+- **Status**: Complete specification; source of truth for all schema definitions
+
+### Tables Catalogued (Section 2) — All 17 Tables
+Full column-level schema, type annotations, nullable flags, defaults, and FK relationships documented for every table referenced in the codebase:
+
+| # | Table | Primary Purpose |
+|---|-------|----------------|
+| 1 | `companies` | Root company entity (status, budget, repo, brain_summary) |
+| 2 | `agents` | AI worker agents (runtime, budget, canvas position, lifecycle) |
+| 3 | `goals` | Hierarchical goal tree (self-referential parent_id) |
+| 4 | `delegations` | CEO → worker task delegation (ephemeral, deleted on completion) |
+| 5 | `activity_log` | Human-readable event feed (powers ActivityFeed component) |
+| 6 | `tickets` | Kanban work items (approval gate, board_column, sprint scoping) |
+| 7 | `ticket_comments` | Threaded comments (human/agent/system author types) |
+| 8 | `audit_log` | Structured compliance log (append-only, event_type enum) |
+| 9 | `task_queue` | Legacy flat task queue (deprecated — use tickets pipeline) |
+| 10 | `token_usage` | Per-invocation LLM cost ledger (input/output tokens + USD) |
+| 11 | `agent_sessions` | Claude SDK session tracking (enables multi-turn memory) |
+| 12 | `merge_requests` | Git branch + diff review (open/merged/rejected, diff stats) |
+| 13 | `notifications` | In-app notification bell (type, read flag, deep link) |
+| 14 | `sprints` | Agile sprint containers (triggers auto-next-sprint on complete) |
+| 15 | `project_plans` | AI-generated plans (triggers auto-hire, auto-sprint on approve) |
+| 16 | `configs` | Three-level config store (global → company → agent scopes) |
+| 17 | `project_env_vars` | Per-company env vars (is_secret masking, agent injection) |
+
+### FK Dependency Graph (Section 3)
+- Full cascade rule table defined: all child tables CASCADE on company delete
+- `tickets.agent_id`, `merge_requests.agent_id`, `token_usage.agent_id` → SET NULL (preserve history)
+- `agent_sessions.agent_id` → CASCADE (sessions meaningless without agent)
+
+### Migration File Numbering Convention (Section 4)
+- **Supabase**: `YYYYMMDDHHMMSS_snake_case_description.sql` — timestamp-prefixed, generated via `supabase migration new`
+- **Docker init**: `NN-kebab-case-description.sql` — two-digit sequence, run once on volume creation
+- Canonical Docker init sequence: `01-extensions` → `02-schema` → `03-rls-policies` → `04-functions` → `05-indexes` → `06-seed-dev`
+- Naming vocabulary: 10 standard verb prefixes (`create_`, `add_`, `drop_`, `alter_`, `rename_`, `seed_`, `backfill_`, `add_rls_`, `add_index_`, `add_trigger_`)
+
+### Shared Patterns (Section 5)
+- Standard column set: `id UUID PK`, `created_at TIMESTAMPTZ`
+- `updated_at` auto-trigger pattern: SQL for `update_updated_at()` function documented
+- `check_stale_agents()` RPC SQL defined (5-min stale, 30-min dead thresholds)
+
+### Migration Backlog (Section 7)
+- 🔴 `users` table + `user_id` FK on companies (auth — see [[Auth-System-Spec]])
+- 🔴 UNIQUE constraints missing on `project_env_vars(company_id, key)` and `configs(scope, scope_id, type, key)`
+- 🟡 `task_queue` deprecation, `activity_log` 90-day retention, `goals` table migration
+- 🟢 Performance indexes, notification cleanup
+
+### Table-to-File Reference Matrix (Section 8)
+Cross-reference of all 17 tables against 7 server source files documented.
+
+---
+
 ## 2026-04-11 — Task 2.4: ROLE_SEATS Reachability Validation + Bug Fixes
 
 ### Validation Results (see [[Role-Seat-Validation]])

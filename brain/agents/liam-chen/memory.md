@@ -18,6 +18,18 @@ status: active
 - Build Tools
 
 ## Short-Term Memory
+- Both files written. Here's the full delivery summary:
+
+---
+
+## ✅ Migration Spec v1.0 — Delivered
+
+**File:** `brain/wiki/Migration-Spec.md`  
+**Changelog:** `brain/changelog.md` updated
+
+---
+
+### 📋 Wh
 - Task 2.4 is complete. Here's the full validation report and what was done:
 
 ---
@@ -58,11 +70,34 @@ status: active
 - Frequently works with: summary:
 - Frequently works with: here's
 - Frequently works with: validation
+- Frequently works with: files
+- Frequently works with: written.
+- Frequently works with: delivered
+- Frequently works with: **file:**
+- Frequently works with: **changelog:**
+- Frequently works with: `brain/changelog.md`
 
 ## Rules
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **** — Write `brain/wiki/Migration-Spec.md`: Catalog all tables referenced in code — `companies`, `agents`, `goals`, `delegations`, `activity_log`, `tickets`, `ticket_comments`, `audit_log`, `task_queue`, `token_usage`, `agent_sessions`, `merge_requests`, `notifications`, `sprints`, `project_plans`, `configs`, `env_vars`. Define migration file numbering convention.
+Both files written. Here's the full delivery summary:
+
+---
+
+## ✅ Migration Spec v1.0 — Delivered
+
+**File:** `brain/wiki/Migration-Spec.md`  
+**Changelog:** `brain/changelog.md` updated
+
+---
+
+### 📋 What's in the spec
+
+#### Section 1 — Overview
+Establishes the **two migration contexts** (Supabase clo
+
 ### 2026-04-11 — **Task 2.4**  — **Validate `ROLE_SEATS` reachability** against the actual layout. Cross-reference these 6 critical positions with the furniture placed in `default-layout-1.json`:
 Task 2.4 is complete. Here's the full validation report and what was done:
 
