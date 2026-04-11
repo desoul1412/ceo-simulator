@@ -9,9 +9,10 @@ import { startHeartbeatDaemon, stopHeartbeatDaemon, isDaemonRunning } from './he
 import { listWorktrees } from './worktreeManager';
 import { getCompanyCwd, ensureRepo, syncRepo, listRepos } from './repoManager';
 import { supabase } from './supabaseAdmin';
+import { env } from './config/env.js';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = env.PORT;
 
 const BRAIN_ROOT = path.join(process.cwd(), 'brain');
 
@@ -407,7 +408,7 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     services: {
-      supabase: !!process.env.SUPABASE_URL,
+      supabase: !!env.SUPABASE_URL,
       agentSdk: true,
     },
   });
@@ -1793,7 +1794,7 @@ app.post('/api/tickets/:id/reject', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\n▣ CEO.SIM Orchestrator running on http://localhost:${PORT}`);
-  console.log(`  Supabase: ${process.env.SUPABASE_URL ? '● connected' : '○ missing'}`);
+  console.log(`  Supabase: ${env.SUPABASE_URL ? '● connected' : '○ missing'}`);
   console.log(`  Agent SDK: ● ready`);
 
   // Auto-start heartbeat daemon

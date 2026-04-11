@@ -1,16 +1,11 @@
-import { config } from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.env') });
+/**
+ * server/supabaseAdmin.ts
+ * Server-side Supabase client (service-role key — bypasses RLS).
+ * All env vars sourced from the validated config object.
+ */
 
 import { createClient } from '@supabase/supabase-js';
-
-const url = process.env.SUPABASE_URL!;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-if (!url || !serviceKey) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-}
+import { env } from './config/env.js';
 
 // Server-side client with service role key — bypasses RLS
-export const supabase = createClient(url, serviceKey);
+export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);

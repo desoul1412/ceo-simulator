@@ -6,6 +6,59 @@ status: active
 
 # Changelog
 
+## 2026-04-11 — Backend: Centralized Env Config (`server/config/env.ts`) (Raj Gupta)
+
+**Task:** Replace scattered `process.env.X!` assertions with typed, validated config using Zod.
+
+**Files created/modified:**
+- `server/config/env.ts` — new; Zod schema validating all required/optional env vars, throws descriptive error on boot if any required var is missing
+- `server/config/env.test.ts` — new; 8 unit tests covering defaults, coercion, missing-required, invalid values
+- `server/supabaseAdmin.ts` — updated; removed manual `process.env` access, imports `env` from config
+- `server/index.ts` — updated; replaced `process.env.PORT`, `process.env.SUPABASE_URL` with `env.*`
+- `package.json` — added `zod ^4.3.6` dependency
+
+**Schema summary:**
+| Var | Required | Default |
+|-----|----------|---------|
+| `SUPABASE_URL` | ✅ | — |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | — |
+| `ANTHROPIC_API_KEY` | optional | `undefined` |
+| `PORT` | optional | `3001` (number) |
+| `NODE_ENV` | optional | `"development"` |
+
+**Tests:** 8/8 passed ✅
+
+## 2026-04-11 — Backend: Database Migration Files Created (Raj Gupta)
+
+**Agent:** Raj Gupta (Backend Developer)
+**Branch:** agent/raj-gupta
+
+Created `server/migrations/` directory with 18 numbered SQL DDL migration files covering all tables referenced across `agentRunner.ts`, `ticketProcessor.ts`, `index.ts`, `memoryManager.ts`, and `heartbeatDaemon.ts`.
+
+**Files created:**
+- `001_companies.sql` — companies table + `set_updated_at()` trigger function
+- `002_agents.sql` — agents table (all columns incl. budget_spent, total_cost_usd, heartbeat_status, tile_col/row)
+- `003_goals.sql` — goals table with parent_goal_id self-reference + ancestry array
+- `004_sprints.sql` — sprints table
+- `005_tickets.sql` — tickets table + `claim_next_ticket()` RPC function (FOR UPDATE SKIP LOCKED)
+- `006_ticket_comments.sql` — ticket_comments table
+- `007_agent_sessions.sql` — agent_sessions table (token tracking per invocation)
+- `008_token_usage.sql` — token_usage table (granular billing records)
+- `009_activity_log.sql` — activity_log table (event feed)
+- `010_merge_requests.sql` — merge_requests table + deferred FK tickets→merge_requests
+- `011_notifications.sql` — notifications table
+- `012_audit_log.sql` — audit_log table (compliance trail)
+- `013_project_plans.sql` — project_plans table
+- `014_plan_comments.sql` — plan_comments table
+- `015_configs.sql` — configs table (global/company/agent scoped key-value)
+- `016_delegations.sql` — delegations table
+- `017_task_queue.sql` — task_queue table
+- `018_project_env_vars.sql` — project_env_vars table
+
+All tables include: RLS enabled with permissive policies, indexes on FKs and commonly filtered columns, `updated_at` triggers where applicable.
+
+---
+
 ## 2026-04-10 — UI Overhaul: Compact Agent Grid, Goals+Costs Merge, Office Fill
 
 ### Office Layout v2
@@ -776,3 +829,80 @@ Key architectural changes documented:
 - Created `CLAUDE.md` autonomy engine
 - Initialized Obsidian vault at `./brain/`
 - Configured Tavily MCP and Context7 MCP
+
+---
+
+## 2026-04-11 — Migration 020: RPC Functions (raj-gupta)
+
+### Task
+Extract and consolidate Postgres RPC functions referenced in application code into a dedicated migration file.
+
+### Deliverable
+`server/migrations/020_rpc_functions.sql`
+
+> **Note:** The task originally specified `018_rpc_functions.sql`, but migrations `018_project_env_vars.sql` and `019_users.sql` already existed. Number `020` was used to avoid conflicts.
+
+### Functions Defined
+
+#### `claim_next_ticket(p_company_id UUID) → UUID`
+- Referenced in: `server/ticketProcessor.ts:17`
+- Atomically selects the oldest `approved` ticket for a company using `FOR UPDATE SKIP LOCKED`
+- Transitions ticket `status → 'in_progress'`
+- Returns `NULL` when no approved tickets are queued
+- Previously inlined in `005_tickets.sql`; this file supersedes it as canonical source
+
+#### `check_stale_agents() → void`
+- Referenced in: `server/heartbeatDaemon.ts:47`
+- Called every daemon tick; marks agents `stale` after 2 min silence, `dead`+`offline` after 10 min
+- New function — not defined anywhere previously
+
+### Design Notes
+- Both functions use `SECURITY DEFINER` + `SET search_path = public` (Supabase best practice)
+- `GRANT EXECUTE` to `anon`, `authenticated`, `service_role` for Supabase RLS compatibility
+- `set_updated_at()` re-declared idempotently for standalone test execution
+
+---
+
+## 2026-04-11 — raj-gupta — `server/config/schema.ts` — Config Contract Interfaces
+
+**Task:** Create TypeScript interfaces for all server configuration as the contract for all provider implementations.
+
+**File created:** `server/config/schema.ts`
+
+### Interfaces Defined
+
+#### `DatabaseConfig` + `DatabasePoolConfig`
+- `supabaseUrl`, `supabaseServiceRoleKey` — required Supabase credentials
+- `postgresConnectionString?` — optional raw PG string for migrations/RPC
+- `pool?: DatabasePoolConfig` — `maxConnections`, `idleTimeoutMs`, `acquireTimeoutMs`
+- `schema?`, `debug?` — optional operational knobs
+
+#### `LLMProviderConfig` (discriminated union)
+- `AnthropicProviderConfig` — `provider: 'anthropic'`, `apiKey`, `model`, `baseUrl`, `timeoutMs`, `maxRetries`
+- `OpenAIProviderConfig` — `provider: 'openai'`, `apiKey`, `model`, `baseUrl`, `organizationId`
+- `OllamaProviderConfig` — `provider: 'ollama'`, `baseUrl`, `model`
+- `CustomProviderConfig` — `provider: 'custom'`, `baseUrl`, `apiKey`, `extraHeaders`
+- `LLMBudgetConfig` — `maxBudgetUsd`, `minBudgetUsd`, `maxTurns`, `effort`
+
+#### `AuthConfig` + sub-interfaces
+- `JWTConfig` — `secret`, `expiresIn`, `algorithm`
+- `SessionConfig` — `cookieName`, `httpOnly`, `sameSite`, `secure`, `maxAgeMs`
+- `CORSConfig` — `allowedOrigins`, `allowedMethods`, `credentials`
+- `AuthConfig` — composes all of the above + `adminAllowlist`, `enforceRLS`
+
+#### `ServerConfig` (root aggregate)
+- `port`, `nodeEnv`, `serviceName`, `version`
+- `database: DatabaseConfig`, `llm: LLMProviderConfig`, `llmFallback?`, `llmBudget?`, `auth: AuthConfig`
+- Feature flags: `enableHeartbeatDaemon`, `enableObsidianSync`, `enableRealtimeSubscriptions`
+- Observability: `logLevel`, `sentryDsn`
+
+#### Helper types
+- `PartialServerConfig` — deep partial for test fixtures
+- `ConfigFactory` — function signature for config builder functions
+
+### Design Notes
+- All interfaces are exported — consumers import types only (`import type`)
+- Discriminated union on `provider` field allows exhaustive switch in runners
+- No runtime code — pure TypeScript contracts; zero bundle impact
+- `LLMBudgetConfig` mirrors existing `runtimeConfig` shape in `claudeRunner.ts`
+- `AnthropicProviderConfig.model` default `'sonnet'` matches `claudeRunner.ts:55`
