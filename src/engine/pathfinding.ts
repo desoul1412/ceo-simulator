@@ -102,3 +102,88 @@ export function bfsPath(
 
   return []; // no path found
 }
+
+// ---------------------------------------------------------------------------
+// validateReachability
+// ---------------------------------------------------------------------------
+
+/** Result returned by {@link validateReachability}. */
+export interface ReachabilityResult {
+  /** `true` when every walkable cell can be reached from `start`. */
+  reachable: boolean;
+  /**
+   * List of walkable cells that are NOT reachable from `start`.
+   * Each entry is `[col, row]`.  Empty when `reachable` is `true`.
+   */
+  unreachableCells: [number, number][];
+}
+
+/**
+ * Flood-fills the grid from `start` and reports whether all walkable cells
+ * are reachable.
+ *
+ * Useful for validating office layouts: if any desk/path cell is cut off by
+ * furniture or walls the result will contain the isolated cells.
+ *
+ * @param grid  A walkable grid produced by {@link buildWalkableGrid}.
+ * @param start `[col, row]` of the flood-fill origin (must be walkable).
+ *
+ * @returns {@link ReachabilityResult} — `reachable` flag + list of isolated cells.
+ *
+ * @example
+ * ```ts
+ * const grid = buildWalkableGrid(tiles, cols, rows, blockedCells);
+ * const { reachable, unreachableCells } = validateReachability(grid, [0, 0]);
+ * if (!reachable) console.warn('Isolated cells:', unreachableCells);
+ * ```
+ */
+export function validateReachability(
+  grid: WalkableGrid,
+  start: [number, number],
+): ReachabilityResult {
+  const rows = grid.length;
+  if (rows === 0) return { reachable: true, unreachableCells: [] };
+  const cols = grid[0].length;
+
+  const [sc, sr] = start;
+
+  // If start is out-of-bounds or not walkable, every walkable cell is unreachable
+  const startWalkable =
+    sr >= 0 && sr < rows && sc >= 0 && sc < cols && grid[sr][sc];
+
+  const visited = Array.from({ length: rows }, () => new Array<boolean>(cols).fill(false));
+
+  if (startWalkable) {
+    // BFS flood-fill from start
+    const queue: [number, number][] = [[sc, sr]];
+    visited[sr][sc] = true;
+    const dirs: [number, number][] = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+
+    while (queue.length > 0) {
+      const [cc, cr] = queue.shift()!;
+      for (const [dc, dr] of dirs) {
+        const nc = cc + dc;
+        const nr = cr + dr;
+        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
+        if (visited[nr][nc] || !grid[nr][nc]) continue;
+        visited[nr][nc] = true;
+        queue.push([nc, nr]);
+      }
+    }
+  }
+
+  // Collect all walkable cells that were never visited
+  const unreachableCells: [number, number][] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] && !visited[r][c]) {
+        unreachableCells.push([c, r]);
+      }
+    }
+  }
+
+  return {
+    reachable: unreachableCells.length === 0,
+    unreachableCells,
+  };
+}

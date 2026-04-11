@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildWalkableGrid, bfsPath } from './pathfinding';
+import { buildWalkableGrid, bfsPath, validateReachability } from './pathfinding';
 import {
   resolveFootprint,
   furnitureToBlockedCells,
@@ -135,6 +135,104 @@ describe('furnitureFootprints', () => {
     expect(grid[0][2]).toBe(false);
     expect(grid[0][3]).toBe(false);
     expect(grid[0][0]).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateReachability
+// ---------------------------------------------------------------------------
+
+describe('validateReachability', () => {
+  // Helper: build a WalkableGrid directly from a 2-D boolean array
+  const g = (rows: boolean[][]): boolean[][] => rows;
+
+  it('fully-connected open grid → reachable:true, no unreachable cells', () => {
+    const grid = g(Array.from({ length: 4 }, () => Array(4).fill(true)));
+    const result = validateReachability(grid, [0, 0]);
+    expect(result.reachable).toBe(true);
+    expect(result.unreachableCells).toHaveLength(0);
+  });
+
+  it('returns reachable:true when there are no walkable cells at all', () => {
+    const grid = g([[false, false], [false, false]]);
+    const result = validateReachability(grid, [0, 0]);
+    expect(result.reachable).toBe(true);
+    expect(result.unreachableCells).toHaveLength(0);
+  });
+
+  it('returns reachable:true for an empty grid', () => {
+    const result = validateReachability([], [0, 0]);
+    expect(result.reachable).toBe(true);
+  });
+
+  it('detects a single isolated walkable cell', () => {
+    /*
+     *  T F T
+     *  F F F
+     *  T F T
+     *
+     *  Corners are walkable but not connected to each other (all edges are walls).
+     *  Start at top-left [col=0, row=0]; only that cell is "visited".
+     */
+    const grid = g([
+      [true, false, true],
+      [false, false, false],
+      [true, false, true],
+    ]);
+    const result = validateReachability(grid, [0, 0]);
+    expect(result.reachable).toBe(false);
+    // Three other walkable corners are unreachable
+    expect(result.unreachableCells).toHaveLength(3);
+    // Check one of them is present
+    expect(result.unreachableCells).toContainEqual([2, 0]);
+  });
+
+  it('detects an island cut off by a wall of furniture', () => {
+    /*
+     *  5×5 grid; column 2 is a wall → left side (col 0-1) and right side (col 3-4)
+     *  are isolated from each other.
+     *  Start on the left; right side cells are unreachable.
+     */
+    const grid: boolean[][] = Array.from({ length: 5 }, (_, r) =>
+      Array.from({ length: 5 }, (__, c) => c !== 2),
+    );
+    const result = validateReachability(grid, [0, 0]);
+    expect(result.reachable).toBe(false);
+    // Right side: col 3 and 4 for every row → 10 cells
+    expect(result.unreachableCells).toHaveLength(10);
+    result.unreachableCells.forEach(([c]) => expect(c).toBeGreaterThanOrEqual(3));
+  });
+
+  it('when start is non-walkable all walkable cells are unreachable', () => {
+    const grid = g([[true, true], [true, true]]);
+    const result = validateReachability(grid, [0, 0]); // (0,0) is walkable, use a wall
+    // Make start a wall: rebuild with top-left as wall
+    const walledGrid = g([[false, true], [true, true]]);
+    const r2 = validateReachability(walledGrid, [0, 0]);
+    expect(r2.reachable).toBe(false);
+    expect(r2.unreachableCells).toHaveLength(3); // the three remaining walkable cells
+  });
+
+  it('when start is out-of-bounds all walkable cells are unreachable', () => {
+    const grid = g([[true, true], [true, true]]);
+    const result = validateReachability(grid, [99, 99]);
+    expect(result.reachable).toBe(false);
+    expect(result.unreachableCells).toHaveLength(4);
+  });
+
+  it('integration: office layout with furniture island', () => {
+    // 5×5 floor; a ring of desks blocks off the center cell
+    const tiles = Array(25).fill(1);
+    const blockedCells = [
+      { col: 2, row: 1 },
+      { col: 1, row: 2 },
+      { col: 3, row: 2 },
+      { col: 2, row: 3 },
+    ];
+    const grid = buildWalkableGrid(tiles, 5, 5, blockedCells);
+    const result = validateReachability(grid, [0, 0]);
+    expect(result.reachable).toBe(false);
+    expect(result.unreachableCells).toContainEqual([2, 2]); // center is isolated
   });
 });
 

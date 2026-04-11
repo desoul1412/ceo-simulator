@@ -4,6 +4,27 @@ date: 2026-04-11
 status: active
 ---
 
+## 2026-04-11 — Task 2.2: validateReachability() added to pathfinding.ts
+
+**Agent**: Dev Sharma (Frontend)
+
+### Changes
+- **`src/engine/pathfinding.ts`** — New exported function `validateReachability(grid, start)`:
+  - BFS flood-fill from `start: [col, row]`
+  - Returns `ReachabilityResult { reachable: boolean; unreachableCells: [number,number][] }`
+  - Handles edge cases: empty grid, non-walkable start, out-of-bounds start
+  - Exported `ReachabilityResult` interface for consumer typing
+- **`src/engine/pathfinding.test.ts`** — 8 new tests in `describe('validateReachability')`.
+  All 28 tests pass.
+
+### Usage
+```ts
+const { reachable, unreachableCells } = validateReachability(grid, [0, 0]);
+if (!reachable) console.warn('Isolated walkable cells:', unreachableCells);
+```
+
+---
+
 ## 2026-04-11 — Task 2.1: buildWalkableGrid furniture overlay + furnitureFootprints.ts
 
 **Agent**: Dev Sharma (Frontend)
