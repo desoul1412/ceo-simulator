@@ -1,12 +1,26 @@
 /** BFS pathfinding on a walkable tile grid */
 
+import type { BlockedCell } from './furnitureFootprints';
+
 export type WalkableGrid = boolean[][];  // true = walkable
 
-/** Build walkable grid from layout tiles (255=void, 0=wall → not walkable) */
+/**
+ * Build a walkable grid from flat tile data with an optional furniture overlay.
+ *
+ * @param tiles        Flat array of tile IDs (row-major). 255=void, 0=wall → not walkable.
+ * @param cols         Number of columns in the grid.
+ * @param rows         Number of rows in the grid.
+ * @param blockedCells Optional list of furniture-occupied cells to mark non-walkable.
+ *                     Produced by `furnitureToBlockedCells()` in furnitureFootprints.ts.
+ *                     Out-of-bounds cells are silently ignored.
+ *
+ * @returns WalkableGrid  2D boolean array [row][col], true = agent can walk here.
+ */
 export function buildWalkableGrid(
   tiles: number[],
   cols: number,
-  rows: number
+  rows: number,
+  blockedCells?: BlockedCell[]
 ): WalkableGrid {
   const grid: WalkableGrid = [];
   for (let r = 0; r < rows; r++) {
@@ -17,6 +31,16 @@ export function buildWalkableGrid(
     }
     grid.push(row);
   }
+
+  // Overlay furniture-blocked cells (if provided)
+  if (blockedCells && blockedCells.length > 0) {
+    for (const { col, row } of blockedCells) {
+      if (row >= 0 && row < rows && col >= 0 && col < cols) {
+        grid[row][col] = false;
+      }
+    }
+  }
+
   return grid;
 }
 

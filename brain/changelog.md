@@ -1,8 +1,24 @@
 ---
 tags: [changelog, meta]
-date: 2026-04-10
+date: 2026-04-11
 status: active
 ---
+
+## 2026-04-11 — Task 2.1: buildWalkableGrid furniture overlay + furnitureFootprints.ts
+
+**Agent**: Dev Sharma (Frontend)
+
+### Changes
+- **`src/engine/pathfinding.ts`** — `buildWalkableGrid()` now accepts optional 4th parameter `blockedCells?: BlockedCell[]`. After building the base tile grid, it overlays furniture-blocked cells; out-of-bounds cells are silently ignored. Fully backward-compatible (no callers broken).
+- **`src/engine/furnitureFootprints.ts`** — New file. Exports:
+  - `FURNITURE_FOOTPRINTS` — footprint registry (w×h) for all known furniture types
+  - `resolveFootprint(type)` — handles variant suffixes (`:left`), falls back to 1×1
+  - `furnitureToBlockedCells(furniture)` — converts layout furniture array to `BlockedCell[]`
+  - **Chair decision (Task 2.5)**: All `CUSHIONED_CHAIR_*` and `WOODEN_CHAIR_*` types have footprint `{w:0, h:0}` (non-blocking), so agents can walk to their seats.
+- **`src/engine/pathfinding.test.ts`** — 14 new tests added (5 for blockedCells overlay, 9 for furnitureFootprints). All 20 tests pass.
+
+### Downstream
+- `canvasRenderer.ts` / `useCompanySimulation` should call `furnitureToBlockedCells(layout.furniture)` and pass result as 4th arg to `buildWalkableGrid()` when computing agent paths.
 
 # Changelog
 
