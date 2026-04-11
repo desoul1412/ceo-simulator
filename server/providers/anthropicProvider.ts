@@ -12,7 +12,13 @@ export function createAnthropicProvider(config: ProviderConfig): Provider {
     config,
 
     async isHealthy(): Promise<boolean> {
-      return !!process.env.ANTHROPIC_API_KEY;
+      // Claude Agent SDK uses the local Claude Code CLI auth, not ANTHROPIC_API_KEY
+      try {
+        await import('@anthropic-ai/claude-agent-sdk');
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     getModelId(tier: ModelTier): string {

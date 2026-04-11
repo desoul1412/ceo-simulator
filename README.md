@@ -45,7 +45,7 @@ docker compose up -d           # Server + PostgreSQL
 |------------|-------|
 | Node.js 22+ | For `tsx` TypeScript runner |
 | [Supabase](https://supabase.com) project | Free tier works. Run `supabase/migrations/*.sql` in order |
-| `ANTHROPIC_API_KEY` | In `server/.env` for Claude agents |
+| [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | Agents run via `@anthropic-ai/claude-agent-sdk` — uses your local Claude Code auth (no API key needed) |
 | Git | For worktree-based agent isolation |
 
 ---
@@ -121,10 +121,14 @@ CEO Simulator is the **control plane for a Zero-Human Software Factory**. You se
 
 ```bash
 # server/.env
-LLM_PROVIDER=auto    # anthropic → openrouter failover
-# LLM_PROVIDER=anthropic   # Claude only
-# LLM_PROVIDER=openrouter  # OpenRouter only (cheaper, more models)
+LLM_PROVIDER=auto        # Claude Agent SDK → OpenRouter failover
+# LLM_PROVIDER=anthropic  # Claude Agent SDK only (default, uses local CLI auth)
+# LLM_PROVIDER=openrouter # OpenRouter only (requires OPENROUTER_API_KEY)
 ```
+
+**Default:** Agents use `@anthropic-ai/claude-agent-sdk` which authenticates through your local [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) session. No API key env var needed.
+
+**Fallback:** When `LLM_PROVIDER=auto`, if Claude SDK is unavailable, routes to OpenRouter (OpenAI-compatible API).
 
 3-tier model routing: CEO → Opus, PM/Dev → Sonnet, QA/Scrum → Haiku.
 
@@ -170,7 +174,11 @@ VITE_API_URL=http://localhost:3001   # optional, defaults to localhost:3001
 # Required
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-ANTHROPIC_API_KEY=sk-ant-...
+
+# Claude Agent SDK auth
+# Agents use @anthropic-ai/claude-agent-sdk which authenticates through
+# your local Claude Code CLI session. No ANTHROPIC_API_KEY needed.
+# Just ensure `claude` CLI is installed and authenticated.
 
 # Optional
 SUPABASE_ANON_KEY=your-anon-key              # For auth features
