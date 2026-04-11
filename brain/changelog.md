@@ -206,3 +206,37 @@ for (let dr = 0; dr < fp.h; dr++) {
 - `src/engine/furnitureFootprints.ts` — **NEW** (furniture blocking registry + overlay utility)
 - `brain/wiki/Role-Seat-Validation.md` — **UPDATED** (Task 2.5 decision section appended; frontmatter tags expanded)
 - `brain/changelog.md` — **UPDATED** (this entry)
+
+---
+
+## 2026-04-11 — Phase 1 Index Update (Post-Flight Doc Control)
+
+### Action: `brain/00-Index.md` Updated with All Phase 1 Spec Links
+
+**Agent:** liam-chen (Project Manager)
+**Trigger:** POST-FLIGHT — all Phase 1 spec documents confirmed written; index must reflect current vault state per CLAUDE.md §1 PRE-FLIGHT/POST-FLIGHT protocol.
+
+### New Section Added: "Phase 1 Specs" *(top of index, above Architecture)*
+
+8 new Wikilinks registered in `[[00-Index]]`:
+
+| Wikilink | Document | Category |
+|----------|----------|----------|
+| `[[Migration-Spec]]` | Database Migration Spec v1.0 — 17-table schema, FK graph, naming conventions | Backend & Data |
+| `[[Database-Abstraction-Spec]]` | Database Abstraction Spec — Supabase/PostgreSQL/SQLite adapter pattern | Backend & Data |
+| `[[Docker-Deployment-Spec]]` | Docker Deployment Spec v1.0 — multi-stage Dockerfile, Compose, 40+ env vars | Backend & Data |
+| `[[Auth-System-Spec]]` | Auth System Spec v2.0 — JWT, RLS, users table, per-user company isolation | Auth |
+| `[[Auth-Implementation-Roadmap]]` | Auth Implementation Roadmap — user stories, sprint breakdown, ACs | Auth |
+| `[[Auth-Executive-Summary]]` | Auth Executive Summary — Spec Complete ✅ / Implementation: Ready 🚀 | Auth |
+| `[[Provider-Abstraction-Spec]]` | LLM Provider Abstraction Spec — Anthropic/OpenAI/Ollama unified adapter | LLM / AI |
+| `[[Role-Seat-Validation]]` | ROLE_SEATS Reachability Validation & Chair Blocking Decision (Tasks 2.4/2.5) | Canvas / Office Engine |
+
+### Index Structural Changes
+- `status` frontmatter: `archived` → `active`
+- `date` frontmatter: `2026-04-08` → `2026-04-11`
+- Archive warning replaced with active update notice (original handover link preserved)
+- Outstanding auth item in Backend section updated to cross-link `[[Auth-System-Spec]]`
+
+### Files Changed
+- `brain/00-Index.md` — **UPDATED** (Phase 1 Specs section added; status/date refreshed)
+- `brain/changelog.md` — **UPDATED** (this entry)

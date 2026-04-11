@@ -1,12 +1,35 @@
 ---
 tags: [index, meta]
-date: 2026-04-08
-status: archived
+date: 2026-04-11
+status: active
 ---
 
 # CEO Simulator — Master Index
 
-> ⚠️ **ARCHIVED 2026-04-08** — See [[Offboarding-Handover-Report]] for full project handover.
+> 📝 **UPDATED 2026-04-11** — Phase 1 spec documents added. See [[changelog]] for full history.
+> ⚠️ Previous archive notice: See [[Offboarding-Handover-Report]] for original project handover (2026-04-08).
+
+---
+
+## Phase 1 Specs *(New — 2026-04-11)*
+
+### Backend & Data
+- [[Migration-Spec]] — **Database Migration Spec v1.0** — Full column-level schema for all 17 tables, FK dependency graph, migration file naming conventions, shared patterns, migration backlog
+- [[Database-Abstraction-Spec]] — **Database Abstraction Spec** — Adapter pattern for Supabase / PostgreSQL / SQLite; `DATABASE_MODE` env-gate; repository interfaces
+- [[Docker-Deployment-Spec]] — **Docker Deployment Spec v1.0** — Self-hosted Docker Compose architecture; multi-stage Dockerfile; 40+ env var schema with Zod validation; PostgreSQL init scripts
+
+### Auth
+- [[Auth-System-Spec]] — **Auth System Spec v2.0** — Full auth architecture: JWT, RLS, `users` table, per-user company isolation, session management
+- [[Auth-Implementation-Roadmap]] — **Auth Implementation Roadmap** — User stories, sprint breakdown, acceptance criteria for full auth delivery
+- [[Auth-Executive-Summary]] — **Auth Executive Summary** — Status dashboard: Spec Complete ✅ | Implementation: Ready to Start 🚀
+
+### LLM / AI
+- [[Provider-Abstraction-Spec]] — **LLM Provider Abstraction Spec** — Unified adapter for Anthropic / OpenAI / Ollama; provider registry; cost routing
+
+### Canvas / Office Engine
+- [[Role-Seat-Validation]] — **ROLE_SEATS Reachability Validation & Chair Blocking Decision** — Task 2.4 / 2.5: 6-seat audit, 2 bugs fixed (DevOps, QA), chairs declared non-blocking
+
+---
 
 ## Architecture
 - [[Factory-Operations-Manual]] — **Zero-Human Software Factory** — SOPs, failure modes, token optimization, execution pipeline
@@ -48,7 +71,7 @@ status: archived
 - [x] `server/heartbeatDaemon.ts` — 30s auto-processing daemon
 - [x] `server/ticketProcessor.ts` — ticket-based executor with budget checks
 - [x] `server/agents/` — agentRunner, claudeRunner, httpRunner, bashRunner
-- [ ] Auth (user accounts + per-user companies) — OUTSTANDING
+- [ ] Auth (user accounts + per-user companies) — OUTSTANDING → see [[Auth-System-Spec]]
 
 ## State (v3)
 - [x] `src/store/dashboardStore.ts` — Zustand + Supabase sync (optimistic local + background persist)

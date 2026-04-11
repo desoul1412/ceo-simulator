@@ -18,6 +18,17 @@ status: active
 - Build Tools
 
 ## Short-Term Memory
+- Both files are written. Here's the full delivery summary:
+
+---
+
+## ✅ Phase 1 Index Update — Delivered
+
+### 📄 `brain/00-Index.md` — Updated
+
+| Change | Detail |
+|--------|--------|
+| `status` | `archi
 - All three deliverables are complete. Here's the full summary:
 
 ---
@@ -87,11 +98,29 @@ The reaso
 - Frequently works with: **file:**
 - Frequently works with: **changelog:**
 - Frequently works with: `brain/changelog.md`
+- Frequently works with: updated
 
 ## Rules
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **** — Update `brain/00-Index.md` with new spec links. Append all Phase 1 actions to `brain/changelog.md`.
+
+⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
+Both files are written. Here's the full delivery summary:
+
+---
+
+## ✅ Phase 1 Index Update — Delivered
+
+### 📄 `brain/00-Index.md` — Updated
+
+| Change | Detail |
+|--------|--------|
+| `status` | `archived` → `active` |
+| `date` | `2026-04-08` → `2026-04-11` |
+| **New section added** | **"Phase 1 Spec
+
 ### 2026-04-11 — **Task 2.5**  — **Decision: Are chairs blocking?** Chairs (`CUSHIONED_CHAIR_*`, `WOODEN_CHAIR_*`) represent where agents sit. Marking them non-walkable would block the agent's own seat. **Recommendation**: Chairs should be **non-blocking** (footprint `{w:0, h:0}`). Document decision in spec. Frontend updates `furnitureFootprints.ts` accordingly.
 All three deliverables are complete. Here's the full summary:
 
