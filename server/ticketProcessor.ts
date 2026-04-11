@@ -133,9 +133,21 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
 
     // Pull latest from main into agent branch (rebase to stay clean)
     try {
-      execSync(`git fetch origin main 2>/dev/null; git rebase origin/main 2>/dev/null || git merge origin/main --no-edit 2>/dev/null || true`, {
-        cwd: worktreePath, stdio: 'pipe',
-      });
+      execSync('git fetch origin main', { cwd: worktreePath, stdio: 'pipe' });
+      try {
+        execSync('git rebase origin/main', { cwd: worktreePath, stdio: 'pipe' });
+      } catch {
+        // Rebase failed — abort and try merge
+        try { execSync('git rebase --abort', { cwd: worktreePath, stdio: 'pipe' }); } catch {}
+        try {
+          execSync('git merge origin/main --no-edit', { cwd: worktreePath, stdio: 'pipe' });
+        } catch (mergeErr: any) {
+          // Both failed: reset to origin/main so agent starts from a clean state
+          console.warn(`[git] Sync conflict on ${branchName} — resetting to origin/main: ${mergeErr.message}`);
+          try { execSync('git merge --abort', { cwd: worktreePath, stdio: 'pipe' }); } catch {}
+          execSync('git reset --hard origin/main', { cwd: worktreePath, stdio: 'pipe' });
+        }
+      }
     } catch { /* first time — no origin/main yet */ }
 
     // Conflict avoidance: check if other agents have open MRs touching same files

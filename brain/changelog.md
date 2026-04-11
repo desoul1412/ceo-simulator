@@ -1,10 +1,22 @@
 ---
 tags: [changelog, meta]
-date: 2026-04-10
+date: 2026-04-11
 status: active
 ---
 
 # Changelog
+
+## 2026-04-11 — Git Worktree Conflict Prevention
+
+**Problem:** Merge conflicts when CEO manually merged agent MRs. Root causes:
+1. Merge endpoint jumped straight to `git merge` without ensuring `main` was current or rebasing the agent branch
+2. Pull-before-work used `|| true` — silently swallowed real conflicts, agents worked in conflicted state
+3. New worktrees branched from `HEAD` (potentially stale) instead of `origin/main`
+
+**Fixes in 3 files:**
+- `server/index.ts` `/api/merge-requests/:id/merge`: Added 5-step safe merge flow: fetch → rebase agent branch in its worktree (with `--force-with-lease` push) → checkout + reset main to `origin/main` → merge → push main. Sets `status: 'conflicted'` in DB if rebase or merge fails.
+- `server/ticketProcessor.ts` pull-before-work: Replaced `|| true` chain with explicit rebase → abort+merge fallback → reset-hard-to-main fallback. Agent never works in a conflicted state.
+- `server/worktreeManager.ts` `createWorktree()`: New branches now start from `origin/main` (falls back to `HEAD` if no remote). Prevents drift from stale local HEAD.
 
 ## 2026-04-10 — Agent Framework Optimization: Smart Models, Prompt Caching, Parallel Execution
 

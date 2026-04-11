@@ -1210,10 +1210,50 @@ app.post('/api/merge-requests/:id/merge', async (req, res) => {
     // Attempt git merge in the company repo
     const cwd = await getCompanyCwd(m.company_id);
     const { execSync } = await import('child_process');
+
+    // Step 1: Fetch latest from origin
     try {
-      execSync(`git merge ${m.branch_name} --no-ff -m "Merge ${m.branch_name}"`, { cwd, stdio: 'pipe' });
+      execSync('git fetch origin', { cwd, stdio: 'pipe', timeout: 30000 });
+    } catch (fetchErr: any) {
+      console.warn('[merge] Fetch failed (continuing offline):', fetchErr.message);
+    }
+
+    // Step 2: Rebase agent branch onto latest main in its worktree (avoids conflict at merge time)
+    const worktreePath = path.join(cwd, '.agent-worktrees', m.branch_name);
+    if (fs.existsSync(worktreePath)) {
+      try {
+        execSync('git rebase origin/main', { cwd: worktreePath, stdio: 'pipe' });
+        execSync(`git push --force-with-lease origin ${m.branch_name}`, { cwd: worktreePath, stdio: 'pipe', timeout: 30000 });
+        console.log(`[merge] Rebased ${m.branch_name} onto origin/main`);
+      } catch (rebaseErr: any) {
+        try { execSync('git rebase --abort', { cwd: worktreePath, stdio: 'pipe' }); } catch {}
+        await supabase.from('merge_requests').update({ status: 'conflicted' }).eq('id', req.params.id);
+        return res.status(409).json({ error: `Rebase conflict — resolve manually: ${(rebaseErr.stderr?.toString() || rebaseErr.message).slice(0, 300)}` });
+      }
+    }
+
+    // Step 3: Ensure main is current before merging
+    try {
+      execSync('git checkout main', { cwd, stdio: 'pipe' });
+      execSync('git reset --hard origin/main', { cwd, stdio: 'pipe' });
+    } catch (checkoutErr: any) {
+      console.warn('[merge] Could not reset main to origin/main:', checkoutErr.message);
+    }
+
+    // Step 4: Merge (should be clean after rebase above)
+    try {
+      execSync(`git merge ${m.branch_name} --no-ff -m "Merge ${m.branch_name}: ${(m.title ?? '').replace(/"/g, '\\"')}"`, { cwd, stdio: 'pipe' });
     } catch (mergeErr: any) {
+      try { execSync('git merge --abort', { cwd, stdio: 'pipe' }); } catch {}
+      await supabase.from('merge_requests').update({ status: 'conflicted' }).eq('id', req.params.id);
       return res.status(409).json({ error: `Merge conflict: ${mergeErr.message}` });
+    }
+
+    // Step 5: Push merged main to origin
+    try {
+      execSync('git push origin main', { cwd, stdio: 'pipe', timeout: 30000 });
+    } catch (pushErr: any) {
+      console.warn('[merge] Push origin/main failed:', pushErr.message);
     }
 
     await supabase.from('merge_requests').update({ status: 'merged', merged_at: new Date().toISOString() }).eq('id', req.params.id);
