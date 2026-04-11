@@ -860,3 +860,49 @@ Extract and consolidate Postgres RPC functions referenced in application code in
 - Both functions use `SECURITY DEFINER` + `SET search_path = public` (Supabase best practice)
 - `GRANT EXECUTE` to `anon`, `authenticated`, `service_role` for Supabase RLS compatibility
 - `set_updated_at()` re-declared idempotently for standalone test execution
+
+---
+
+## 2026-04-11 — raj-gupta — `server/config/schema.ts` — Config Contract Interfaces
+
+**Task:** Create TypeScript interfaces for all server configuration as the contract for all provider implementations.
+
+**File created:** `server/config/schema.ts`
+
+### Interfaces Defined
+
+#### `DatabaseConfig` + `DatabasePoolConfig`
+- `supabaseUrl`, `supabaseServiceRoleKey` — required Supabase credentials
+- `postgresConnectionString?` — optional raw PG string for migrations/RPC
+- `pool?: DatabasePoolConfig` — `maxConnections`, `idleTimeoutMs`, `acquireTimeoutMs`
+- `schema?`, `debug?` — optional operational knobs
+
+#### `LLMProviderConfig` (discriminated union)
+- `AnthropicProviderConfig` — `provider: 'anthropic'`, `apiKey`, `model`, `baseUrl`, `timeoutMs`, `maxRetries`
+- `OpenAIProviderConfig` — `provider: 'openai'`, `apiKey`, `model`, `baseUrl`, `organizationId`
+- `OllamaProviderConfig` — `provider: 'ollama'`, `baseUrl`, `model`
+- `CustomProviderConfig` — `provider: 'custom'`, `baseUrl`, `apiKey`, `extraHeaders`
+- `LLMBudgetConfig` — `maxBudgetUsd`, `minBudgetUsd`, `maxTurns`, `effort`
+
+#### `AuthConfig` + sub-interfaces
+- `JWTConfig` — `secret`, `expiresIn`, `algorithm`
+- `SessionConfig` — `cookieName`, `httpOnly`, `sameSite`, `secure`, `maxAgeMs`
+- `CORSConfig` — `allowedOrigins`, `allowedMethods`, `credentials`
+- `AuthConfig` — composes all of the above + `adminAllowlist`, `enforceRLS`
+
+#### `ServerConfig` (root aggregate)
+- `port`, `nodeEnv`, `serviceName`, `version`
+- `database: DatabaseConfig`, `llm: LLMProviderConfig`, `llmFallback?`, `llmBudget?`, `auth: AuthConfig`
+- Feature flags: `enableHeartbeatDaemon`, `enableObsidianSync`, `enableRealtimeSubscriptions`
+- Observability: `logLevel`, `sentryDsn`
+
+#### Helper types
+- `PartialServerConfig` — deep partial for test fixtures
+- `ConfigFactory` — function signature for config builder functions
+
+### Design Notes
+- All interfaces are exported — consumers import types only (`import type`)
+- Discriminated union on `provider` field allows exhaustive switch in runners
+- No runtime code — pure TypeScript contracts; zero bundle impact
+- `LLMBudgetConfig` mirrors existing `runtimeConfig` shape in `claudeRunner.ts`
+- `AnthropicProviderConfig.model` default `'sonnet'` matches `claudeRunner.ts:55`
