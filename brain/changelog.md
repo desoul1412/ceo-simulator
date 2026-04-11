@@ -6,6 +6,90 @@ status: active
 
 # Changelog
 
+## 2026-04-11 — Auth System Specification v2.0
+
+### Auth System Spec — Complete Rewrite & Endpoint Audit
+- **File**: `brain/wiki/Auth-System-Spec.md` (updated to v2.0, active)
+- **Status**: Complete specification; ready for Phase 1 implementation
+- Full audit of `server/index.ts` — catalogued all **57 endpoints** (vs. 25 in v1)
+- Identified critical security gaps: notifications, daemon control, indirect agent→company ownership
+
+### Coverage Added in v2.0
+
+#### JWT Flow (sections 3–6)
+- Signup, Login, Token Refresh, Logout flows — complete request/response contracts
+- Access token: 15 min HS256, `aud: "authenticated"`, in-memory client storage
+- Refresh token: 7 days HS256, `type: "refresh"` claim, `localStorage` + rotation on use
+- `generateTokens()` helper factored out; shared by signup and login handlers
+- `logoutHandler()` annotated with TODO for refresh token revocation in `public.refresh_tokens`
+
+#### Middleware (section 5)
+- `verifyJWT` — blocks with 401/403 on missing/invalid/expired token
+- `verifyJWTOptional` — silent attach; used for `/api/health`
+- `assertCompanyOwnership(supabase, userId, companyId)` — reusable ownership check helper
+- `app.use('/api', verifyJWT)` — single-line protection for all 57 endpoints
+
+#### Complete Endpoint Auth Table (section 7) — 57 endpoints mapped
+- **Section A:** Public — `/api/health` (optional auth)
+- **Section B:** Core ops — 12 endpoints: assign-goal, review, tasks, costs, queue, hire/fire agent, lifecycle, budget
+- **Section C:** Configs — 5 endpoints: list, effective, create, patch, delete (scope-aware ownership)
+- **Section D:** Repos — 6 endpoints: connect, sync, status, disconnect, list repos, worktrees
+- **Section E:** Tickets & Approvals — 5 endpoints: list, status, approve, reject, approve-all
+- **Section F:** Merge Requests — 5 endpoints: list, merge, reject, revert, diff
+- **Section G:** Sprints — 5 endpoints: list, create, patch, tickets, complete
+- **Section H:** Project Plans — 6 endpoints: list, create, patch, approve, comments CRUD
+- **Section I:** Brain/Files — 3 endpoints: company summary, agent brain init, agent memory update
+- **Section J:** Notifications — 4 endpoints with `⚠️ user-scoping fix required` (currently returns ALL notifications)
+- **Section K:** Env Vars — 2 endpoints (returns masked secrets — high sensitivity)
+- **Section L:** Daemon Control — 3 endpoints with `⚠️ Admin-flag required` (start/stop affect all companies)
+
+#### RLS Implications for Multi-Tenancy (section 8)
+- 17-table RLS policy matrix — every `company_id` table mapped to cascade policy
+- `ticket_comments` and `plan_comments` — join-based RLS through parent tables
+- `configs` — multi-level policy: global scope readable by all authenticated; company/agent scope via ownership
+- `project_env_vars` — flagged as high sensitivity (secrets masked at app layer)
+- Confirmed: `supabaseAdmin` (service role) bypasses RLS — safe for daemon operations, never expose to client
+
+#### Client-Side Auth (section 9)
+- `src/store/authStore.ts` — Zustand store: signup/login/logout/refreshAccessToken actions
+- `src/components/ProtectedRoute.tsx` — `<Navigate to="/login" replace />` pattern (no useEffect redirect)
+- `src/lib/api.ts` — `apiCall<T>()` wrapper with auto-401-retry and session expiry redirect
+- New frontend routes needed: `/login`, `/signup` (both Pixel Art / HUD styled)
+
+#### Migration Checklist (section 11) — 5-phase plan
+- Phase 1 (1 day): DB schema — `public.users`, `owner_id` on companies, 17 RLS policies, backfill
+- Phase 2 (2 days): Backend auth — middleware, handlers, JWT signing, env vars, `jsonwebtoken` install
+- Phase 3 (2 days): Endpoint audit — ownership checks on all 57 endpoints, notification scoping, daemon admin gate
+- Phase 4 (2 days): Frontend — authStore, ProtectedRoute, login/signup pages, API wrapper
+- Phase 5 (1 day): Deploy — production RLS, email confirmation, rate limiting, OWASP audit
+
+#### Security Hardening (section 12)
+- Attack vector table: brute force, XSS token theft, session fixation, CSRF, RLS bypass, daemon abuse
+- Rate limiting: `express-rate-limit` on `/auth/login` — 5 req/min/IP
+- Access token memory-only (not `localStorage`) to mitigate XSS risk
+- Refresh token rotation on every `/auth/refresh` call
+
+### Acceptance Criteria
+- [x] JWT flow fully specified (signup, login, refresh, logout)
+- [x] All 57 `server/index.ts` endpoints audited and classified
+- [x] Auth middleware TypeScript implementation provided
+- [x] RLS policies specified for all 17 dependent tables
+- [x] Client-side auth store + protected route + API wrapper provided
+- [x] Security attack vector analysis complete
+- [x] 5-phase migration checklist defined
+- [x] Linked to [[00-Index]], [[Factory-Operations-Manual]], [[Office-Simulator-Architecture]]
+
+### Files Changed
+- **Updated**: `brain/wiki/Auth-System-Spec.md` (v1.0 → v2.0 — comprehensive rewrite)
+- **Updated**: `brain/changelog.md` (this entry)
+
+### Spec Links
+- **Main Spec**: [[Auth-System-Spec]]
+- **Related**: [[00-Index]], [[Factory-Operations-Manual]], [[Office-Simulator-Architecture]], [[Provider-Abstraction-Spec]]
+- **Code refs**: `server/index.ts` (57 endpoints), `server/supabaseAdmin.ts`, `src/lib/supabase.ts`, `src/lib/database.types.ts`
+
+---
+
 ## 2026-04-11 — Provider Abstraction Specification
 
 ### LLM Provider Interface Definition (Spec)
@@ -609,8 +693,3 @@ status: active
 - Added `last_heartbeat` (timestamptz) and `heartbeat_status` (alive/stale/dead) to agents table
 - `agent_heartbeat(agent_id)` function — updates heartbeat timestamp
 - `check_stale_agents()` function — marks agents stale after 30s, dead after 120s
-
-### Canvas Heartbeat Visuals
-- `renderHeartbeat()` in `canvasRenderer.ts` — pulsing glow ring under each agent
-  - **alive** (green): smooth 0.5Hz pulse, bright glow
-  - **stale** (orange): slow dim pulse
