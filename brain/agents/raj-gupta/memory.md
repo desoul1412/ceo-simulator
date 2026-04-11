@@ -11,8 +11,14 @@ status: active
 - Testing
 - Database
 - Documentation
+- API Development
 
 ## Short-Term Memory
+- Everything is already complete. The `server/config/env.ts` was already created, all tests pass (8/8), and the changelog has been updated. Here's a summary of the current state:
+
+---
+
+## ✅ Task Complet
 - Done. Here's a summary of what was delivered:
 
 ---
@@ -39,11 +45,23 @@ All tables discovered by scanning `agentRunner.ts`, `ticketProcessor.ts`, `index
 - Frequently works with: here's
 - Frequently works with: summary
 - Frequently works with: delivered:
+- Frequently works with: already
 
 ## Rules
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **** — Create `server/config/env.ts` — centralized environment variable validation. Replace scattered `process.env.X!` assertions (currently in `server/supabaseAdmin.ts:8-9`, `src/lib/supabase.ts:3-4`) with typed, validated config object using `zod`. Define required vs. optional vars with defaults.
+
+⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/liam-chen. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
+Everything is already complete. The `server/config/env.ts` was already created, all tests pass (8/8), and the changelog has been updated. Here's a summary of the current state:
+
+---
+
+## ✅ Task Complete — `server/config/env.ts` Already Delivered
+
+The centralized environment configuration was already 
+
 ### 2026-04-11 — **** — Create `server/migrations/018_rpc_functions.sql` — extract Postgres RPC functions referenced in code: `claim_next_ticket` (`ticketProcessor.ts:17`), `check_stale_agents` (`heartbeatDaemon.ts:47`).
 
 ⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/liam-chen. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.

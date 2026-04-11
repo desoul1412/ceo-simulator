@@ -6,6 +6,28 @@ status: active
 
 # Changelog
 
+## 2026-04-11 — Backend: Centralized Env Config (`server/config/env.ts`) (Raj Gupta)
+
+**Task:** Replace scattered `process.env.X!` assertions with typed, validated config using Zod.
+
+**Files created/modified:**
+- `server/config/env.ts` — new; Zod schema validating all required/optional env vars, throws descriptive error on boot if any required var is missing
+- `server/config/env.test.ts` — new; 8 unit tests covering defaults, coercion, missing-required, invalid values
+- `server/supabaseAdmin.ts` — updated; removed manual `process.env` access, imports `env` from config
+- `server/index.ts` — updated; replaced `process.env.PORT`, `process.env.SUPABASE_URL` with `env.*`
+- `package.json` — added `zod ^4.3.6` dependency
+
+**Schema summary:**
+| Var | Required | Default |
+|-----|----------|---------|
+| `SUPABASE_URL` | ✅ | — |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | — |
+| `ANTHROPIC_API_KEY` | optional | `undefined` |
+| `PORT` | optional | `3001` (number) |
+| `NODE_ENV` | optional | `"development"` |
+
+**Tests:** 8/8 passed ✅
+
 ## 2026-04-11 — Backend: Database Migration Files Created (Raj Gupta)
 
 **Agent:** Raj Gupta (Backend Developer)
