@@ -138,3 +138,71 @@ The bottom-floor desks use a `DESK_SIDE` pattern where the agent sits at the `WO
 - `03-rls-policies.sql`: RLS policies (see [[Auth-System-Spec]])
 - `04-seed-dev.sql`: dev data (ARG-gated)
 - `05-functions.sql`: `update_updated_at()` trigger
+
+---
+
+## 2026-04-11 — Task 2.5: Chair Blocking Decision + furnitureFootprints.ts
+
+### Decision: Chairs are NON-BLOCKING (see [[Role-Seat-Validation]] — Task 2.5 section)
+
+**Verdict:** `CUSHIONED_CHAIR_*` and `WOODEN_CHAIR_*` variants → footprint `{ w: 0, h: 0 }` — zero cells contributed to the walkable grid blocking overlay.
+
+**Core Rationale:**
+- Chair tiles ARE `ROLE_SEATS`. Blocking chairs = blocking the agent's own assigned seat.
+- DESK_SIDE agents (DevOps at (2,13), QA at (9,13)) sit directly on their chair tile — marking it non-walkable makes those seats permanently unreachable via BFS.
+- Chairs are visual affordances rendered beneath agent sprites, not physical obstacles.
+- Industry precedent (Pixel Agents, RPG genre): only furniture with a mass larger than one person blocks movement.
+
+**Rejected alternative:** Placing ROLE_SEATS one tile south of each chair. Rejected — breaks visual alignment and complicates layout authoring.
+
+### New File: `src/engine/furnitureFootprints.ts`
+
+Complete furniture collision registry for the office engine.
+
+**Exports:**
+| Export | Description |
+|--------|-------------|
+| `FurnitureFootprint` | Interface: `{ w: number, h: number }` |
+| `FURNITURE_FOOTPRINTS` | Registry: maps furniture type key → footprint |
+| `resolveFurnitureKey(type)` | Strips variant suffix: `"PC_SIDE:left"` → `"PC_SIDE"` |
+| `getFurnitureFootprint(type)` | Lookup with safe fallback `{ w:1, h:1 }` for unknown types |
+| `applyFurnitureBlocking(grid, items)` | Mutates WalkableGrid — adds furniture blocking on top of tile-based grid |
+
+**Footprint summary by category:**
+
+| Category | Types | Footprint |
+|----------|-------|-----------|
+| Desks | DESK_FRONT, DESK_SIDE, DESK_CORNER | w:1-2, h:1-2 (blocking) |
+| PCs / Monitors | PC_FRONT_OFF, PC_FRONT_ON, PC_SIDE, PC_SIDE_ON | w:1, h:1 (blocking) |
+| **Chairs** | **CUSHIONED_CHAIR_*, WOODEN_CHAIR_*** | **w:0, h:0 (NON-BLOCKING)** |
+| Sofas | SOFA_SIDE, SOFA_FRONT | w:2, h:1 (blocking) |
+| Storage | BOOKSHELF, FILING_CABINET, SERVER_RACK | w:1-2, h:1-2 (blocking) |
+| Appliances | COFFEE_MACHINE, WATER_COOLER, PRINTER | w:1, h:1 (blocking) |
+| Décor | PLANT_SMALL | w:0, h:0 (non-blocking); PLANT_LARGE/TALL w:1, h:1 |
+| Meeting | MEETING_TABLE, WHITEBOARD, TV_STAND | w:2-3, h:1-2 (blocking) |
+
+**`applyFurnitureBlocking()` logic:**
+```typescript
+// Non-blocking furniture — skip entirely (zero tiles blocked)
+if (fp.w === 0 || fp.h === 0) continue;
+
+// Blocking furniture — mark footprint rect as non-walkable
+for (let dr = 0; dr < fp.h; dr++) {
+  for (let dc = 0; dc < fp.w; dc++) {
+    grid[row + dr][col + dc] = false;
+  }
+}
+```
+
+### Acceptance Criteria — All Met
+- [x] All 6 chair variants in registry with `{ w: 0, h: 0 }`
+- [x] `applyFurnitureBlocking()` skips zero-footprint items
+- [x] Variant suffix stripped before registry lookup (`"WOODEN_CHAIR_SIDE:left"` → `"WOODEN_CHAIR_SIDE"`)
+- [x] Safe fallback `{ w:1, h:1 }` for unregistered furniture types
+- [x] BFS can still reach chair seat tiles (DevOps: (2,13), QA: (9,13))
+- [x] Decision rationale documented in [[Role-Seat-Validation]] — Task 2.5 section
+
+### Files Changed
+- `src/engine/furnitureFootprints.ts` — **NEW** (furniture blocking registry + overlay utility)
+- `brain/wiki/Role-Seat-Validation.md` — **UPDATED** (Task 2.5 decision section appended; frontmatter tags expanded)
+- `brain/changelog.md` — **UPDATED** (this entry)

@@ -18,6 +18,17 @@ status: active
 - Build Tools
 
 ## Short-Term Memory
+- All three deliverables are complete. Here's the full summary:
+
+---
+
+## ✅ Task 2.5 — Chair Blocking Decision — **COMPLETE**
+
+---
+
+### Decision: Chairs are **NON-BLOCKING** — `{ w: 0, h: 0 }`
+
+The reaso
 - Both files written. Here's the full delivery summary:
 
 ---
@@ -81,6 +92,19 @@ status: active
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **Task 2.5**  — **Decision: Are chairs blocking?** Chairs (`CUSHIONED_CHAIR_*`, `WOODEN_CHAIR_*`) represent where agents sit. Marking them non-walkable would block the agent's own seat. **Recommendation**: Chairs should be **non-blocking** (footprint `{w:0, h:0}`). Document decision in spec. Frontend updates `furnitureFootprints.ts` accordingly.
+All three deliverables are complete. Here's the full summary:
+
+---
+
+## ✅ Task 2.5 — Chair Blocking Decision — **COMPLETE**
+
+---
+
+### Decision: Chairs are **NON-BLOCKING** — `{ w: 0, h: 0 }`
+
+The reasoning is airtight and comes down to one fundamental constraint: **chair tiles ARE agent seats**. Here
+
 ### 2026-04-11 — **** — Write `brain/wiki/Migration-Spec.md`: Catalog all tables referenced in code — `companies`, `agents`, `goals`, `delegations`, `activity_log`, `tickets`, `ticket_comments`, `audit_log`, `task_queue`, `token_usage`, `agent_sessions`, `merge_requests`, `notifications`, `sprints`, `project_plans`, `configs`, `env_vars`. Define migration file numbering convention.
 Both files written. Here's the full delivery summary:
 

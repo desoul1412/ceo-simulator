@@ -1,10 +1,10 @@
 ---
-tags: [spec, canvas, layout, validation, bug-fix]
+tags: [spec, canvas, layout, validation, bug-fix, furniture, pathfinding]
 date: 2026-04-11
 status: active
 ---
 
-# Task 2.4 — ROLE_SEATS Reachability Validation
+# Task 2.4 / 2.5 — ROLE_SEATS Reachability Validation & Chair Blocking Decision
 
 ## Related
 - [[Office-Simulator-Architecture]]
@@ -257,3 +257,82 @@ col 8, row 12: [DESK_SIDE    ]
 col 8, row 13: [PC_SIDE:left ]
 col 9, row 13: [WOODEN_CHAIR_SIDE:left ← SEAT]   ← agent sits here, facing left
 ```
+
+---
+
+## Task 2.5 — Chair Blocking Decision
+
+**Date:** 2026-04-11  
+**Status:** ✅ DECIDED & IMPLEMENTED
+
+### The Question
+
+Should chairs (`CUSHIONED_CHAIR_*`, `WOODEN_CHAIR_*`) block pathfinding?
+
+If marked blocking, a furniture-aware BFS overlay would add those tiles to the non-walkable set. This is standard for desks, servers, and large appliances — but chairs present a unique problem.
+
+### The Problem with Blocking Chairs
+
+Every chair tile IS a `ROLE_SEAT`. The mapping is exact and intentional:
+
+| Role     | Seat Coord | Chair at same coord        |
+|----------|------------|---------------------------|
+| CEO      | (4, 4)     | CUSHIONED_CHAIR_FRONT      |
+| Frontend | (9, 4)     | CUSHIONED_CHAIR_FRONT      |
+| PM       | (18, 4)    | CUSHIONED_CHAIR_FRONT      |
+| Backend  | (24, 4)    | CUSHIONED_CHAIR_FRONT      |
+| DevOps   | (2, 13)    | WOODEN_CHAIR_SIDE          |
+| QA       | (9, 13)    | WOODEN_CHAIR_SIDE:left     |
+
+> Note: DESK_FRONT agent positions (row 3) are 1 row above the chair (row 4). The chair is a decorative sprite rendered south of the agent. DESK_SIDE agents sit directly ON the chair tile.
+
+If chairs were blocking, `applyFurnitureBlocking()` would mark those tiles `false` in the walkable grid. BFS would then reject those tiles as targets, making `ROLE_SEATS` unreachable for DevOps and QA (who sit directly on chair tiles), and cutting off any path that passes through chair tiles for all roles.
+
+### Decision
+
+> **Chairs are NON-BLOCKING. Footprint: `{ w: 0, h: 0 }`**
+
+**Rationale:**
+1. **Semantic:** Chairs are _where agents sit_, not obstacles. The chair graphic is a visual affordance for the seat; the agent sprite renders on top of it.
+2. **Functional:** Chair tiles are the exact coordinates in `ROLE_SEATS`. Blocking them breaks navigation to those seats.
+3. **Consistency:** `DESK_FRONT` agents (CEO, Frontend, PM, Backend) sit at row 3, one row above their chair at row 4. While their primary seat tile is not the chair tile, pathfinding often traverses through chair tiles in adjacent routes. Blocking chairs creates dead-end corridors in the top-floor rooms.
+4. **Precedent:** In RPG/office sim genre (Pixel Agents, Stardew Valley), chairs are sit-on objects, not collision boxes. Only furniture with a physical mass larger than one person (desks, servers, walls) blocks movement.
+
+### Rejected Alternative: "Chair-adjacent" seats
+
+One alternative was to place `ROLE_SEATS` one tile south of each chair (behind the chair, away from the desk), avoiding the blocking conflict. This was rejected because:
+- It breaks the visual alignment (agent appears behind their own chair)
+- It wastes the tile immediately south, which may be the corridor or another desk cluster
+- It adds complexity to the layout editor — every chair placement would require a separate seat marker
+
+### Implementation
+
+**File:** `src/engine/furnitureFootprints.ts` (new, 2026-04-11)
+
+All six chair variants registered as `{ w: 0, h: 0 }`:
+
+```typescript
+// Chairs — NON-BLOCKING (Task 2.5 decision)
+CUSHIONED_CHAIR_FRONT: { w: 0, h: 0 },
+CUSHIONED_CHAIR_BACK:  { w: 0, h: 0 },
+CUSHIONED_CHAIR_SIDE:  { w: 0, h: 0 },
+WOODEN_CHAIR_FRONT:    { w: 0, h: 0 },
+WOODEN_CHAIR_BACK:     { w: 0, h: 0 },
+WOODEN_CHAIR_SIDE:     { w: 0, h: 0 },
+```
+
+The `applyFurnitureBlocking()` function explicitly skips any furniture with `fp.w === 0 || fp.h === 0`, so chairs contribute zero cells to the blocking overlay.
+
+### Acceptance Criteria
+
+- [x] All 6 chair variants appear in `FURNITURE_FOOTPRINTS` with `{ w: 0, h: 0 }`
+- [x] `applyFurnitureBlocking()` skips items with zero footprint
+- [x] `getFurnitureFootprint('CUSHIONED_CHAIR_FRONT')` returns `{ w: 0, h: 0 }`
+- [x] `getFurnitureFootprint('WOODEN_CHAIR_SIDE')` returns `{ w: 0, h: 0 }`
+- [x] `getFurnitureFootprint('WOODEN_CHAIR_SIDE:left')` returns `{ w: 0, h: 0 }` (variant stripped)
+- [x] BFS can still path to chair tile coordinates (DevOps: (2,13), QA: (9,13))
+- [x] Decision documented in this spec with full rationale
+
+### Future Consideration
+
+If a "hotdesk" feature is added (agents can sit at any free chair, not just their assigned seat), the furniture system should expose a `isSeat: boolean` flag per type, allowing the seat-assignment system to enumerate available chairs. This is additive and does not require changing the non-blocking decision.
