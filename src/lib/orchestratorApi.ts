@@ -94,6 +94,72 @@ export async function fireAgent(agentId: string): Promise<{ success: boolean }> 
   return res.json();
 }
 
+export async function updateAgent(agentId: string, updates: {
+  name?: string;
+  role?: string;
+  system_prompt?: string;
+  budget_limit?: number;
+  skills?: string[];
+}): Promise<any> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
+export async function updateAgentLifecycle(agentId: string, status: 'active' | 'paused' | 'terminated'): Promise<any> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}/lifecycle`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  return res.json();
+}
+
+// ── Repository Management ────────────────────────────────────────────────────
+
+export interface RepoStatus {
+  repo_url: string | null;
+  repo_branch: string;
+  repo_path: string | null;
+  repo_status: string;
+  repo_error: string | null;
+  repo_last_synced_at: string | null;
+  git_auth_method: string;
+}
+
+export async function connectRepo(companyId: string, config: {
+  repoUrl: string;
+  branch?: string;
+  authMethod?: string;
+  token?: string;
+}): Promise<{ success: boolean; repoPath?: string; error?: string }> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  return res.json();
+}
+
+export async function getRepoStatus(companyId: string): Promise<RepoStatus> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`);
+  if (!res.ok) return { repo_url: null, repo_branch: 'main', repo_path: null, repo_status: 'not_connected', repo_error: null, repo_last_synced_at: null, git_auth_method: 'none' };
+  return res.json();
+}
+
+export async function syncRepoApi(companyId: string): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo/sync`, { method: 'POST' });
+  return res.json();
+}
+
+export async function disconnectRepo(companyId: string): Promise<boolean> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`, { method: 'DELETE' });
+  return res.ok;
+}
+
 // ── Configs CRUD ─────────────────────────────────────────────────────────────
 
 export interface ConfigRow {
@@ -242,5 +308,188 @@ export async function fetchQueueStatus(companyId: string): Promise<{
 }> {
   const res = await fetch(`${ORCHESTRATOR_URL}/api/queue-status/${companyId}`);
   if (!res.ok) return { pending: 0, processing: 0, completed: 0, failed: 0, isProcessing: false };
+  return res.json();
+}
+
+// ── Merge Requests ──────────────────────────────────────────────────────────
+
+export async function fetchMergeRequests(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/merge-requests`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function mergeMR(mrId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/merge`, { method: 'POST' });
+  return res.json();
+}
+
+export async function rejectMR(mrId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/reject`, { method: 'POST' });
+  return res.json();
+}
+
+export async function getMRDiff(mrId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/diff`);
+  if (!res.ok) return { diff: '' };
+  return res.json();
+}
+
+// ── Sprints ─────────────────────────────────────────────────────────────────
+
+export async function fetchSprints(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/sprints`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function completeSprint(sprintId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/sprints/${sprintId}/complete`, { method: 'POST' });
+  return res.json();
+}
+
+export async function createSprint(companyId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/sprints`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ── Plans ───────────────────────────────────────────────────────────────────
+
+export async function fetchPlans(companyId: string, type?: string) {
+  const params = type ? `?type=${type}` : '';
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/plans${params}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createPlan(companyId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/plans`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updatePlan(planId: string, content: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  return res.json();
+}
+
+export async function approvePlan(planId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/approve`, { method: 'POST' });
+  return res.json();
+}
+
+export async function addPlanComment(planId: string, content: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  return res.json();
+}
+
+export async function fetchPlanComments(planId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/comments`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+// ── Notifications ───────────────────────────────────────────────────────────
+
+export async function fetchNotifications() {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getUnreadCount(): Promise<number> {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/count`);
+  if (!res.ok) return 0;
+  const data = await res.json();
+  return data.count ?? 0;
+}
+
+export async function markRead(notifId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/${notifId}/read`, { method: 'POST' });
+  return res.json();
+}
+
+export async function markAllRead() {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/read-all`, { method: 'POST' });
+  return res.json();
+}
+
+// ── Env Vars ────────────────────────────────────────────────────────────────
+
+export async function fetchEnvVars(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/env-vars`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createEnvVar(companyId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/env-vars`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateEnvVar(envId: string, data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/env-vars/${envId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ── Brain Management ───────────────────────────────────────────────────────
+
+export async function updateCompanyBrain(companyId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/brain/update-summary`, { method: 'POST' });
+  return res.json();
+}
+
+export async function initAgentBrain(companyId: string, agentId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/agents/${agentId}/brain/init`, { method: 'POST' });
+  return res.json();
+}
+
+export async function deleteEnvVar(envId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/env-vars/${envId}`, { method: 'DELETE' });
+  return res.ok;
+}
+
+// ── Ticket Update ───────────────────────────────────────────────────────────
+
+export async function updateTicket(ticketId: string, updates: Record<string, any>) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/tickets/${ticketId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
+// ── Ticket Column ───────────────────────────────────────────────────────────
+
+export async function updateTicketColumn(ticketId: string, column: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/tickets/${ticketId}/column`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ board_column: column }),
+  });
   return res.json();
 }

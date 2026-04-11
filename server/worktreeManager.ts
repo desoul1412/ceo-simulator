@@ -35,8 +35,16 @@ export function createWorktree(
   }
 
   try {
-    // Create a new branch from current HEAD
-    execSync(`git worktree add -b "${branchName}" "${worktreePath}"`, {
+    // Create a new branch from origin/main (not current HEAD which may be stale)
+    const startPoint = (() => {
+      try {
+        execSync('git rev-parse origin/main', { cwd, stdio: 'pipe' });
+        return 'origin/main';
+      } catch {
+        return 'HEAD';
+      }
+    })();
+    execSync(`git worktree add -b "${branchName}" "${worktreePath}" ${startPoint}`, {
       cwd,
       stdio: 'pipe',
     });

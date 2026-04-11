@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "brain/raw/asset-TODO.md",
+                "file": "brain/library/agent-presets/project-manager.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "asset-TODO"
+              "title": "project-manager"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "brain/raw/asset-TODO.md",
+                "file": "brain/library/agent-presets/project-manager.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for asset-TODO"
+              "title": "Backlinks for project-manager"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "brain/raw/asset-TODO.md",
+                "file": "brain/library/agent-presets/project-manager.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from asset-TODO"
+              "title": "Outgoing links from project-manager"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "brain/raw/asset-TODO.md",
+                "file": "brain/library/agent-presets/project-manager.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of asset-TODO"
+              "title": "Outline of project-manager"
             }
           }
         ]
@@ -185,51 +185,51 @@
   },
   "active": "f78b7aaeb6607877",
   "lastOpenFiles": [
-    "node_modules/zustand/vanilla.d.ts",
-    "node_modules/zustand/ts_version_4.5_and_above_is_required.d.ts",
-    "node_modules/zustand/traditional.d.ts",
-    "node_modules/zustand/middleware/subscribeWithSelector.d.ts",
-    "node_modules/zustand/middleware/ssrSafe.d.ts",
-    "node_modules/zustand/shallow.d.ts",
-    "node_modules/zustand/middleware/redux.d.ts",
-    "node_modules/zustand/react.d.ts",
-    "node_modules/zustand/middleware/persist.d.ts",
-    "node_modules/zustand/middleware.d.ts",
-    "node_modules/zustand/index.d.ts",
-    "node_modules/zustand/README.md",
-    "node_modules/react-is/README.md",
-    "node_modules/tinyglobby/README.md",
-    "public/assets/sprites/iso-worker-1.png",
-    "public/assets/tiles/iso-desk.png",
-    "public/assets/tiles/iso-floor.png",
-    "brain/00-Index.md",
-    "brain/raw/asset-TODO.md",
-    "public/assets/sprites/agent-1.png",
-    "public/assets/tiles/indicator.png",
-    "public/assets/tiles/meeting.png",
-    "public/assets/tiles/kitchen.png",
-    "public/assets/tiles/desk.png",
-    "public/assets/tiles/server-floor.png",
-    "node_modules/jsdom/README.md",
-    "node_modules/aria-query/README.md",
-    "node_modules/aria-query/CHANGELOG.md",
-    "node_modules/@testing-library/dom/README.md",
-    "node_modules/tldts-core/README.md",
-    "node_modules/@exodus/bytes/README.md",
-    "node_modules/@testing-library/jest-dom/CHANGELOG.md",
-    "node_modules/@babel/runtime/README.md",
-    "node_modules/es-module-lexer/README.md",
-    "node_modules/obug/README.md",
-    "node_modules/@adobe/css-tools/docs/EXAMPLES.md",
-    "node_modules/@adobe/css-tools/docs/CHANGELOG.md",
-    "node_modules/@adobe/css-tools/docs/AST.md",
-    "node_modules/@adobe/css-tools/docs/API.md",
-    "node_modules/expect-type/SECURITY.md",
-    "node_modules/expect-type/README.md",
-    "node_modules/undici/lib/web/subresource-integrity/Readme.md",
-    "node_modules/undici/docs/docs/best-practices/writing-tests.md",
-    "node_modules/undici/docs/docs/best-practices/undici-vs-builtin-fetch.md",
-    "node_modules/undici/docs/docs/best-practices/proxy.md",
-    "public/assets/sprites/agent-1.svg"
+    "dist/assets/index-Bycx5oD8.js",
+    "src/components/ScrumBoard.tsx.tmp.71352.1775812879477",
+    "src/components/ScrumBoard.tsx.tmp.71352.1775812811962",
+    "src/components/ScrumBoard.tsx.tmp.71352.1775812803408",
+    "src/components/ScrumBoard.tsx.tmp.71352.1775812786025",
+    "src/components/ScrumBoard.tsx.tmp.71352.1775812780227",
+    "src/components/ProjectOverview.tsx.tmp.71352.1775812767215",
+    "src/components/ProjectOverview.tsx.tmp.71352.1775812764232",
+    "src/components/ProjectOverview.tsx.tmp.71352.1775812762858",
+    "server/ticketProcessor.ts.tmp.71352.1775812755614",
+    "server/index.ts.tmp.71352.1775812746219",
+    "brain/library/agent-presets/seo-specialist.md",
+    "brain/library/skills/ceo/project-overview.md",
+    "brain/library/agent-presets/scrum-master.md",
+    "brain/library/skills/data-scientist/statistical-analysis.md",
+    "brain/library/skills/data-scientist/ml-pipelines.md",
+    "brain/library/skills/data-scientist/experiment-design.md",
+    "brain/library/skills/data-engineer/pipeline-debugging.md",
+    "brain/library/skills/data-engineer/pandas-mastery.md",
+    "brain/library/skills/data-engineer/data-quality.md",
+    "brain/library/skills/data-architect/migration-safety.md",
+    "brain/library/skills/data-architect/etl-architecture.md",
+    "brain/library/skills/data-architect/data-modeling.md",
+    "brain/library/skills/automation/webhook-integration.md",
+    "brain/library/skills/automation/pipeline-automation.md",
+    "brain/library/skills/automation/n8n-workflows.md",
+    "brain/library/skills/full-stack/rapid-prototyping.md",
+    "brain/library/skills/full-stack/end-to-end-features.md",
+    "brain/library/skills/ai-engineer/rag-systems.md",
+    "brain/library/skills/ai-engineer/prompt-engineering.md",
+    "brain/library/skills/ai-engineer/llm-integration.md",
+    "brain/library/skills/ai-engineer/agent-sdk-integration.md",
+    "brain/library/skills/ai-engineer/agent-orchestration.md",
+    "brain/library/skills/planner/risk-assessment.md",
+    "brain/library/skills/frontend-designer/frontend-tdd.md",
+    "brain/library/skills/frontend-designer/canvas-rendering.md",
+    "dist/icons.svg",
+    "dist/favicon.svg",
+    "dist/assets/walls/wall_0.png",
+    "dist/assets/tiles/server-floor.svg",
+    "dist/assets/tiles/server-floor.png",
+    "dist/assets/tiles/meeting.png",
+    "dist/assets/tiles/kitchen.png",
+    "dist/assets/tiles/iso-floor.png",
+    "dist/assets/tiles/iso-desk.png",
+    "dist/assets/tiles/indicator.png"
   ]
 }

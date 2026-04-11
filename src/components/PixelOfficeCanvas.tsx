@@ -29,25 +29,27 @@ const ROLE_CHAR_INDEX: Record<string, number> = {
 };
 
 // ── Seat positions (col, row) for each agent role in the default layout ──────
-// Maps to desks in the default-layout-1.json
+// Top-left: CEO Office, Top-right: Product/PM, Bottom-left: DevOps, Bottom-right: Lounge
 const ROLE_SEATS: Record<string, { col: number; row: number }> = {
-  CEO:      { col: 3, row: 13 },   // left desk
-  PM:       { col: 7, row: 13 },   // right desk
-  DevOps:   { col: 5, row: 17 },   // lower-left
-  Frontend: { col: 5, row: 19 },   // lower-right
+  CEO:      { col: 4, row: 3 },    // CEO office (top-left)
+  PM:       { col: 18, row: 3 },   // Product room (top-right)
+  DevOps:   { col: 4, row: 14 },   // DevOps room (bottom-left)
+  Frontend: { col: 9, row: 3 },    // CEO office second desk
+  Backend:  { col: 24, row: 3 },   // Product room second desk
+  QA:       { col: 9, row: 14 },   // DevOps room second desk
 };
 
 const BREAK_POSITIONS = [
-  { col: 15, row: 14 },  // sofa area
-  { col: 15, row: 15 },
-  { col: 14, row: 15 },
+  { col: 21, row: 14 },  // lounge sofa area (bottom-right)
+  { col: 21, row: 16 },
+  { col: 19, row: 15 },
 ];
 
 const IDLE_POSITIONS = [
-  { col: 4, row: 15 },
-  { col: 8, row: 15 },
-  { col: 12, row: 12 },
-  { col: 16, row: 12 },
+  { col: 20, row: 15 },  // lounge center
+  { col: 22, row: 14 },  // lounge right
+  { col: 24, row: 16 },  // lounge far right
+  { col: 17, row: 15 },  // lounge left
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -140,7 +142,7 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
           isWalking: false,
           frameIndex: 0,
           frameTick: 0,
-          label: emp.role,
+          label: emp.role, // Display role, not name
           labelColor: emp.color,
           speechBubble: null,
           heartbeat: 'alive',
@@ -159,15 +161,30 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
             : 'Working...';
           break;
         case 'meeting':
-          targetPos = { col: 5, row: 16 }; // meeting table area
+          targetPos = { col: 7, row: 6 }; // CEO office meeting area
           agent.speechBubble = 'In meeting';
           break;
         case 'break':
-          targetPos = pickRandom(BREAK_POSITIONS);
+          // Only pick a new break position if not already walking
+          if (!agent.isWalking && agent.tileCol === agent.targetCol && agent.tileRow === agent.targetRow) {
+            targetPos = pickRandom(BREAK_POSITIONS);
+          } else {
+            targetPos = { col: agent.targetCol, row: agent.targetRow };
+          }
           agent.speechBubble = 'On break';
           break;
         default:
-          targetPos = pickRandom(IDLE_POSITIONS);
+          // Idle — only pick a new wander target if stationary
+          if (!agent.isWalking && agent.tileCol === agent.targetCol && agent.tileRow === agent.targetRow) {
+            // Occasionally wander (1 in 180 frames ≈ every 3 seconds at 60fps)
+            if (Math.random() < 1 / 180) {
+              targetPos = pickRandom(IDLE_POSITIONS);
+            } else {
+              targetPos = { col: agent.targetCol, row: agent.targetRow };
+            }
+          } else {
+            targetPos = { col: agent.targetCol, row: agent.targetRow };
+          }
           agent.speechBubble = null;
           break;
       }
@@ -293,8 +310,12 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
         });
       }
 
-      // Render
+      // Render at scaled resolution for crisp text
+      ctx!.save();
+      ctx!.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx!.imageSmoothingEnabled = false;
       renderFrame(ctx!, layout!, charStates, assets!, tileColors.length > 0 ? tileColors : undefined);
+      ctx!.restore();
 
       rafId = requestAnimationFrame(loop);
     }
@@ -318,14 +339,22 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
     return () => obs.disconnect();
   }, []);
 
-  const scale = useMemo(() => {
-    if (!layout || containerSize.w === 0) return SCALE;
-    const nw = layout.cols * TILE_SIZE;
-    const nh = layout.rows * TILE_SIZE;
+  // Internal rendering scale (integer for crisp pixels)
+  const renderScale = SCALE;
+
+  // CSS display: fit canvas into container (contain — no cropping), using fractional scale to avoid gaps
+  const displaySize = useMemo(() => {
+    if (!layout || containerSize.w === 0) return { w: 0, h: 0 };
+    const nw = layout.cols * TILE_SIZE * renderScale;
+    const nh = layout.rows * TILE_SIZE * renderScale;
     const sx = containerSize.w / nw;
     const sy = containerSize.h / nh;
-    return Math.max(1, Math.floor(Math.min(sx, sy)));
-  }, [layout, containerSize]);
+    const s = Math.min(sx, sy); // contain — fit fully, no cropping
+    return { w: Math.round(nw * s), h: Math.round(nh * s) };
+  }, [layout, containerSize, renderScale]);
+
+  // keep old `scale` name for rendering code
+  const scale = renderScale;
 
   if (!layout) {
     return (
@@ -341,6 +370,8 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
 
   const nativeW = layout.cols * TILE_SIZE;
   const nativeH = layout.rows * TILE_SIZE;
+  const canvasW = nativeW * scale;
+  const canvasH = nativeH * scale;
 
   return (
     <div ref={containerRef} style={{
@@ -350,11 +381,11 @@ export function PixelOfficeCanvas({ company }: PixelOfficeCanvasProps) {
     }}>
       <canvas
         ref={canvasRef}
-        width={nativeW}
-        height={nativeH}
+        width={canvasW}
+        height={canvasH}
         style={{
-          width: nativeW * scale,
-          height: nativeH * scale,
+          width: displaySize.w || canvasW,
+          height: displaySize.h || canvasH,
           imageRendering: 'pixelated',
           display: 'block',
         }}

@@ -69,7 +69,7 @@ export function IsometricCharacter({ employee }: IsometricCharacterProps) {
           {/* Role label */}
           <div style={{
             position: 'absolute', bottom: -14, left: '50%', transform: 'translateX(-50%)',
-            fontSize: 8, fontFamily: 'monospace', color: color,
+            fontSize: 'var(--font-xs)', fontFamily: 'monospace', color: color,
             textShadow: `0 0 4px ${color}`, whiteSpace: 'nowrap',
             letterSpacing: '0.05em', textTransform: 'uppercase',
           }}>
@@ -84,7 +84,7 @@ export function IsometricCharacter({ employee }: IsometricCharacterProps) {
             position: 'absolute',
             top: 2,
             right: 6,
-            fontSize: 10,
+            fontSize: 'var(--font-sm)',
             lineHeight: 1,
             color: badge.color,
             textShadow: `0 0 6px ${badge.color}`,

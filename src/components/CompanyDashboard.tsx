@@ -16,12 +16,12 @@ export function CompanyDashboard() {
     return (
       <div className="sim-root" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'monospace', color: '#00ffff', fontSize: 14,
+        fontFamily: 'monospace', color: '#00ffff', fontSize: 'var(--font-md)',
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>▣</div>
           <div>CONNECTING TO MAINFRAME...</div>
-          <div style={{ fontSize: 10, color: '#2a3a50', marginTop: 6 }}>Loading company data from Supabase</div>
+          <div style={{ fontSize: 'var(--font-sm)', color: '#2a3a50', marginTop: 6 }}>Loading company data from Supabase</div>
         </div>
       </div>
     );
@@ -40,14 +40,14 @@ export function CompanyDashboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {orchestratorConnected && (
             <span style={{
-              fontSize: 8, fontFamily: 'monospace', textTransform: 'uppercase',
+              fontSize: 'var(--font-xs)', fontFamily: 'monospace', textTransform: 'uppercase',
               color: '#c084fc', letterSpacing: '0.1em',
             }}>
               ◆ CLAUDE
             </span>
           )}
           <span style={{
-            fontSize: 8, fontFamily: 'monospace', textTransform: 'uppercase',
+            fontSize: 'var(--font-xs)', fontFamily: 'monospace', textTransform: 'uppercase',
             color: synced ? '#00ff88' : '#ff8800',
             letterSpacing: '0.1em',
           }}>
@@ -65,7 +65,7 @@ export function CompanyDashboard() {
         <aside className="sim-sidebar">
           <div style={{
             padding: '8px 10px',
-            fontSize: 9, fontFamily: 'monospace',
+            fontSize: 'var(--font-xs)', fontFamily: 'monospace',
             color: '#4a5568', textTransform: 'uppercase',
             letterSpacing: '0.1em', borderBottom: '1px solid #1b2030',
           }}>
@@ -91,7 +91,7 @@ export function CompanyDashboard() {
             <div className="sim-placeholder">
               <div style={{ fontSize: 20, color: '#1b2030', marginBottom: 8 }}>▣</div>
               <div style={{
-                fontSize: 12, color: '#2a3a50',
+                fontSize: 'var(--font-sm)', color: '#2a3a50',
                 fontFamily: 'monospace', textTransform: 'uppercase',
                 letterSpacing: '0.1em',
               }}>

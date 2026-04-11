@@ -1,10 +1,202 @@
 ---
 tags: [changelog, meta]
-date: 2026-04-08
+date: 2026-04-11
 status: active
 ---
 
 # Changelog
+
+## 2026-04-11 — Git Worktree Conflict Prevention
+
+**Problem:** Merge conflicts when CEO manually merged agent MRs. Root causes:
+1. Merge endpoint jumped straight to `git merge` without ensuring `main` was current or rebasing the agent branch
+2. Pull-before-work used `|| true` — silently swallowed real conflicts, agents worked in conflicted state
+3. New worktrees branched from `HEAD` (potentially stale) instead of `origin/main`
+
+**Fixes in 3 files:**
+- `server/index.ts` `/api/merge-requests/:id/merge`: Added 5-step safe merge flow: fetch → rebase agent branch in its worktree (with `--force-with-lease` push) → checkout + reset main to `origin/main` → merge → push main. Sets `status: 'conflicted'` in DB if rebase or merge fails.
+- `server/ticketProcessor.ts` pull-before-work: Replaced `|| true` chain with explicit rebase → abort+merge fallback → reset-hard-to-main fallback. Agent never works in a conflicted state.
+- `server/worktreeManager.ts` `createWorktree()`: New branches now start from `origin/main` (falls back to `HEAD` if no remote). Prevents drift from stale local HEAD.
+
+## 2026-04-10 — Agent Framework Optimization: Smart Models, Prompt Caching, Parallel Execution
+
+### Phase 1+2: Smart Model/Effort Selection + Prompt Caching
+- **NEW** `server/agents/taskClassifier.ts` — `selectModel()`, `selectEffort()`, `allocateBudget()` functions
+- CEO planner uses `opus` + `effort: 'high'` for strategic planning (was: sonnet/medium)
+- QA/PM/Designer simple tasks (SP ≤ 2) use `haiku` + `effort: 'low'` (~50% cost reduction)
+- Complex tasks (SP 8+ or architect/refactor keywords) use `sonnet` + `effort: 'high'`
+- **Prompt caching**: System prompts now static per role (memory context moved to user prompt), enabling Anthropic's automatic prefix caching (90% cheaper reads)
+- Token usage now records actual model used (was hardcoded `claude-sonnet-4-6`)
+
+### Phase 3: Parallel Ticket Execution
+- **NEW** `processMultipleTickets()` in `ticketProcessor.ts` — fires up to 3 concurrent `processNextTicket` calls
+- Heartbeat daemon now processes N tickets per company per heartbeat (was: 1)
+- Safe: atomic DB claims prevent double-dispatch, agents use separate branches
+
+### Phase 4: Universal Memory Injection
+- CEO planner phases now receive CEO agent's accumulated memory context
+- `buildRelevantMemoryContext()` already used in claudeRunner + worker; now also in ceoPlannerV2
+
+### Phase 5: Role-Based Tool Filtering
+- Added `CEO` to ROLE_TOOLS with read-only tools (`Read`, `Glob`, `Grep`) — reduces prompt overhead
+
+### Phase 6: Session Reuse
+- Expanded session resume: agents reuse sessions for sequential tickets if session < 150K tokens
+- Previously only explicit `continuation_of` tickets could resume sessions
+
+### Expected Impact
+- ~30-40% token cost reduction on simple tasks (haiku model)
+- ~3x throughput improvement (parallel ticket processing)
+- Better CEO planning quality (opus model + memory context)
+- Automatic prompt caching across same-role executions
+
+---
+
+## 2026-04-10 — Full Codebase QA + UI/UX Audit & Fix Pass
+
+### Critical Bug Fixes
+- **worker.ts**: Removed no-op `supabase.rpc('', {})` placeholder; added null check on company fetch
+- **circuitBreaker.ts**: Fixed broken retry logic — consolidated two-step retry_count increment into single atomic update
+- **ceoPlannerV2.ts**: Added null check + early return when planning session not found; added 5-minute timeout per phase iterator to prevent indefinite hangs
+- **ScrumBoard.tsx**: Wrapped `approveTicket`, `rejectTicket`, `removeTicketDependency` in try-catch to prevent state desync on API failure
+- **PlanningPopup.tsx**: Added try-finally to `handleApprove` (prevents stuck approving state); added catch to `handleReplan`
+
+### Medium Bug Fixes
+- **ticketProcessor.ts**: Fixed race condition in worktree removal — now checks `in_progress` status too; added agent fetch error logging
+- **budgetUtils.ts**: Extracted shared `usdToUnits()` helper — replaced 3 independent `* 100000` calculations in agentRunner, ceo, worker
+- **agentMessenger.ts**: Replaced N+1 sequential `markRead()` loop with single batch `.in('id', ids)` update
+- **index.ts**: Added graceful shutdown handler (SIGINT/SIGTERM) to stop heartbeat daemon and close server
+- **planningStore.ts**: Added 120-attempt (5-min) max to polling interval, auto-stops with error on timeout
+- **CompanyDetail.tsx**: Budget caps now read from `VITE_DAILY_BUDGET_CAP` / `VITE_WEEKLY_BUDGET_CAP` env vars
+
+### Low Bug Fixes
+- Replaced silent `.catch(() => {})` with `console.warn` in AgentCard, NavBar
+- **memoryManager.ts**: Replaced `writeFileSync`/`mkdirSync` with async `fs/promises` equivalents
+
+### UI/UX Improvements
+- **Design tokens**: Added spacing scale (`--space-xs` to `--space-2xl`), font scale (`--font-2xs` to `--font-3xl`), glow scale, animation timing vars, role/status color vars, focus ring var
+- **Accessibility**: Added global `:focus-visible` ring styles, `button:disabled` cursor, `aria-label` on icon buttons (close, approve, remove dependency), `role="dialog"` on modals, `role="alert"` on error banners, `.sr-only` utility class
+- **Animations**: Added `fadeIn` + `slideUp` keyframes for modal overlay/content, `.modal-overlay`/`.modal-content` classes
+- **Responsive**: Changed all fixed-width modals (HireAgentDialog 540px, AgentCard 560px, ScrumBoard 520px) to `width: 95vw; max-width: Npx`
+- **Empty states**: Improved ScrumBoard column empty state (now visible with column name); added dismiss button to PlanningPopup error banner
+- **Mobile**: Added `--space-lg`/`--space-xl` overrides for 768px breakpoint
+
+---
+
+## 2026-04-10 — CEO Planning Flow Overhaul: Multi-Tab Planner, Dependency DAG, Agent Communication
+
+### Multi-Tab Planning Popup (Part 1)
+- New `PlanningPopup.tsx` — full-screen modal with 7 tabs: Overview, Findings, Research, Tech Stack, Architecture, Hiring Plan, Implementation Plan
+- `PlanningTabContent.tsx` — view/edit toggle per tab with generating animation
+- `PlanningProgress.tsx` — phase diamond indicators
+- `planningStore.ts` — Zustand store for planning state with polling (2.5s interval)
+- `planningApi.ts` — API client for all new planning/dependency/messaging endpoints
+- `ceoPlannerV2.ts` — multi-phase CEO planner, each phase is a separate Claude Agent SDK call
+- CEO Directive input in Office view now triggers the planning flow instead of old CeoPlanFlow
+- Project size selector (S/M/L) gates which phases/tabs are generated
+- Tabs are editable, support re-planning from any tab (cascades to downstream tabs)
+- Approval-to-execution bridge: parses hiring plan → auto-hires agents, implementation plan → creates sprints/tickets with dependencies
+
+### Task Dependency DAG (Part 2)
+- `ticket_dependencies` table with `blocker_ticket_id` → `blocked_ticket_id` edges
+- `dependencyManager.ts` — add/remove deps, cycle detection, propagation on completion/failure
+- `claim_next_ticket_v2` RPC — only claims tickets where ALL dependencies are satisfied
+- `propagate_dependency_satisfaction` / `propagate_dependency_failure` RPC functions
+- Auto-inferred dependencies from role ordering: PM → Frontend+Backend → QA → DevOps
+- ScrumBoard enhanced: blocked/partial ticket indicators, dependency section in ticket detail modal
+
+### Inter-Agent Communication (Part 3)
+- `agent_messages` table for structured messaging between agents
+- `agentMessenger.ts` — send messages, broadcast completion signals, inject upstream context into agent prompts
+- When a ticket completes, downstream agents receive artifact context (files, branch, output summary)
+- Messages prepended to agent task prompt before execution
+
+### Anti-Loop & Anti-Silent-Failure (Part 4)
+- `circuitBreaker.ts` — retry with exponential backoff, dead letter queue, execution timeout detection
+- `dead_letter_queue` table for permanently failed tickets
+- Fixed 4 silent `catch {}` blocks in heartbeatDaemon.ts and ticketProcessor.ts
+- Heartbeat daemon now sweeps for execution timeouts
+- Tickets get `retry_count`, `max_retries`, `started_at`, `max_execution_ms` fields
+
+### Documentation & Brain Integration (Part 5)
+- Planning sessions persisted to `brain/{company}/plans/{session-id}/` as markdown files
+- Dependency graphs exported as Mermaid diagrams to `brain/{company}/sprints/{sprint}/dependency-graph.md`
+- Dead letter failures logged to `brain/changelog.md`
+- New DB tables: `planning_sessions`, `planning_tabs`, `ticket_dependencies`, `agent_messages`, `dead_letter_queue`
+- New server modules: `circuitBreaker.ts`, `dependencyManager.ts`, `agentMessenger.ts`, `ceoPlannerV2.ts`
+- ~12 new API endpoints for planning sessions, dependencies, messages, dead letter queue
+
+---
+
+## 2026-04-10 — UI Overhaul: Compact Agent Grid, Goals+Costs Merge, Office Fill
+
+### Office Layout v2
+- Canvas now takes ~65% width (flex: 2), agent grid ~35% — fills all available space
+- Agent cards redesigned: compact 3-column grid showing pixel avatar + role + status + pending badge
+- Click any card to open full-detail modal with scrollable activity, ticket approvals, edit buttons
+- `AgentCard.tsx` exports `PixelAvatar` component (reusable CSS sprite renderer)
+- Empty grid slots show "+ Hire" placeholder up to 9 agents
+
+### Goals + Costs Merge
+- `GoalsPage.tsx` now includes: Active Goal, Master Plan Progress (moved from Board), Delegation Tree, Agent Cost Cards, Sprint History
+- Agent Cost Cards: 3-column grid with pixel avatar, role, daily/weekly usage %, cost bar
+- Removed "Costs" tab from NavBar (route still exists for deep links)
+
+### Board Cleanup
+- Removed master plan progress panel from ScrumBoard (now in Goals)
+- Board is pure kanban: sprint selector, agent filter, 5-column drag-drop, burndown
+
+---
+
+## 2026-04-10 — Unified Office+Agents, Sprint Auto-Transition, Brain Directories, Board Checklist, Custom Requirements
+
+### Unified Agent + Office View (Feature 6)
+- New `AgentCard.tsx` component — pixel avatar (CSS sprite from char_N.png), status dot, real-time activity feed, pending ticket approvals
+- Redesigned `CompanyDetail.tsx` layout: Office canvas (left 50%) + Agent cards (right 50%) + CEO directive (bottom)
+- Removed separate "Agents" tab from NavBar — merged into "Office" tab
+- Each agent card expands to show activity stream and approval buttons
+- Hire button integrated into agent cards header
+
+### Custom Requirements for Project Regeneration (Feature 5)
+- `ProjectOverview.tsx` — toggle-able requirements textarea before "Regenerate with CEO"
+- Requirements passed to `POST /api/companies/:id/review` body
+- `server/agents/ceo.ts` — `executeCeoProjectReview()` accepts optional `customRequirements` param, injected into CEO prompt
+
+### Master Plan Checklist on Board (Feature 4)
+- `ScrumBoard.tsx` — collapsible "Master Plan Progress" panel between top bar and kanban columns
+- Parses approved master_plan markdown into phases with task checklists
+- Each phase shows progress bar + task completion (cross-referenced with done tickets)
+- Overall progress bar with percentage
+- Current sprint phase highlighted
+- "Complete Sprint" button when burndown >= 90%
+- `completeSprint(sprintId)` API client function
+
+### Feature 1: Sprint Auto-Transition
+- `checkSprintCompletion(sprintId)` helper — detects when all tickets in a sprint are done/cancelled
+- Auto-marks sprint as completed, then parses master_plan phases to create the next sprint + tickets
+- `parseMasterPlanPhases(content)` parser for `### Phase N:` headers and `- [ ] Task` checklist items
+- Hooked into: `PATCH /api/tickets/:id/column`, `PATCH /api/tickets/:id`, `POST /api/tickets/:id/reject`
+- New endpoint: `POST /api/sprints/:id/complete` for manual sprint completion with auto-transition
+
+### Feature 2: Per-Company Brain Directory
+- `updateCompanyBrainSummary(companyId)` helper — writes `brain/{company-slug}/summary.md`
+- Summary includes YAML frontmatter, current sprint, agent count, ticket progress, completed sprints list
+- New endpoint: `POST /api/companies/:id/brain/update-summary`
+- Auto-triggered on sprint completion
+
+### Feature 3: Per-Agent Brain Directory
+- `initAgentBrain(companyId, agentId)` helper — creates `brain/{company-slug}/{agent-slug}/` with soul.md, context.md, memory.md
+- `updateAgentMemory(companyId, agentId, ticketTitle)` helper — appends completed ticket entries to memory.md
+- New endpoints: `POST /api/companies/:companyId/agents/:agentId/brain/init`, `POST /api/companies/:companyId/agents/:agentId/brain/update-memory`
+- Hooked into: `POST /api/hire-agent` (auto-init), hiring_plan approval (auto-init), ticket column move to done (memory update)
+
+### Hooks Summary
+- `PATCH /api/tickets/:id/column` (done) -> checkSprintCompletion + updateAgentMemory
+- `PATCH /api/tickets/:id` (board_column=done) -> checkSprintCompletion + updateAgentMemory
+- `POST /api/tickets/:id/reject` -> checkSprintCompletion
+- `POST /api/hire-agent` -> initAgentBrain
+- `POST /api/plans/:id/approve` (hiring_plan) -> initAgentBrain per auto-hired agent
+- Sprint completion -> updateCompanyBrainSummary
 
 ## 2026-04-08 — Wave 2: Agent-Agnostic Runtimes + Session Resume + Skill Injection + Mobile UI
 
@@ -706,3 +898,6 @@ Key architectural changes documented:
 - Created `CLAUDE.md` autonomy engine
 - Initialized Obsidian vault at `./brain/`
 - Configured Tavily MCP and Context7 MCP
+
+- [2026-04-11T05:31:21.981Z] DEAD LETTER: Ticket a5451c3b-169d-48fc-b971-a6347fc6fb27 failed permanently. Error: Execution timeout: exceeded 600000ms
+- [2026-04-11T05:38:29.076Z] DEAD LETTER: Ticket 7daebc6b-77a0-4129-a2c7-16d63e53f9e7 failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (10)

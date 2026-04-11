@@ -1,48 +1,143 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const ENGINEERING_ROLES = ['PM', 'DevOps', 'Frontend', 'Backend', 'QA', 'Designer', 'Data Engineer'];
-const BUSINESS_ROLES = ['Marketing', 'Data Analyst', 'Operations', 'Sales', 'Content Writer', 'Growth', 'Finance', 'SEO'];
-// All available roles (engineering + business)
-const _ALL_ROLES = [...ENGINEERING_ROLES, ...BUSINESS_ROLES]; void _ALL_ROLES;
-
-const ROLE_DESCRIPTIONS: Record<string, string> = {
-  PM: 'Writes specs, user stories, acceptance criteria',
-  DevOps: 'Infrastructure, CI/CD, Docker, deployment',
-  Frontend: 'React components, TypeScript, Tailwind, tests',
-  Backend: 'API endpoints, database, server logic, tests',
-  QA: 'Test suites, bug triage, coverage reports',
-  Designer: 'Design specs, mockups, color schemes, CSS',
-  'Data Engineer': 'Data pipelines, ETL, SQL, pandas validation',
-  Marketing: 'Content strategy, SEO audits, email sequences, social media',
-  'Data Analyst': 'KPI dashboards, cohort analysis, financial models, A/B tests',
-  Operations: 'SOPs, workflow maps, onboarding, OKRs, knowledge base',
-  Sales: 'Customer personas, funnels, pricing, competitor analysis',
-  'Content Writer': 'Blog posts, case studies, landing pages, newsletters',
-  Growth: 'Onboarding flows, referrals, A/B tests, churn prevention',
-  Finance: 'Financial models, cash flow, P&L, pricing strategy',
-  SEO: 'SEO audits, keyword research, link building, schema markup',
+// Agent models with pre-designed skills, rules, and system prompts
+const AGENT_MODELS: Record<string, AgentModel> = {
+  CEO: {
+    role: 'CEO', color: '#00ffff', model: 'opus', budget: 25,
+    skills: ['Strategic Delegation', 'Business Reasoning', 'Discovery', 'Tavily Research'],
+    rules: ['No Hallucination', 'Pre-Flight Docs', 'Post-Flight Update', 'Budget Awareness', 'Gate Rule'],
+    mcpServers: ['Tavily', 'Supabase'],
+    systemPrompt: 'You are the CEO. Receive goals, reason strategically, delegate to 9 agent types, and monitor progress.',
+    description: 'Strategic leader — delegates goals, makes decisions, tracks progress',
+  },
+  PM: {
+    role: 'PM', color: '#c084fc', model: 'sonnet', budget: 15,
+    skills: ['Project Planning', 'Discovery', 'Writing Plans', 'Tavily Research', 'Context7 Docs'],
+    rules: ['Data-First', 'Gate Rule', 'No Placeholders', 'ADR Rule', 'Dual-Track Output'],
+    mcpServers: ['Context7', 'Tavily', 'Supabase'],
+    systemPrompt: 'You are the Planner/PM. Gather requirements, design solutions, write TDD implementation plans.',
+    description: 'Architecture & planning — requirements, specs, implementation plans',
+  },
+  Frontend: {
+    role: 'Frontend', color: '#ff8800', model: 'sonnet', budget: 15,
+    skills: ['UI/UX Pro Max', 'React Development', 'CSS/Tailwind', 'Quality Engineering', 'Systematic Debugging', 'Context7 Docs', 'Git Worktree'],
+    rules: ['TDD Circuit Breaker', 'Context7 First', 'Design System', 'Pre-Flight Docs', 'Git Worktree Isolation'],
+    mcpServers: ['Context7'],
+    systemPrompt: 'You are a Frontend Designer. Build React 19 + TypeScript + Tailwind v4 components with pixel art / HUD / sci-fi style.',
+    description: 'UI/UX builder — React, Tailwind, design intelligence, pixel art',
+  },
+  Backend: {
+    role: 'Backend', color: '#3b82f6', model: 'sonnet', budget: 15,
+    skills: ['API Design', 'Database', 'Quality Engineering', 'Systematic Debugging', 'Context7 Docs', 'Tavily Research', 'Git Worktree'],
+    rules: ['TDD Circuit Breaker', 'Context7 First', 'Atomic Operations', 'RLS Always', 'No Secrets in Code'],
+    mcpServers: ['Context7', 'Supabase', 'Tavily'],
+    systemPrompt: 'You are a Backend Developer. Build APIs and manage data with Supabase PostgreSQL + Express.',
+    description: 'API & data engineer — endpoints, schemas, integrations',
+  },
+  DevOps: {
+    role: 'DevOps', color: '#00ff88', model: 'sonnet', budget: 10,
+    skills: ['DevOps CI/CD', 'Infrastructure Management', 'Database', 'Quality Engineering', 'Systematic Debugging', 'Context7 Docs', 'Git Worktree'],
+    rules: ['No Secrets in Code', 'Test Before Deploy', 'Never Force Push Main', 'MCP Fallback', 'Runbook Updates'],
+    mcpServers: ['Supabase', 'Context7', 'Tavily'],
+    systemPrompt: 'You are a DevOps Engineer. Manage Vercel, Supabase, CI/CD, and system reliability.',
+    description: 'Infrastructure — CI/CD, deployment, monitoring, reliability',
+  },
+  QA: {
+    role: 'QA', color: '#ef4444', model: 'haiku', budget: 5,
+    skills: ['Quality Engineering', 'Systematic Debugging'],
+    rules: ['TDD Circuit Breaker', 'Test Behavior Not Implementation', 'Regression Tests Required', 'No Mocks for Critical Paths'],
+    mcpServers: ['Supabase'],
+    systemPrompt: 'You are a QA Engineer. Write test plans, validate acceptance criteria, catch regressions.',
+    description: 'Quality gatekeeper — tests, validation, regressions',
+  },
+  Marketer: {
+    role: 'Marketer', color: '#f59e0b', model: 'sonnet', budget: 10,
+    skills: ['Product Launch', 'SEO Growth', 'Analytics & Metrics', 'Social & Ads', 'Brand Positioning', 'Tavily Research'],
+    rules: ['Data-Driven', 'Research First', 'Measure Everything', 'ROI Focus'],
+    mcpServers: ['Tavily'],
+    systemPrompt: 'You are a Growth Marketer. Drive user acquisition, SEO, paid ads, and brand awareness.',
+    description: 'Growth & acquisition — launches, SEO, ads, analytics, brand',
+  },
+  'Content Writer': {
+    role: 'Content Writer', color: '#a78bfa', model: 'haiku', budget: 5,
+    skills: ['Copywriting', 'Technical Writing', 'Content Strategy', 'SEO Growth', 'Tavily Research'],
+    rules: ['Accuracy First', 'Write for the Reader', 'Every Feature = Benefit', 'Copy-Pasteable Code'],
+    mcpServers: ['Tavily'],
+    systemPrompt: 'You are a Content Writer. Create landing pages, docs, blog posts, and email sequences.',
+    description: 'Copy & docs — landing pages, blog, technical writing, email',
+  },
+  Sales: {
+    role: 'Sales', color: '#06b6d4', model: 'sonnet', budget: 10,
+    skills: ['Pricing & Conversion', 'Customer Success', 'Analytics & Metrics', 'Tavily Research'],
+    rules: ['Customer-First', 'Data-Driven Pricing', 'Measure Retention', 'Close the Loop'],
+    mcpServers: ['Tavily', 'Supabase'],
+    systemPrompt: 'You are a Sales & Customer Success agent. Optimize pricing, conversions, and retention.',
+    description: 'Revenue & retention — pricing, funnels, onboarding, churn prevention',
+  },
+  Operations: {
+    role: 'Operations', color: '#6b7280', model: 'haiku', budget: 5,
+    skills: ['Process & Finance', 'Compliance', 'Analytics & Metrics'],
+    rules: ['Document Everything', 'Budget Alerts', 'Automate ROI', 'Compliance First'],
+    mcpServers: ['Supabase'],
+    systemPrompt: 'You are an Operations agent. Manage budgets, SOPs, compliance, and team capacity.',
+    description: 'Process & compliance — budgets, SOPs, legal docs, capacity planning',
+  },
+  // -- Data & AI Roles --
+  'Data Architect': {
+    role: 'Data Architect', color: '#0ea5e9', model: 'opus', budget: 15,
+    skills: ['Data Modeling', 'ETL Architecture', 'Migration Safety', 'Quality Engineering', 'Context7 Docs'],
+    rules: ['Schema First', 'Migration Safety', 'Normalization', 'No Secrets in Code'],
+    mcpServers: ['Supabase', 'Context7'],
+    systemPrompt: 'You are a Data Architect. Design schemas, data models (star/snowflake), and migration plans. Ensure normalization, referential integrity, and query performance.',
+    description: 'Schema & data modeling — ERDs, migrations, partitions, warehousing',
+  },
+  'Data Scientist': {
+    role: 'Data Scientist', color: '#d946ef', model: 'opus', budget: 15,
+    skills: ['ML Pipelines', 'Experiment Design', 'Statistical Analysis', 'Quality Engineering', 'Tavily Research'],
+    rules: ['Hypothesis First', 'Validate Each Step', 'No Silent Drops', 'Statistical Rigor'],
+    mcpServers: ['Tavily', 'Supabase'],
+    systemPrompt: 'You are a Data Scientist. Run hypothesis-driven analysis, design experiments, build ML pipelines. Validate every transformation step.',
+    description: 'ML & analysis — experiments, statistics, pipelines, reproducibility',
+  },
+  'AI Engineer': {
+    role: 'AI Engineer', color: '#f43f5e', model: 'opus', budget: 20,
+    skills: ['LLM Integration', 'Prompt Engineering', 'Agent Orchestration', 'RAG Systems', 'Quality Engineering', 'Context7 Docs'],
+    rules: ['Cost Awareness', 'Structured Output', 'No Hallucination', 'Session Management'],
+    mcpServers: ['Context7', 'Tavily', 'Supabase'],
+    systemPrompt: 'You are an AI Engineer. Build LLM integrations, design prompts, orchestrate agents via Claude Agent SDK. Optimize for cost and latency.',
+    description: 'LLM & agents — Claude API, prompts, RAG, orchestration, cost optimization',
+  },
+  Automation: {
+    role: 'Automation', color: '#10b981', model: 'sonnet', budget: 10,
+    skills: ['n8n Workflows', 'Pipeline Automation', 'Webhook Integration', 'Quality Engineering'],
+    rules: ['Idempotency', 'Error Handling', 'Retry Logic', 'Secrets Management'],
+    mcpServers: ['Supabase', 'Context7'],
+    systemPrompt: 'You are an Automation Engineer. Build n8n workflows, scheduled tasks, ETL pipelines, and webhook integrations. Ensure idempotency and error handling.',
+    description: 'Workflows & pipelines — n8n, cron, ETL, webhooks, error handling',
+  },
+  'Full-Stack': {
+    role: 'Full-Stack', color: '#6366f1', model: 'sonnet', budget: 12,
+    skills: ['React Development', 'API Design', 'Database', 'Quality Engineering', 'Systematic Debugging', 'Context7 Docs', 'Git Worktree'],
+    rules: ['TDD First', 'Read Before Write', 'Context7 First', 'Small Commits'],
+    mcpServers: ['Context7', 'Supabase'],
+    systemPrompt: 'You are a Full-Stack Developer. Build end-to-end features with TDD-first across React 19 + Vite + Supabase. Read existing code before writing.',
+    description: 'End-to-end builder — React + API + DB, TDD-first, rapid prototyping',
+  },
 };
 
-const ROLE_COLORS: Record<string, string> = {
-  PM: '#c084fc', DevOps: '#00ff88', Frontend: '#ff8800',
-  Backend: '#3b82f6', QA: '#ef4444', Designer: '#f59e0b',
-};
+interface AgentModel {
+  role: string;
+  color: string;
+  model: string;
+  budget: number;
+  skills: string[];
+  rules: string[];
+  mcpServers: string[];
+  systemPrompt: string;
+  description: string;
+}
 
-const DEFAULT_SKILLS: Record<string, string[]> = {
-  PM: ['Requirements', 'Documentation', 'User Stories'],
-  DevOps: ['CI/CD', 'Docker', 'Infrastructure'],
-  Frontend: ['React', 'TypeScript', 'CSS/Tailwind'],
-  Backend: ['API Design', 'Database', 'TypeScript'],
-  QA: ['Testing', 'Automation', 'Bug Triage'],
-  Designer: ['UI Design', 'Design Systems', 'CSS/Tailwind'],
-};
-
-const ALL_SKILLS = [
-  'React', 'TypeScript', 'CSS/Tailwind', 'API Design', 'Database',
-  'Testing', 'Documentation', 'CI/CD', 'Docker', 'Git',
-  'Infrastructure', 'Automation', 'UI Design', 'Design Systems',
-  'Requirements', 'User Stories', 'Bug Triage', 'Build Tools',
-];
+const ROLES = Object.keys(AGENT_MODELS);
 
 interface HireAgentDialogProps {
   companyId: string;
@@ -73,15 +168,32 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [model, setModel] = useState('sonnet');
   const [runtimeType, setRuntimeType] = useState('claude_sdk');
-  const [httpUrl, setHttpUrl] = useState('');
-  const [bashCommand, setBashCommand] = useState('');
+  const [httpUrl] = useState('');
+  const [bashCommand] = useState('');
   const [budgetLimit, setBudgetLimit] = useState('10');
 
+  const agentModel = AGENT_MODELS[role];
   const effectiveRole = customRole || role;
-  const color = ROLE_COLORS[effectiveRole] ?? '#6a7a90';
+  const color = agentModel?.color ?? '#6a7a90';
+
+  // Sync model defaults when role changes
+  useEffect(() => {
+    if (agentModel) {
+      setSelectedSkills([...agentModel.skills]);
+      setModel(agentModel.model);
+      setBudgetLimit(String(agentModel.budget));
+      setSystemPrompt(agentModel.systemPrompt);
+    }
+  }, [role]);
 
   const handleQuickHire = () => {
-    onHire({ companyId, mode: 'auto', role: effectiveRole });
+    onHire({
+      companyId, mode: 'auto', role: effectiveRole,
+      model: agentModel?.model,
+      skills: agentModel?.skills,
+      systemPrompt: agentModel?.systemPrompt,
+      budgetLimit: agentModel?.budget,
+    });
   };
 
   const handleManualHire = () => {
@@ -91,15 +203,11 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
       ? { command: bashCommand }
       : { model };
     onHire({
-      companyId,
-      mode: 'manual',
-      role: effectiveRole,
+      companyId, mode: 'manual', role: effectiveRole,
       name: name || undefined,
       systemPrompt: systemPrompt || undefined,
       skills: selectedSkills.length > 0 ? selectedSkills : undefined,
-      model,
-      runtimeType,
-      runtimeConfig,
+      model, runtimeType, runtimeConfig,
       budgetLimit: parseFloat(budgetLimit) || 10,
     });
   };
@@ -121,7 +229,7 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
         style={{
           background: '#0d1117',
           border: '1px solid var(--hud-border)',
-          width: 480, maxHeight: '80vh',
+          width: '95vw', maxWidth: 540, maxHeight: '85vh',
           overflow: 'auto',
           fontFamily: 'var(--font-hud)',
         }}
@@ -129,17 +237,17 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
       >
         {/* Header */}
         <div style={{
-          padding: '10px 14px',
+          padding: '12px 16px',
           borderBottom: '1px solid var(--hud-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span style={{ fontSize: 11, color: 'var(--hud-text-h)', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 'var(--font-md)', color: 'var(--hud-text-h)', textTransform: 'uppercase' }}>
             Hire Agent
           </span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', color: '#4a5568',
-            cursor: 'pointer', fontSize: 14, fontFamily: 'var(--font-hud)',
-          }}>×</button>
+            cursor: 'pointer', fontSize: 16, fontFamily: 'var(--font-hud)',
+          }}>x</button>
         </div>
 
         {/* Mode toggle */}
@@ -149,33 +257,33 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
               key={m}
               onClick={() => setMode(m)}
               style={{
-                flex: 1, padding: '8px',
+                flex: 1, padding: '10px',
                 background: mode === m ? '#1b203060' : 'transparent',
                 border: 'none', borderBottom: mode === m ? '2px solid var(--neon-cyan)' : '2px solid transparent',
                 color: mode === m ? 'var(--neon-cyan)' : '#4a5568',
-                fontFamily: 'var(--font-hud)', fontSize: 10,
+                fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)',
                 textTransform: 'uppercase', cursor: 'pointer',
               }}
             >
-              {m === 'auto' ? '⚡ Quick Hire' : '⚙ Custom Hire'}
+              {m === 'auto' ? '\u26A1 Quick Hire' : '\u2699 Custom Hire'}
             </button>
           ))}
         </div>
 
-        <div style={{ padding: '12px 14px' }}>
+        <div style={{ padding: '14px 16px' }}>
           {/* Role selector */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Engineering Roles</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-              {ENGINEERING_ROLES.map(r => (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 6 }}>Role</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {ROLES.map(r => (
                 <button
                   key={r}
-                  onClick={() => { setRole(r); setCustomRole(''); setSelectedSkills(DEFAULT_SKILLS[r] ?? []); }}
+                  onClick={() => { setRole(r); setCustomRole(''); }}
                   style={{
-                    padding: '4px 10px', fontSize: 9,
-                    background: role === r && !customRole ? `${ROLE_COLORS[r] ?? '#6a7a90'}18` : 'transparent',
-                    border: `1px solid ${role === r && !customRole ? (ROLE_COLORS[r] ?? '#6a7a90') + '60' : '#1b2030'}`,
-                    color: role === r && !customRole ? ROLE_COLORS[r] ?? '#6a7a90' : '#4a5568',
+                    padding: '5px 12px', fontSize: 'var(--font-xs)',
+                    background: role === r && !customRole ? `${AGENT_MODELS[r].color}18` : 'transparent',
+                    border: `1px solid ${role === r && !customRole ? AGENT_MODELS[r].color + '60' : '#1b2030'}`,
+                    color: role === r && !customRole ? AGENT_MODELS[r].color : '#4a5568',
                     cursor: 'pointer', fontFamily: 'var(--font-hud)',
                   }}
                 >
@@ -183,68 +291,69 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
                 </button>
               ))}
             </div>
-            <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Business Roles</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {BUSINESS_ROLES.map(r => (
-                <button
-                  key={r}
-                  onClick={() => { setRole(r); setCustomRole(''); setSelectedSkills(DEFAULT_SKILLS[r] ?? []); }}
-                  style={{
-                    padding: '4px 10px', fontSize: 9,
-                    background: role === r && !customRole ? `${ROLE_COLORS[r] ?? '#6a7a90'}18` : 'transparent',
-                    border: `1px solid ${role === r && !customRole ? (ROLE_COLORS[r] ?? '#6a7a90') + '60' : '#1b2030'}`,
-                    color: role === r && !customRole ? ROLE_COLORS[r] ?? '#6a7a90' : '#4a5568',
-                    cursor: 'pointer', fontFamily: 'var(--font-hud)',
-                  }}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-            {mode === 'manual' && (
-              <input
-                type="text"
-                value={customRole}
-                onChange={e => setCustomRole(e.target.value)}
-                placeholder="...or type custom role"
-                style={{
-                  marginTop: 6, width: '100%', padding: '4px 8px',
-                  background: '#090d14', border: '1px solid #1b2030',
-                  color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)',
-                  fontSize: 10,
-                }}
-              />
-            )}
-            <div style={{ fontSize: 8, color: '#4a5568', marginTop: 4 }}>
-              {ROLE_DESCRIPTIONS[effectiveRole] ?? 'Custom role — define skills and prompt below'}
+            <div style={{ fontSize: 'var(--font-xs)', color: '#6a7a90', marginTop: 6 }}>
+              {agentModel?.description ?? 'Custom role'}
             </div>
           </div>
 
-          {/* Auto mode: just show summary and hire button */}
-          {mode === 'auto' && (
+          {/* Auto mode: show agent model summary */}
+          {mode === 'auto' && agentModel && (
             <div>
               <div style={{
-                padding: '10px 12px', background: '#090d14',
-                border: '1px solid #1b2030', marginBottom: 12,
-                fontSize: 9, color: '#6a7a90', lineHeight: 1.5,
+                padding: '12px 14px', background: '#090d14',
+                border: '1px solid #1b2030', marginBottom: 14,
+                fontSize: 'var(--font-sm)', color: '#6a7a90', lineHeight: 1.6,
               }}>
-                <div style={{ color, marginBottom: 4 }}>◆ {effectiveRole} Agent</div>
-                <div>Name: Auto-generated</div>
-                <div>Skills: {(DEFAULT_SKILLS[effectiveRole] ?? ['General']).join(', ')}</div>
-                <div>System prompt: Role-default</div>
-                <div>Model: Sonnet</div>
+                <div style={{ color, marginBottom: 6, fontSize: 'var(--font-md)' }}>{'\u25C6'} {effectiveRole} Agent</div>
+                <div><span style={{ color: '#4a5568' }}>Model:</span> {agentModel.model}</div>
+                <div><span style={{ color: '#4a5568' }}>Budget:</span> ${agentModel.budget}</div>
+                <div style={{ marginTop: 8 }}>
+                  <span style={{ color: '#4a5568' }}>Skills:</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                    {agentModel.skills.map(s => (
+                      <span key={s} style={{
+                        padding: '2px 8px', fontSize: 'var(--font-xs)',
+                        background: '#00ff8810', border: '1px solid #00ff8830', color: '#00ff88',
+                      }}>{s}</span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <span style={{ color: '#4a5568' }}>Rules:</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                    {agentModel.rules.map(r => (
+                      <span key={r} style={{
+                        padding: '2px 8px', fontSize: 'var(--font-xs)',
+                        background: '#ff880010', border: '1px solid #ff880030', color: '#ff8800',
+                      }}>{r}</span>
+                    ))}
+                  </div>
+                </div>
+                {agentModel.mcpServers.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <span style={{ color: '#4a5568' }}>MCP Servers:</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                      {agentModel.mcpServers.map(m => (
+                        <span key={m} style={{
+                          padding: '2px 8px', fontSize: 'var(--font-xs)',
+                          background: '#c084fc10', border: '1px solid #c084fc30', color: '#c084fc',
+                        }}>{m}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 onClick={handleQuickHire}
                 style={{
-                  width: '100%', padding: '8px',
+                  width: '100%', padding: '10px',
                   background: `${color}18`, border: `1px solid ${color}60`,
                   color, fontFamily: 'var(--font-hud)',
-                  fontSize: 11, textTransform: 'uppercase',
+                  fontSize: 'var(--font-sm)', textTransform: 'uppercase',
                   cursor: 'pointer', letterSpacing: '0.1em',
                 }}
               >
-                ⚡ Hire {effectiveRole}
+                {'\u26A1'} Hire {effectiveRole}
               </button>
             </div>
           )}
@@ -252,146 +361,97 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
           {/* Manual mode: full configuration */}
           {mode === 'manual' && (
             <div>
-              {/* Name */}
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 3 }}>Name</div>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Name</div>
+                <input type="text" value={name} onChange={e => setName(e.target.value)}
                   placeholder="Auto-generated if empty"
-                  style={{
-                    width: '100%', padding: '4px 8px',
-                    background: '#090d14', border: '1px solid #1b2030',
-                    color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 10,
-                  }}
-                />
+                  style={{ width: '100%', padding: '6px 10px', background: '#090d14', border: '1px solid #1b2030', color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)' }} />
               </div>
 
-              {/* System prompt */}
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 3 }}>
-                  System Prompt
-                </div>
-                <textarea
-                  value={systemPrompt}
-                  onChange={e => setSystemPrompt(e.target.value)}
-                  placeholder={`Default: "${(ROLE_DESCRIPTIONS[effectiveRole] ?? 'You are a ' + effectiveRole).slice(0, 80)}..."`}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>System Prompt</div>
+                <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)}
                   rows={3}
-                  style={{
-                    width: '100%', padding: '6px 8px',
-                    background: '#090d14', border: '1px solid #1b2030',
-                    color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 9,
-                    resize: 'vertical',
-                  }}
-                />
+                  style={{ width: '100%', padding: '6px 10px', background: '#090d14', border: '1px solid #1b2030', color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)', resize: 'vertical' }} />
               </div>
 
-              {/* Skills */}
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 3 }}>
-                  Skills
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                  {ALL_SKILLS.map(skill => (
-                    <button
-                      key={skill}
-                      onClick={() => toggleSkill(skill)}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Skills</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {(agentModel?.skills ?? []).map(skill => (
+                    <button key={skill} onClick={() => toggleSkill(skill)}
                       style={{
-                        padding: '2px 7px', fontSize: 8,
+                        padding: '3px 10px', fontSize: 'var(--font-xs)',
                         background: selectedSkills.includes(skill) ? '#00ff8815' : 'transparent',
                         border: `1px solid ${selectedSkills.includes(skill) ? '#00ff8840' : '#1b2030'}`,
                         color: selectedSkills.includes(skill) ? '#00ff88' : '#4a5568',
                         cursor: 'pointer', fontFamily: 'var(--font-hud)',
-                      }}
-                    >
-                      {skill}
-                    </button>
+                      }}>{skill}</button>
                   ))}
                 </div>
               </div>
 
-              {/* Runtime Type */}
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 3 }}>Runtime</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[
-                    { id: 'claude_sdk', label: 'Claude SDK' },
-                    { id: 'http_endpoint', label: 'HTTP' },
-                    { id: 'bash_script', label: 'Bash' },
-                  ].map(rt => (
-                    <button
-                      key={rt.id}
-                      onClick={() => setRuntimeType(rt.id)}
-                      style={{
-                        padding: '3px 10px', fontSize: 9,
-                        background: runtimeType === rt.id ? '#c084fc18' : 'transparent',
-                        border: `1px solid ${runtimeType === rt.id ? '#c084fc60' : '#1b2030'}`,
-                        color: runtimeType === rt.id ? '#c084fc' : '#4a5568',
-                        cursor: 'pointer', fontFamily: 'var(--font-hud)',
-                      }}
-                    >
-                      {rt.label}
-                    </button>
-                  ))}
-                </div>
-                {runtimeType === 'http_endpoint' && (
-                  <input type="text" value={httpUrl} onChange={e => setHttpUrl(e.target.value)}
-                    placeholder="https://api.example.com/agent"
-                    style={{ marginTop: 4, width: '100%', padding: '4px 8px', background: '#090d14', border: '1px solid #1b2030', color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 9 }} />
-                )}
-                {runtimeType === 'bash_script' && (
-                  <input type="text" value={bashCommand} onChange={e => setBashCommand(e.target.value)}
-                    placeholder="python scripts/agent.py"
-                    style={{ marginTop: 4, width: '100%', padding: '4px 8px', background: '#090d14', border: '1px solid #1b2030', color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 9 }} />
-                )}
-              </div>
-
-              {/* Budget */}
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 3 }}>Budget Cap (USD)</div>
-                <input type="number" value={budgetLimit} onChange={e => setBudgetLimit(e.target.value)}
-                  step="1" min="0.5"
-                  style={{ width: 100, padding: '4px 8px', background: '#090d14', border: '1px solid #1b2030', color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 10 }} />
-                <span style={{ fontSize: 8, color: '#2a3a50', marginLeft: 6 }}>Auto-throttle when exceeded</span>
-              </div>
-
-              {/* Model (Claude SDK only) */}
-              {runtimeType === 'claude_sdk' && (
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 8, color: '#4a5568', textTransform: 'uppercase', marginBottom: 3 }}>Model</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {['haiku', 'sonnet', 'opus'].map(m => (
-                    <button
-                      key={m}
-                      onClick={() => setModel(m)}
-                      style={{
-                        padding: '3px 10px', fontSize: 9,
-                        background: model === m ? '#c084fc18' : 'transparent',
-                        border: `1px solid ${model === m ? '#c084fc60' : '#1b2030'}`,
-                        color: model === m ? '#c084fc' : '#4a5568',
-                        cursor: 'pointer', fontFamily: 'var(--font-hud)',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {m}
-                    </button>
+                <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Rules</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {(agentModel?.rules ?? []).map(rule => (
+                    <span key={rule} style={{
+                      padding: '3px 10px', fontSize: 'var(--font-xs)',
+                      background: '#ff880010', border: '1px solid #ff880030', color: '#ff8800',
+                    }}>{rule}</span>
                   ))}
                 </div>
               </div>
-              )}
 
-              <button
-                onClick={handleManualHire}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Runtime</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[{ id: 'claude_sdk', label: 'Claude SDK' }, { id: 'http_endpoint', label: 'HTTP' }, { id: 'bash_script', label: 'Bash' }].map(rt => (
+                      <button key={rt.id} onClick={() => setRuntimeType(rt.id)}
+                        style={{
+                          padding: '4px 12px', fontSize: 'var(--font-xs)',
+                          background: runtimeType === rt.id ? '#c084fc18' : 'transparent',
+                          border: `1px solid ${runtimeType === rt.id ? '#c084fc60' : '#1b2030'}`,
+                          color: runtimeType === rt.id ? '#c084fc' : '#4a5568',
+                          cursor: 'pointer', fontFamily: 'var(--font-hud)',
+                        }}>{rt.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Budget ($)</div>
+                  <input type="number" value={budgetLimit} onChange={e => setBudgetLimit(e.target.value)}
+                    style={{ width: 80, padding: '4px 10px', background: '#090d14', border: '1px solid #1b2030', color: 'var(--hud-text-h)', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)' }} />
+                </div>
+                {runtimeType === 'claude_sdk' && (
+                  <div>
+                    <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>Model</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {['haiku', 'sonnet', 'opus'].map(m => (
+                        <button key={m} onClick={() => setModel(m)}
+                          style={{
+                            padding: '4px 12px', fontSize: 'var(--font-xs)',
+                            background: model === m ? '#c084fc18' : 'transparent',
+                            border: `1px solid ${model === m ? '#c084fc60' : '#1b2030'}`,
+                            color: model === m ? '#c084fc' : '#4a5568',
+                            cursor: 'pointer', fontFamily: 'var(--font-hud)', textTransform: 'uppercase',
+                          }}>{m}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button onClick={handleManualHire}
                 style={{
-                  width: '100%', padding: '8px',
+                  width: '100%', padding: '10px',
                   background: `${color}18`, border: `1px solid ${color}60`,
                   color, fontFamily: 'var(--font-hud)',
-                  fontSize: 11, textTransform: 'uppercase',
+                  fontSize: 'var(--font-sm)', textTransform: 'uppercase',
                   cursor: 'pointer', letterSpacing: '0.1em',
-                }}
-              >
-                ⚙ Hire {effectiveRole}
+                }}>
+                {'\u2699'} Hire {effectiveRole}
               </button>
             </div>
           )}

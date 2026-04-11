@@ -24,7 +24,7 @@ export function SettingsPage() {
         padding: '10px 0',
       }}>
         <div style={{
-          fontSize: 9, color: '#4a5568', textTransform: 'uppercase',
+          fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase',
           padding: '0 12px', marginBottom: 8, letterSpacing: '0.1em',
         }}>
           Global Settings
@@ -38,7 +38,7 @@ export function SettingsPage() {
               padding: '6px 12px', background: tab === t.id ? '#1b203060' : 'transparent',
               border: 'none', borderLeft: tab === t.id ? '2px solid var(--neon-cyan)' : '2px solid transparent',
               color: tab === t.id ? 'var(--neon-cyan)' : '#6a7a90',
-              fontFamily: 'var(--font-hud)', fontSize: 10,
+              fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)',
               textAlign: 'left', cursor: 'pointer',
               textTransform: 'uppercase', letterSpacing: '0.05em',
             }}
@@ -55,10 +55,10 @@ export function SettingsPage() {
       }}>
         {tab === 'general' && (
           <div>
-            <div style={{ fontSize: 12, color: 'var(--hud-text-h)', marginBottom: 16 }}>General</div>
+            <div style={{ fontSize: 'var(--font-sm)', color: 'var(--hud-text-h)', marginBottom: 16 }}>General</div>
 
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
                 Connection Status
               </div>
               <div style={{ display: 'flex', gap: 16, fontSize: 10 }}>
@@ -72,23 +72,23 @@ export function SettingsPage() {
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
                 Orchestrator URL
               </div>
               <div style={{
                 padding: '6px 10px', background: '#090d14',
-                border: '1px solid #1b2030', fontSize: 10, color: '#6a7a90',
+                border: '1px solid #1b2030', fontSize: 'var(--font-sm)', color: '#6a7a90',
               }}>
                 http://localhost:3001
               </div>
-              <div style={{ fontSize: 8, color: '#2a3a50', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 2 }}>
                 Start with: npm run server
               </div>
             </div>
 
             <div style={{
               padding: '10px 12px', background: '#090d14',
-              border: '1px solid #1b2030', fontSize: 9, color: '#4a5568',
+              border: '1px solid #1b2030', fontSize: 'var(--font-xs)', color: '#4a5568',
               lineHeight: 1.6,
             }}>
               <div style={{ color: 'var(--hud-text-h)', marginBottom: 4 }}>Config Cascade</div>

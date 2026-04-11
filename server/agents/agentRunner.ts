@@ -1,4 +1,6 @@
 import { supabase } from '../supabaseAdmin';
+import { usdToUnits } from '../budgetUtils';
+import { selectModel, MODEL_IDS } from './taskClassifier';
 import { executeClaudeAgent } from './claudeRunner';
 import { executeHttpAgent } from './httpRunner';
 import { executeBashAgent } from './bashRunner';
@@ -26,7 +28,9 @@ export interface AgentContext {
   runtimeType: string;
   runtimeConfig: any;
   activeSessionId: string | null;
+  isContinuation: boolean;
   budgetRemaining: number;
+  storyPoints: number;
   onActivity: (message: string) => Promise<void>;
 }
 
@@ -81,14 +85,14 @@ export async function executeAgent(ctx: AgentContext): Promise<AgentRunResult> {
     input_tokens: result.inputTokens,
     output_tokens: result.outputTokens,
     cost_usd: result.costUsd,
-    model: ctx.runtimeConfig?.model ?? ctx.runtimeType,
+    model: MODEL_IDS[selectModel(ctx.role, ctx.storyPoints, ctx.task)] ?? ctx.runtimeConfig?.model ?? ctx.runtimeType,
   });
 
   // Update company budget
   const { data: co } = await supabase
     .from('companies').select('budget_spent').eq('id', ctx.companyId).single();
   await supabase.from('companies').update({
-    budget_spent: ((co as any)?.budget_spent ?? 0) + Math.round(result.costUsd * 100000),
+    budget_spent: ((co as any)?.budget_spent ?? 0) + usdToUnits(result.costUsd),
   }).eq('id', ctx.companyId);
 
   // Update agent
