@@ -807,3 +807,34 @@ Key architectural changes documented:
 - Created `CLAUDE.md` autonomy engine
 - Initialized Obsidian vault at `./brain/`
 - Configured Tavily MCP and Context7 MCP
+
+---
+
+## 2026-04-11 — Migration 020: RPC Functions (raj-gupta)
+
+### Task
+Extract and consolidate Postgres RPC functions referenced in application code into a dedicated migration file.
+
+### Deliverable
+`server/migrations/020_rpc_functions.sql`
+
+> **Note:** The task originally specified `018_rpc_functions.sql`, but migrations `018_project_env_vars.sql` and `019_users.sql` already existed. Number `020` was used to avoid conflicts.
+
+### Functions Defined
+
+#### `claim_next_ticket(p_company_id UUID) → UUID`
+- Referenced in: `server/ticketProcessor.ts:17`
+- Atomically selects the oldest `approved` ticket for a company using `FOR UPDATE SKIP LOCKED`
+- Transitions ticket `status → 'in_progress'`
+- Returns `NULL` when no approved tickets are queued
+- Previously inlined in `005_tickets.sql`; this file supersedes it as canonical source
+
+#### `check_stale_agents() → void`
+- Referenced in: `server/heartbeatDaemon.ts:47`
+- Called every daemon tick; marks agents `stale` after 2 min silence, `dead`+`offline` after 10 min
+- New function — not defined anywhere previously
+
+### Design Notes
+- Both functions use `SECURITY DEFINER` + `SET search_path = public` (Supabase best practice)
+- `GRANT EXECUTE` to `anon`, `authenticated`, `service_role` for Supabase RLS compatibility
+- `set_updated_at()` re-declared idempotently for standalone test execution
