@@ -6,6 +6,37 @@ status: active
 
 # Changelog
 
+## 2026-04-11 — Backend: Database Migration Files Created (Raj Gupta)
+
+**Agent:** Raj Gupta (Backend Developer)
+**Branch:** agent/raj-gupta
+
+Created `server/migrations/` directory with 18 numbered SQL DDL migration files covering all tables referenced across `agentRunner.ts`, `ticketProcessor.ts`, `index.ts`, `memoryManager.ts`, and `heartbeatDaemon.ts`.
+
+**Files created:**
+- `001_companies.sql` — companies table + `set_updated_at()` trigger function
+- `002_agents.sql` — agents table (all columns incl. budget_spent, total_cost_usd, heartbeat_status, tile_col/row)
+- `003_goals.sql` — goals table with parent_goal_id self-reference + ancestry array
+- `004_sprints.sql` — sprints table
+- `005_tickets.sql` — tickets table + `claim_next_ticket()` RPC function (FOR UPDATE SKIP LOCKED)
+- `006_ticket_comments.sql` — ticket_comments table
+- `007_agent_sessions.sql` — agent_sessions table (token tracking per invocation)
+- `008_token_usage.sql` — token_usage table (granular billing records)
+- `009_activity_log.sql` — activity_log table (event feed)
+- `010_merge_requests.sql` — merge_requests table + deferred FK tickets→merge_requests
+- `011_notifications.sql` — notifications table
+- `012_audit_log.sql` — audit_log table (compliance trail)
+- `013_project_plans.sql` — project_plans table
+- `014_plan_comments.sql` — plan_comments table
+- `015_configs.sql` — configs table (global/company/agent scoped key-value)
+- `016_delegations.sql` — delegations table
+- `017_task_queue.sql` — task_queue table
+- `018_project_env_vars.sql` — project_env_vars table
+
+All tables include: RLS enabled with permissive policies, indexes on FKs and commonly filtered columns, `updated_at` triggers where applicable.
+
+---
+
 ## 2026-04-10 — UI Overhaul: Compact Agent Grid, Goals+Costs Merge, Office Fill
 
 ### Office Layout v2
