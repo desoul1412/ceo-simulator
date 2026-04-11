@@ -11,6 +11,16 @@ status: active
 - Testing
 
 ## Short-Term Memory
+- All **44 tests pass**. Here's a summary of everything added in Task 2.3:
+
+---
+
+### New Test Cases Added
+
+#### `bfsPath` — 7 new cases
+| Test | What it covers |
+|---|---|
+| `returns empty when start is
 - ---
 
 ## ✅ Task 2.2 — `validateReachability()` — Complete
@@ -35,6 +45,21 @@ The `buildWalkableGrid()` function in `src/engine/pathfinding.ts` h
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **Task 2.3**  — Extend `src/engine/pathfinding.test.ts` with new test cases:
+
+⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
+All **44 tests pass**. Here's a summary of everything added in Task 2.3:
+
+---
+
+### New Test Cases Added
+
+#### `bfsPath` — 7 new cases
+| Test | What it covers |
+|---|---|
+| `returns empty when start is out-of-bounds` | Negative-coord start guard |
+| `returns empty when end is out-of-bounds` | Out-of-
+
 ### 2026-04-11 — **Task 2.2**  — Add `validateReachability()` function to `pathfinding.ts`:
 
 ⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
