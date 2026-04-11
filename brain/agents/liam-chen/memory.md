@@ -14,8 +14,18 @@ status: active
 - Documentation
 - React
 - Database
+- Git
+- Build Tools
 
 ## Short-Term Memory
+- Both files are written. Here's the full delivery summary:
+
+---
+
+## ✅ Docker Deployment Spec v1.0 — Delivered
+
+**File:** `brain/wiki/Docker-Deployment-Spec.md`
+**Changelog:** `brain/changelog.md` updat
 - Both files written. Here's the full delivery summary:
 
 ---
@@ -35,12 +45,29 @@ status: active
 ## 📋 **SPEC DELIVERY S
 
 ## Long-Term Knowledge
-- Empty
+- Frequently works with: delivery
+- Frequently works with: summary:
 
 ## Rules
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **** — Write `brain/wiki/Docker-Deployment-Spec.md`: Define `docker-compose.yml` architecture: `app` (Vite SPA + Express server), `postgres` (standalone), `redis` (optional for queue). Document environment variable schema with validation rules.
+Both files are written. Here's the full delivery summary:
+
+---
+
+## ✅ Docker Deployment Spec v1.0 — Delivered
+
+**File:** `brain/wiki/Docker-Deployment-Spec.md`
+**Changelog:** `brain/changelog.md` updated (entry prepended at top)
+
+---
+
+### 📋 What Was Written — Section by Section
+
+| Section | Content 
+
 ### 2026-04-11 — **** — Write `brain/wiki/Auth-System-Spec.md`: Define JWT-based auth flow — signup, login, token refresh, per-user company isolation. Map current unprotected endpoints from `server/index.ts` to required auth middleware. Document RLS implications for multi-tenancy.
 Both files written. Here's the full delivery summary:
 
