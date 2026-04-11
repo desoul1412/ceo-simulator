@@ -13,6 +13,13 @@ status: active
 - Documentation
 
 ## Short-Term Memory
+- Done. Here's a summary of what was delivered:
+
+---
+
+## `server/migrations/019_users.sql` — OSS Multi-Tenancy
+
+> **Note:** Migration numbers `017` and `018` were already taken (`017_task_queue.sql`, `0
 - ✅ **Done.** Here's a summary of what was delivered:
 
 ---
@@ -28,6 +35,19 @@ All tables discovered by scanning `agentRunner.ts`, `ticketProcessor.ts`, `index
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-11 — **** — Create `server/migrations/017_users.sql` — the new `users` table for OSS multi-tenancy: `id`, `email`, `password_hash`, `display_name`, `created_at`. Add `owner_id UUID REFERENCES users(id)` column to `companies` table.
+
+⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/liam-chen. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
+Done. Here's a summary of what was delivered:
+
+---
+
+## `server/migrations/019_users.sql` — OSS Multi-Tenancy
+
+> **Note:** Migration numbers `017` and `018` were already taken (`017_task_queue.sql`, `018_project_env_vars.sql`), so this was filed as **`019_users.sql`** to avoid conflicts.
+
+### What it
+
 ### 2026-04-11 — ## Upstream Context (10/30 message(s))
 
 [COMPLETION_SIGNAL] PM completed: **** — Write `brain/wiki/Provider-Abstraction-Spec.md`: Define the `LLMProvider` interface contract (`complete()`, `stream()`, `estimateCost()`), mapping to the existing `AgentRunResult` shape at `server/agents/agentRunner.ts:9-15`. Document supported providers: Anthropic, OpenAI, Ollama, HTTP-generic.
