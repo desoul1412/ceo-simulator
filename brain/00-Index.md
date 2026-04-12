@@ -6,6 +6,7 @@ status: active
 
 # CEO Simulator — Master Index
 
+> 📝 **UPDATED 2026-04-12** — Vercel Project Spec added (Task 1.1.4). `vercel.json` updated with security headers + project name `vnsir-com`. See [[changelog]] for full history.
 > 📝 **UPDATED 2026-04-12** — VNSIR Implementation Spec added (Task 1.1.1). See [[changelog]] for full history.
 > ⚠️ Previous archive notice: See [[Offboarding-Handover-Report]] for original project handover (2026-04-08).
 
@@ -31,6 +32,9 @@ status: active
 
 ### Frontend / Navigation
 - [[VNSIR-Implementation-Spec]] — **VNSIR Implementation Spec v1.0** — Full page inventory (14 routes), per-page acceptance criteria, data flow diagrams, user stories
+
+### Deployment / DevOps
+- [[Vercel-Project-Spec]] — **Vercel Project Spec v1.0** — Project `vnsir-com`, GitHub repo linkage, env var groups (`preview`/`production`), security headers, SPA rewrite rules, 14 acceptance criteria
 
 ---
 
@@ -72,8 +76,8 @@ status: active
 - [x] `src/lib/supabase.ts` — Client with offline fallback
 - [x] `src/lib/api.ts` — CRUD: fetchCompanies, createCompany, assignGoal, tickCompany, sendHeartbeat
 - [x] `src/hooks/useRealtimeSync.ts` — Realtime agent/company updates
-- [x] `vercel.json` — SPA deployment config
-- [x] Vercel deployment — **LIVE** at `https://ceo-simulator-iota.vercel.app`
+- [x] `vercel.json` — SPA deployment config + security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) ✅ Task 1.1.4
+- [x] Vercel deployment — project name `vnsir-com` → see [[Vercel-Project-Spec]]
 - [x] Agent heartbeat system (alive/stale/dead) + canvas pulse visuals
 - [x] `src/components/ActivityFeed.tsx` — Realtime activity log panel
 - [x] `server/heartbeatDaemon.ts` — 30s auto-processing daemon

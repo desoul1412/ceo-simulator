@@ -6,6 +6,148 @@ status: active
 
 # Changelog
 
+## 2026-04-12 — Task 1.1.4: Vercel Project `vnsir-com` — Config, Env Groups, Security Headers
+
+### Summary
+
+Task 1.1.4 delivers three outcomes:
+1. **`vercel.json` updated** — project named `vnsir-com`, security headers added
+2. **`brain/wiki/Vercel-Project-Spec.md` created** — full deployment spec with env var groups, security header rationale, 14 acceptance criteria
+3. **`brain/00-Index.md` updated** — new "Deployment / DevOps" section; `vercel.json` entry annotated
+
+**Agent:** liam-chen (Project Manager)  
+**Conflict risk:** Low — `vercel.json` is not in any open MR by `agent/dev-sharma` branches (verified: their MRs are focused on `DocumentsPage.tsx` / UI components). No shared file edits.
+
+---
+
+### 1. `vercel.json` — Changes
+
+**File:** `vercel.json` (modified)
+
+| Field | Before | After |
+|-------|--------|-------|
+| `name` | _(absent)_ | `"vnsir-com"` |
+| `headers` | _(absent)_ | Three security headers on `"/(.*)"` |
+
+**Headers added:**
+
+```json
+"headers": [
+  {
+    "source": "/(.*)",
+    "headers": [
+      { "key": "X-Frame-Options", "value": "DENY" },
+      { "key": "X-Content-Type-Options", "value": "nosniff" },
+      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+    ]
+  }
+]
+```
+
+**Existing config preserved unchanged:**
+- `$schema`, `framework`, `buildCommand`, `outputDirectory` — untouched
+- `rewrites` — untouched (API pass-through + SPA catch-all)
+
+---
+
+### 2. `brain/wiki/Vercel-Project-Spec.md` — New Document
+
+**10 sections, 14 acceptance criteria, 1 operator runbook**
+
+#### Section 1 — Overview
+- Renamed project from `ceo-simulator-iota` → `vnsir-com`
+- Documents why the name aligns with the VNSIR spec codename
+
+#### Section 2 — Vercel Project Setup
+- Full project identity table: name, framework, root dir, build command, output dir, Node version
+- GitHub repo linkage: production branch `main`, preview branches all non-main
+- `Ignored Build Step` command documented — prevents spurious rebuilds on `brain/*.md`-only commits
+- Conflict avoidance: `agent/dev-sharma` preview branches get auto-deployed, NOT set as production
+
+#### Section 3 — Environment Variable Groups
+
+**`production` group (8 variables):**
+
+| Variable | Type |
+|----------|------|
+| `VITE_SUPABASE_URL` | Plain |
+| `VITE_SUPABASE_ANON_KEY` | Secret |
+| `SUPABASE_URL` | Plain |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret |
+| `ANTHROPIC_API_KEY` | Secret |
+| `JWT_SECRET` | Secret (min 32 chars) |
+| `NODE_ENV` | Plain (`production`) |
+| `VITE_APP_VERSION` | Plain (commit SHA) |
+
+**`preview` group (8 variables):**
+- Same keys as production; different secrets (separate JWT_SECRET, ideally lower-quota Anthropic key)
+- `NODE_ENV=preview`
+- `VITE_APP_VERSION=preview-{SHA}`
+
+**Security rule documented:** `VITE_*` variables are baked into the client bundle — service role keys and JWT secrets must NEVER have `VITE_` prefix.
+
+#### Section 4 — Security Headers
+
+| Header | Value | Protection Against |
+|--------|-------|--------------------|
+| `X-Frame-Options` | `DENY` | Clickjacking |
+| `X-Content-Type-Options` | `nosniff` | MIME-type sniffing |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Referrer leakage on cross-origin |
+
+- Future headers catalogued (CSP, Permissions-Policy, HSTS, X-DNS-Prefetch-Control) with rationale for deferral
+- CSP deferred because inline styles + canvas in Pixel Art HUD require careful tuning post UI stabilization
+
+#### Section 5 — SPA Routing
+- Documents why `/api/:path*` must precede `/(.*)`  
+- Explains catch-all returns `index.html` (200) instead of 404 for React Router v6
+
+#### Section 6 — Deployment Workflow
+- Production deploy flow (push to `main` → Vercel CI → build → edge deploy)
+- Preview deploy flow (any branch push)
+- Manual deploy runbook (`vercel --prod --token=...`)
+
+#### Section 7 — Acceptance Criteria (14 ACs)
+
+| Range | Area |
+|-------|------|
+| VP-01 – VP-04 | Project identity + GitHub linkage |
+| VP-05 – VP-06 | Env var groups |
+| VP-07 – VP-09 | Security headers (verified via `curl -I`) |
+| VP-10 – VP-11 | SPA routing correctness |
+| VP-12 – VP-14 | Secret hygiene, build success, ignored build step |
+
+#### Section 8 — Operator Runbook
+- Secret rotation procedure
+- Adding new env vars (with safety check for `VITE_*`)
+- `curl` command to verify headers in production
+
+#### Section 9 — Open Questions (3 items)
+- OQ-01: Custom domain (`app.ceo-simulator.com`) — CEO decision pending
+- OQ-02: `agent/dev-sharma` preview branch — dedicated Supabase branch? (OPEN)
+- OQ-03: CSP pre-launch vs post-v1 — recommend pre-launch
+
+---
+
+### 3. `brain/00-Index.md` — Updates
+
+- **New section added:** "Deployment / DevOps" under Phase 1 Specs
+  - `[[Vercel-Project-Spec]]` wikilink added with description
+- **Backend section:** `vercel.json` entry updated with security headers annotation + link to `[[Vercel-Project-Spec]]`
+- **Header notice:** Updated to reference Task 1.1.4
+
+---
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `vercel.json` | **MODIFIED** — added `"name": "vnsir-com"` + `"headers"` block (3 security headers) |
+| `brain/wiki/Vercel-Project-Spec.md` | **NEW** — full deployment spec (v1.0, active) |
+| `brain/00-Index.md` | **UPDATED** — Deployment/DevOps section; header notice; backend section annotation |
+| `brain/changelog.md` | **UPDATED** (this entry) |
+
+---
+
 ## 2026-04-12 — Task 1.1.1: VNSIR Implementation Spec v1.0
 
 ### VNSIR Implementation Spec — New Document

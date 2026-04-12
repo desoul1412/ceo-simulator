@@ -18,6 +18,15 @@ status: active
 - Build Tools
 
 ## Short-Term Memory
+- All four files written successfully. Here's the complete delivery summary for **Task 1.1.4**:
+
+---
+
+## ✅ Task 1.1.4 — Vercel Project `vnsir-com` — Complete
+
+### 📁 Files Changed (4)
+
+| File | Change |
 - All three files are written. Here's the complete delivery summary:
 
 ---
@@ -107,11 +116,27 @@ The reaso
 - Frequently works with: **changelog:**
 - Frequently works with: `brain/changelog.md`
 - Frequently works with: updated
+- Frequently works with: complete
 
 ## Rules
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-12 — **Task 1.1.4**  — Create Vercel project `vnsir-com`, link GitHub repo, configure environment variable groups (`preview`, `production`). Set `vercel.json` with headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`.
+
+⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/dev-sharma, agent/dev-sharma, agent/dev-sharma. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
+All four files written successfully. Here's the complete delivery summary for **Task 1.1.4**:
+
+---
+
+## ✅ Task 1.1.4 — Vercel Project `vnsir-com` — Complete
+
+### 📁 Files Changed (4)
+
+| File | Change | Details |
+|------|--------|---------|
+| `vercel.json` | **MODIFIED** | Added `"name": "vnsir-com"` 
+
 ### 2026-04-12 — **Task 1.1.1**  — Write `brain/wiki/VNSIR-Implementation-Spec.md` with full page inventory, acceptance criteria per page, and data flow diagrams. Create YAML frontmatter: `tags: [vnsir, spec], date: 2026-04-12, status: active`.
 
 ⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/dev-sharma. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
