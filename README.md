@@ -52,17 +52,19 @@ docker compose up -d           # Server + PostgreSQL
 
 ## What This Does
 
-CEO Simulator is the **control plane for a Zero-Human Software Factory**. You set business goals. The system handles delegation, coding, testing, and deployment.
+CEO Simulator is the **control plane for a Zero-Human Software Factory**. You type a directive. The AI CEO plans it. Agents execute it.
 
 ```
 1. Create a project → connect a Git repo
-2. CEO agent reviews codebase → generates Project Overview
-3. CEO proposes: Summary, Master Plan, Hiring Plan
-4. You review + approve the plan
-5. Agents are hired per plan → Sprint 1 created
-6. Each agent works in their own branch → commits → pushes → creates MR
+2. Type a CEO directive: "Add dark mode" / "Build auth system" / anything
+3. CEO Planning Terminal generates a 7-tab plan:
+   Overview → Findings → Research → Tech Stack → Architecture → Hiring Plan → Implementation Plan
+4. You review each tab, edit if needed, then Approve & Execute
+5. System auto-hires agents + creates Sprint with tickets + dependency DAG
+6. Agents pick up tickets via heartbeat → read code → make changes → commit → push → create MR
 7. You review MRs on the Scrum Board → merge to main
-8. Repeat. Scrum Master posts daily summaries.
+8. Blocked tickets auto-unblock when dependencies complete → next agents start
+9. Repeat with new directives. Each builds on the last.
 ```
 
 ---
@@ -79,15 +81,17 @@ CEO Simulator is the **control plane for a Zero-Human Software Factory**. You se
 ┌───────────────────────┴─────────────────────────────┐
 │                Express Orchestrator (server/)         │
 │                                                       │
-│  Routes (15 modules)     Middleware                    │
+│  Routes (17 modules)     Middleware                    │
 │  ├─ auth.ts              ├─ auth.ts (JWT + RLS)      │
 │  ├─ companies.ts         ├─ errorHandler.ts          │
 │  ├─ agents.ts            └─ validate.ts              │
 │  ├─ tickets.ts                                        │
-│  ├─ sprints.ts          Providers                     │
+│  ├─ sprints.ts          Providers (4)                 │
 │  ├─ plans.ts            ├─ anthropicProvider.ts      │
-│  ├─ planning.ts         ├─ openrouterProvider.ts     │
-│  ├─ mergeRequests.ts    └─ registry.ts (failover)    │
+│  ├─ planning.ts         ├─ openaiProvider.ts         │
+│  ├─ mergeRequests.ts    ├─ geminiProvider.ts         │
+│  ├─ providers.ts        ├─ openrouterProvider.ts     │
+│  ├─ marketplace.ts      └─ registry.ts (failover)    │
 │  ├─ configs.ts                                        │
 │  ├─ notifications.ts    Pipeline                      │
 │  ├─ audit.ts            ├─ plan → exec → verify      │
@@ -121,16 +125,25 @@ CEO Simulator is the **control plane for a Zero-Human Software Factory**. You se
 
 ```bash
 # server/.env
-LLM_PROVIDER=auto        # Claude Agent SDK → OpenRouter failover
+LLM_PROVIDER=auto        # Claude → OpenAI → Gemini → OpenRouter (priority chain)
 # LLM_PROVIDER=anthropic  # Claude Agent SDK only (default, uses local CLI auth)
-# LLM_PROVIDER=openrouter # OpenRouter only (requires OPENROUTER_API_KEY)
+# LLM_PROVIDER=openai     # OpenAI API (requires OPENAI_API_KEY)
+# LLM_PROVIDER=gemini     # Google Gemini API (requires GEMINI_API_KEY)
+# LLM_PROVIDER=openrouter # OpenRouter (requires OPENROUTER_API_KEY)
 ```
 
-**Default:** Agents use `@anthropic-ai/claude-agent-sdk` which authenticates through your local [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) session. No API key env var needed.
+| Provider | Auth | Models |
+|----------|------|--------|
+| **Anthropic** (default) | Claude Code CLI session (no API key needed) | Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 |
+| **OpenAI** | `OPENAI_API_KEY` | o1, GPT-4o, GPT-4o-mini |
+| **Gemini** | `GEMINI_API_KEY` | Gemini 2.5 Pro, 2.0 Flash |
+| **OpenRouter** | `OPENROUTER_API_KEY` | Any model on OpenRouter |
 
-**Fallback:** When `LLM_PROVIDER=auto`, if Claude SDK is unavailable, routes to OpenRouter (OpenAI-compatible API).
+**Auto-failover:** When `LLM_PROVIDER=auto`, providers are tried in priority order. If one fails, the next is used automatically.
 
-3-tier model routing: CEO → Opus, PM/Dev → Sonnet, QA/Scrum → Haiku.
+**Custom models:** Override default model names per tier in Settings > LLM Providers, or set per-agent in the agent config panel.
+
+**3-tier routing:** CEO → Opus-tier, PM/Dev → Sonnet-tier, QA/Scrum → Haiku-tier. Budget and effort auto-scaled by story points.
 
 ---
 
@@ -139,7 +152,7 @@ LLM_PROVIDER=auto        # Claude Agent SDK → OpenRouter failover
 | Feature | Description |
 |---------|-------------|
 | **Multi-Project** | One server, unlimited projects, each with its own Git repo |
-| **Multi-Provider** | Anthropic (default) + OpenRouter failover. Env-driven. |
+| **Multi-Provider** | Anthropic, OpenAI, Gemini, OpenRouter — auto-failover with custom model names |
 | **Staged Pipeline** | plan → exec → verify → fix → done (SP-based complexity routing) |
 | **Sandbox Isolation** | None (worktree), Docker (container-per-company), E2B (cloud VM) |
 | **Auth + RLS** | Supabase Auth, JWT middleware, row-level security per company |
@@ -155,6 +168,10 @@ LLM_PROVIDER=auto        # Claude Agent SDK → OpenRouter failover
 | **3-Level Config** | Global → Project → Agent cascade for skills, rules, MCP servers |
 | **Tool Provisioning** | Tiered loading (Core 7 / Standard 11 / Full + MCP) per role |
 | **Pixel Office** | Canvas 2D animated RPG office with sprite state machines |
+| **Skill Marketplace** | Browse and install skills from [claudemarketplaces.com](https://claudemarketplaces.com/) — one-click install |
+| **MCP Server Management** | Add/remove/test MCP servers from Settings — agents use them as tools |
+| **E2E Testing** | 39 Playwright tests covering dashboard, board, agents, planning, API health |
+| **Smart Token Optimization** | Model/effort/budget auto-selected per role + story points. Prompt caching via static system prompts |
 
 ---
 
@@ -182,8 +199,10 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # Optional
 SUPABASE_ANON_KEY=your-anon-key              # For auth features
-LLM_PROVIDER=auto                             # anthropic | openrouter | auto
-OPENROUTER_API_KEY=sk-or-...                  # For OpenRouter fallback
+LLM_PROVIDER=auto                             # anthropic | openai | gemini | openrouter | auto
+OPENAI_API_KEY=sk-...                         # For OpenAI provider
+GEMINI_API_KEY=AI...                          # For Google Gemini provider
+OPENROUTER_API_KEY=sk-or-...                  # For OpenRouter provider
 SANDBOX_MODE=none                             # none | docker | e2b
 AUDIT_HMAC_SECRET=change-me-in-production     # For audit proof chain
 ```
@@ -230,6 +249,8 @@ The base schema is created via the Supabase dashboard (companies, agents, ticket
 | `/company/:id/chat` | CEO Chat — streaming conversation with CEO agent |
 | `/company/:id/settings` | Project Config — repo, skills, MCP, rules |
 | `/settings` | Global Settings — connection status, config cascade |
+| `/settings/providers` | LLM Providers — configure Anthropic/OpenAI/Gemini/OpenRouter, custom model names |
+| `/settings/marketplace` | Skill Marketplace — browse/install skills from claudemarketplaces.com |
 
 ---
 
@@ -259,7 +280,7 @@ ceo-simulator/
 │   ├── routes/                       # 15 route modules
 │   ├── dal/                          # 12 data access repos
 │   ├── middleware/                    # auth, errorHandler, validate
-│   ├── providers/                    # LLM provider registry (Anthropic + OpenRouter)
+│   ├── providers/                    # LLM provider registry (Anthropic, OpenAI, Gemini, OpenRouter)
 │   ├── tools/                        # Tool provisioning (tiered, validated)
 │   ├── pipeline/                     # Staged execution (plan→exec→verify→fix)
 │   ├── sandbox/                      # Execution isolation (none/docker/e2b)
@@ -276,6 +297,12 @@ ceo-simulator/
 │   └── .env.docker.example           # Template env vars
 ├── supabase/
 │   └── migrations/                   # 8 SQL migration files (v2.0)
+├── e2e/                              # Playwright E2E tests (10 suites)
+│   ├── 01-dashboard.spec.ts         # Navigation, company cards
+│   ├── 04-scrum-board.spec.ts       # Kanban, tickets, sprints
+│   ├── 07-api-health.spec.ts        # API endpoint tests
+│   ├── 09-planning-execution-flow.spec.ts  # Full pipeline test
+│   └── 10-monitor-agents.spec.ts    # Live agent monitoring
 ├── brain/                            # Obsidian vault
 │   ├── library/skills/               # 61 skill files (15 role dirs)
 │   ├── wiki/                         # Architecture specs
@@ -326,10 +353,17 @@ ceo-simulator/
 ## Scripts
 
 ```bash
-npm run dev        # Frontend (Vite → :5173)
-npm run server     # Orchestrator + heartbeat daemon (→ :3001)
-npm run build      # Production build
-npm run test       # Vitest tests
+npm run dev            # Frontend (Vite → :5173)
+npm run server         # Orchestrator + heartbeat daemon (→ :3001)
+npm run dev:all        # Both frontend + server (concurrently)
+npm run build          # Production build
+npm run test           # Vitest unit tests
+npm run test:e2e       # Playwright E2E tests (39 tests)
+npm run test:e2e:headed    # E2E with visible browser
+npm run test:e2e:ui        # Playwright interactive UI
+npm run test:e2e:api       # API health tests only (fast)
+npm run test:e2e:pipeline  # Full planning → execution pipeline test (headed)
+npm run test:all       # Unit + E2E combined
 ```
 
 ---
@@ -358,7 +392,8 @@ npm run test       # Vitest tests
 | Canvas | 2D pixel-art office, BFS pathfinding, RPG sprite animation |
 | Backend | Express 5 + TypeScript (tsx) |
 | Database | Supabase (PostgreSQL + Realtime + RLS) or self-hosted PostgreSQL |
-| LLM | Claude Agent SDK (primary) + OpenRouter (fallback) |
+| LLM | Claude Agent SDK + OpenAI + Gemini + OpenRouter (auto-failover) |
+| E2E Testing | Playwright (39 tests — dashboard, board, agents, planning, API) |
 | Auth | Supabase Auth + JWT + Row-Level Security |
 | Deployment | Vercel (frontend) + Docker or any Node host (server) |
 | Brain | Obsidian vault for specs, plans, agent memory |

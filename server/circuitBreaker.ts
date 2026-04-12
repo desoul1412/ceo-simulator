@@ -183,7 +183,7 @@ export async function checkExecutionTimeout(ticketId: string): Promise<boolean> 
   if (!t.started_at) return false;
 
   const elapsed = Date.now() - new Date(t.started_at).getTime();
-  if (elapsed <= (t.max_execution_ms ?? 1200000)) return false; // 20 min default
+  if (elapsed <= (t.max_execution_ms ?? 1800000)) return false; // 30 min default
 
   console.warn(`[circuit-breaker] Ticket ${ticketId} timed out after ${Math.round(elapsed / 1000)}s`);
 

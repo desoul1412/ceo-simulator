@@ -44,7 +44,7 @@ interface PhaseConfig {
 const SIZE_MULTIPLIERS: Record<string, { turns: number; budget: number }> = {
   small:  { turns: 0.6, budget: 0.5 },
   medium: { turns: 1.0, budget: 1.0 },
-  large:  { turns: 1.5, budget: 1.5 },
+  large:  { turns: 2.0, budget: 2.0 },
 };
 
 function buildPhases(projectSize: string): PhaseConfig[] {
@@ -77,7 +77,7 @@ Include:
 Write in markdown. Be specific — reference actual files and code you find.`,
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 15,
-      maxBudget: 1.5,
+      maxBudget: 2.0,
     },
 
     // Phase 1: Findings (Discovery + ADRs)
@@ -108,7 +108,7 @@ Include:
 Format as structured markdown with clear sections.`,
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 15,
-      maxBudget: 1.5,
+      maxBudget: 2.0,
     },
 
     // Phase 2: Research (Large projects only)
@@ -136,7 +136,7 @@ Research the technical landscape for this project:
 Document findings with sources and confidence levels.`,
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 12,
-      maxBudget: 1.2,
+      maxBudget: 1.8,
     },
 
     // Phase 3: Tech Stack (Medium+ projects)
@@ -167,7 +167,7 @@ Evaluate and document the technology stack:
 Use tables for comparisons. Be specific about versions.`,
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 12,
-      maxBudget: 1.2,
+      maxBudget: 1.8,
     },
 
     // Phase 4: Architecture
@@ -197,7 +197,7 @@ Design the complete solution architecture:
 Reference actual code patterns found in the codebase. Include mermaid diagrams where helpful.`,
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 15,
-      maxBudget: 1.5,
+      maxBudget: 2.0,
     },
 
     // Phase 5: Hiring Plan
@@ -235,7 +235,7 @@ Also specify:
 IMPORTANT: Output the hiring plan as a markdown table. Each row = one agent to hire.`,
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 10,
-      maxBudget: 1.5,
+      maxBudget: 2.0,
     },
 
     // Phase 6: Implementation Plan
@@ -279,15 +279,19 @@ RULES:
 - Include deployment tasks assigned to DevOps
 - Order by priority and dependency chain
 - Be specific: "Build user auth API with JWT" not "Build backend"
+- NEVER create "manual verification" or "manual testing" tasks — agents cannot use browsers manually
+- ALL QA tasks must be AUTOMATED: use Playwright for visual/E2E tests, Vitest for unit tests
+- QA visual checks = "Write Playwright test that navigates to /page, takes screenshot, asserts elements visible"
+- QA should write test files, run them via Bash, and report results — never "open browser and check"
 
 Also include:
-- **Testing Strategy** — unit, integration, e2e approach
+- **Testing Strategy** — unit tests (Vitest), E2E tests (Playwright), visual regression (screenshots)
 - **CI/CD Pipeline** — build, test, deploy steps
 - **Risk Mitigation** — fallback plans for risky tasks
-- **Definition of Done** — acceptance criteria per phase`,
+- **Definition of Done** — acceptance criteria per phase (must include passing automated tests)`,
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 15,
-      maxBudget: 1.5,
+      maxBudget: 2.0,
     },
   ];
 
@@ -551,7 +555,12 @@ async function executePlanningPhase(
       cwd,
       systemPrompt: `You are a senior technical CEO conducting project planning. Phase: ${phase.name}. Be thorough, specific, and reference actual code when possible. Output clean markdown.
 
-IMPORTANT: NEVER read or output contents of .env, .env.local, credentials, secrets, or API keys. Skip these files entirely. Focus on source code, configs (package.json, tsconfig, vite.config), and documentation.`,
+IMPORTANT RULES:
+- NEVER read or output contents of .env, .env.local, credentials, secrets, or API keys.
+- NEVER create "manual verification" or "manual testing" tasks. ALL testing must be AUTOMATED.
+- QA tasks must use Playwright (E2E/visual) or Vitest (unit). QA agents can run Bash commands.
+- Instead of "manually verify in browser", write "Create Playwright test that verifies [specific elements/behavior]".
+- Focus on source code, configs (package.json, tsconfig, vite.config), and documentation.`,
       maxTurns: phase.maxTurns,
       maxBudgetUsd: phase.maxBudget,
       tools: phase.tools,

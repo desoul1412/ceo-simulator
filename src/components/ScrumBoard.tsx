@@ -458,6 +458,8 @@ export function ScrumBoard() {
           }}
         >
           <div
+            role="dialog"
+            aria-label="Ticket details"
             onClick={e => e.stopPropagation()}
             style={{
               background: '#0a0e14', border: '1px solid var(--hud-border)',

@@ -22,16 +22,9 @@ test.setTimeout(20 * 60_000); // 20 min per test
 test.describe('Planning → Execution Pipeline', () => {
 
   test('should submit directive, generate plan, approve, and trigger agents', async ({ page }) => {
-    await waitForAppReady(page);
-
-    // ── Step 0: Navigate into the company ──
-    // Click the company card on the dashboard
-    const companyCard = page.locator('text=CEO SIMULATOR').first();
-    await expect(companyCard).toBeVisible({ timeout: 10_000 });
-    await companyCard.click();
-    // Wait for company view to load (URL should change to /company/...)
-    await page.waitForURL(/company\//, { timeout: 10_000 });
-    await page.waitForTimeout(3000);
+    // ── Step 0: Login + navigate into the company ──
+    await goToFirstCompany(page);
+    await page.waitForTimeout(2000);
     console.log('[test] Navigated to company view:', page.url());
 
     // ── Step 1: Find the CEO directive textarea and enter the feature request ──

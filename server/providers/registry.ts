@@ -1,6 +1,8 @@
 import type { Provider, ProviderConfig, ProviderExecuteOptions, UnifiedResponse, ModelTier } from './types';
 import { createAnthropicProvider } from './anthropicProvider';
 import { createOpenRouterProvider } from './openrouterProvider';
+import { createOpenAIProvider } from './openaiProvider';
+import { createGeminiProvider } from './geminiProvider';
 
 // ── Provider Registry ────────────────────────────────────────────────────────
 
@@ -118,15 +120,38 @@ const anthropicConfig: ProviderConfig = {
 };
 providerRegistry.register(createAnthropicProvider(anthropicConfig));
 
+// Register OpenAI
+if (process.env.OPENAI_API_KEY) {
+  providerRegistry.register(createOpenAIProvider({
+    name: 'openai',
+    apiKey: process.env.OPENAI_API_KEY,
+    enabled: llmProvider === 'openai' || llmProvider === 'auto',
+    priority: 2,
+    maxRetries: 2,
+    timeoutMs: 120_000,
+  }));
+}
+
+// Register Gemini
+if (process.env.GEMINI_API_KEY) {
+  providerRegistry.register(createGeminiProvider({
+    name: 'gemini',
+    apiKey: process.env.GEMINI_API_KEY,
+    enabled: llmProvider === 'gemini' || llmProvider === 'auto',
+    priority: 3,
+    maxRetries: 2,
+    timeoutMs: 120_000,
+  }));
+}
+
 // Register OpenRouter as fallback
 if (process.env.OPENROUTER_API_KEY) {
-  const openrouterConfig: ProviderConfig = {
+  providerRegistry.register(createOpenRouterProvider({
     name: 'openrouter',
     apiKey: process.env.OPENROUTER_API_KEY,
     enabled: llmProvider === 'openrouter' || llmProvider === 'auto',
-    priority: 2,
+    priority: 4,
     maxRetries: 1,
     timeoutMs: 120_000,
-  };
-  providerRegistry.register(createOpenRouterProvider(openrouterConfig));
+  }));
 }

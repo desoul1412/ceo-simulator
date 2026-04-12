@@ -3,6 +3,7 @@ import { supabase } from '../supabaseAdmin';
 import type { AgentContext, AgentRunResult } from './agentRunner';
 import { buildRelevantMemoryContext, ROLE_PROMPTS, ROLE_TOOLS } from './worker';
 import { selectModel, selectEffort, allocateBudget } from './taskClassifier';
+import { buildSkillContext } from '../skillLoader';
 
 /**
  * Execute a task using Claude Agent SDK.
@@ -15,7 +16,7 @@ export async function executeClaudeAgent(ctx: AgentContext): Promise<AgentRunRes
   const memoryContext = buildRelevantMemoryContext(ctx.memory, ctx.task);
   const model = ctx.runtimeConfig?.model ?? selectModel(ctx.role, ctx.storyPoints, ctx.task);
   const effort = selectEffort(ctx.role, ctx.storyPoints, ctx.task);
-  const maxTurns = ctx.runtimeConfig?.maxTurns ?? (model === 'haiku' ? 8 : 30);
+  const maxTurns = ctx.runtimeConfig?.maxTurns ?? (model === 'haiku' ? 15 : 40);
   const maxBudget = allocateBudget(ctx.role, ctx.storyPoints, ctx.budgetRemaining);
 
   // Build query options — support session resume
@@ -47,7 +48,7 @@ export async function executeClaudeAgent(ctx: AgentContext): Promise<AgentRunRes
         .limit(1)
         .single();
       const prevTokens = (prevSession as any)?.total_input_tokens ?? 0;
-      if (prevTokens < 150_000) {
+      if (prevTokens < 200_000) {
         options.resume = ctx.activeSessionId;
       }
     }
@@ -62,7 +63,7 @@ export async function executeClaudeAgent(ctx: AgentContext): Promise<AgentRunRes
   let sessionId = '';
 
   const q = query({
-    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}Your task:\n\n${ctx.task}\n\nWork in the project directory. Read relevant files first, then make changes. Be thorough but focused.`,
+    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}${buildSkillContext(ctx.role, ctx.cwd)}Your task:\n\n${ctx.task}\n\nWork in the project directory. Read relevant files first, then make changes. Be thorough but focused.`,
     options,
   });
 

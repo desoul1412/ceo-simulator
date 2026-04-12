@@ -29,9 +29,10 @@ export function selectModel(role: string, storyPoints: number, task: string): Mo
   // PM always uses sonnet — specs require reading codebase + structured writing
   if (role === 'PM') return 'sonnet';
 
-  // Simple read-only tasks: haiku (QA triage, Designer review)
+  // QA/Designer: only haiku for truly read-only tasks; sonnet if writing files
   if (storyPoints <= 2 && (role === 'QA' || role === 'Designer')) {
-    return 'haiku';
+    const needsWriting = /create|write|configure|set up|implement|build|add|modify|install|test|verify|run|check|visual|playwright|vitest/i.test(task);
+    return needsWriting ? 'sonnet' : 'haiku';
   }
 
   // Complex tasks: stay with sonnet but bump effort (handled separately)
@@ -64,15 +65,14 @@ export function allocateBudget(
   let base: number;
 
   if (role === 'CEO') {
-    // CEO planning scales with project size
-    base = projectSize === 'large' ? 4.0 : projectSize === 'small' ? 1.5 : 2.5;
+    base = projectSize === 'large' ? 5.0 : projectSize === 'small' ? 1.5 : 2.5;
   } else if (role === 'PM') {
-    base = 2.0; // PM specs need extensive reading + structured writing
+    base = 3.0; // PM specs need extensive reading + structured writing
   } else if (role === 'Designer' || role === 'QA') {
-    base = storyPoints <= 2 ? 0.50 : 1.0; // read-heavy, less writing
+    base = storyPoints <= 2 ? 0.50 : 1.5;
   } else {
-    // Frontend, Backend, DevOps — always need decent budget for code changes
-    base = storyPoints <= 2 ? 1.5 : storyPoints <= 5 ? 2.0 : 3.0;
+    // Frontend, Backend, DevOps — generous budget for code changes
+    base = storyPoints <= 2 ? 2.5 : storyPoints <= 5 ? 3.0 : 5.0;
   }
 
   return Math.min(base, budgetRemaining);

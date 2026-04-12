@@ -48,7 +48,7 @@ let pollAttempts = 0;
 const POLL_LIMITS: Record<string, number> = {
   small: 240,   // 240 * 2.5s = 10 min
   medium: 600,  // 600 * 2.5s = 25 min
-  large: 960,   // 960 * 2.5s = 40 min
+  large: 1440,  // 1440 * 2.5s = 60 min
 };
 
 function stopPolling() {

@@ -969,3 +969,9 @@ Key architectural changes documented:
 
 - [2026-04-11T05:31:21.981Z] DEAD LETTER: Ticket a5451c3b-169d-48fc-b971-a6347fc6fb27 failed permanently. Error: Execution timeout: exceeded 600000ms
 - [2026-04-11T05:38:29.076Z] DEAD LETTER: Ticket 7daebc6b-77a0-4129-a2c7-16d63e53f9e7 failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (10)
+- [2026-04-12T05:51:05.358Z] DEAD LETTER: Ticket aba81df1-a291-46ad-8863-e5d3cc897fd3 failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (8)
+- [2026-04-12T05:58:36.283Z] DEAD LETTER: Ticket a8c39cef-de37-426e-81cd-277b871e7b1f failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (8)
+- [2026-04-12T06:08:33.598Z] DEAD LETTER: Ticket 12a88c7e-a22c-4c6e-a9d2-167c4061bd3a failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (8)
+- [2026-04-12T06:30:26.787Z] DEAD LETTER: Ticket 12a88c7e-a22c-4c6e-a9d2-167c4061bd3a failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (15)
+- [2026-04-12T06:36:15.558Z] DEAD LETTER: Ticket aba81df1-a291-46ad-8863-e5d3cc897fd3 failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (15)
+- [2026-04-12T06:43:33.541Z] DEAD LETTER: Ticket a8c39cef-de37-426e-81cd-277b871e7b1f failed permanently. Error: Claude Code returned an error result: Reached maximum number of turns (15)

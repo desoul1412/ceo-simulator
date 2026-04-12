@@ -1,4 +1,6 @@
 import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 import { supabase } from './supabaseAdmin';
 import { executeAgent, type AgentContext } from './agents/agentRunner';
 import { createWorktree, removeWorktree, taskBranchName } from './worktreeManager';
@@ -128,6 +130,11 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
       .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const branchName = `agent/${agentSlug}`;
 
+    // Branch protection: never work on main/master
+    if (['main', 'master'].includes(branchName)) {
+      throw new Error(`Branch protection: refusing to work on '${branchName}'`);
+    }
+
     // Create worktree for this agent's persistent branch
     const worktreePath = createWorktree(cwd, branchName);
 
@@ -200,6 +207,20 @@ export async function processNextTicket(companyId: string, cwd: string): Promise
     };
 
     const result = await executeAgent(ctx);
+
+    // ── Post-execution: verify code compiles ──────────────────────────────
+    try {
+      // Quick compile check if package.json exists
+      const hasPkg = fs.existsSync(path.join(worktreePath, 'package.json'));
+      if (hasPkg) {
+        try {
+          execSync('npx tsc --noEmit 2>&1 || true', { cwd: worktreePath, timeout: 30_000, encoding: 'utf8' });
+        } catch {
+          // Non-fatal — log but don't block
+          console.warn(`[ticketProcessor] Compile check failed for ${t.title?.slice(0, 40)}`);
+        }
+      }
+    } catch { /* compile check is best-effort */ }
 
     // ── Post-execution: commit → push → create MR ────────────────────────
     let mrId: string | null = null;

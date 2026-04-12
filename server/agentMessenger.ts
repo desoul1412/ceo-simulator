@@ -105,9 +105,10 @@ export async function broadcastCompletion(ticketId: string): Promise<void> {
     }
   }
 
-  // Build artifact summary
+  // Build artifact summary — PM specs get more space for downstream agents
+  const summaryLimit = fromAgentRole === 'PM' ? 3000 : 1000;
   const outputSummary = t.result?.output
-    ? t.result.output.slice(0, 1000)
+    ? t.result.output.slice(0, summaryLimit)
     : 'No output available';
 
   // Send to each downstream agent

@@ -14,6 +14,8 @@ import audit from './audit';
 import ceoChat from './ceoChat';
 import clipmart from './clipmart';
 import daemon from './daemon';
+import providers from './providers';
+import marketplace from './marketplace';
 import misc from './misc';
 
 const router = Router();
@@ -37,6 +39,8 @@ router.use(audit);
 router.use(ceoChat);
 router.use(clipmart);
 router.use(daemon);
+router.use(providers);
+router.use(marketplace);
 router.use(misc);
 
 export default router;
