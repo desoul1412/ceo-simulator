@@ -1,6 +1,6 @@
 ---
 tags: [agent, memory, backend]
-date: 2026-04-11
+date: 2026-04-12
 status: active
 ---
 
@@ -13,8 +13,19 @@ status: active
 - Documentation
 - API Development
 - Build Tools
+- DevOps
+- Git
 
 ## Short-Term Memory
+- ✅ **Task 1.1.6 Complete** — GitHub Actions CI/CD pipeline is live on branch `agent/raj-gupta`.
+
+---
+
+## What Was Delivered
+
+### `.github/workflows/ci.yml`
+
+A 6-job pipeline with strict quality gating:
 - Here's a summary of what was delivered:
 
 ---
@@ -59,6 +70,41 @@ All tables discovered by scanning `agentRunner.ts`, `ticketProcessor.ts`, `index
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-12 — ## Upstream Context (2/2 message(s))
+
+[COMPLETION_SIGNAL] PM completed: **Task 1.1.1**  — Write `brain/wiki/VNSIR-Implementation-Spec.md` with full page inventory, acceptance criteria per page, and data flow diagrams. Create YAML frontmatter: `tags: [vnsir, spec], date: 2026-04-12, status: active`.
+Branch: agent/liam-chen
+**Agent**: Liam Chen (PM) **Task**: **Task 1.1.1**  — Write `brain/wiki/VNSIR-Implementation-Spec.md` with full page inventory, acceptance criteria per page, and data flow diagrams. Create YAML frontm
+
+---
+
+[COMPLETION_SIGNAL] PM completed: **Task 1.1.4**  — Create Vercel project `vnsir-com`, link GitHub repo, configure environment variable groups (`preview`, `production`). Set `vercel.json` with headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`.
+Branch: agent/liam-chen
+**Agent**: Liam Chen (PM) **Task**: **Task 1.1.4**  — Create Vercel project `vnsir-com`, link GitHub repo, configure environment variable groups (`preview`, `production`). Set `vercel.json` with heade
+
+---
+
+## Your Task
+
+**Task 1.1.6**  — Set up GitHub Actions CI: lint (`next lint`), type-check (`tsc --noEmit`), test (`vitest run`), build (`next build`). Gate on all checks green before Vercel deploy.
+
+⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/dev-sharma, agent/liam-chen, agent/dev-sharma, agent/dev-sharma, agent/liam-chen, agent/dev-sharma. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
+✅ **Task 1.1.6 Complete** — GitHub Actions CI/CD pipeline is live on branch `agent/raj-gupta`.
+
+---
+
+## What Was Delivered
+
+### `.github/workflows/ci.yml`
+
+A 6-job pipeline with strict quality gating:
+
+```
+push / PR
+  ├─► lint        → npm run lint (ESLint)
+  ├─► type-check  → npx tsc --noEmit
+  ├─►
+
 ### 2026-04-11 — **** — Create `server/config/schema.ts` — TypeScript interfaces for all configuration: `ServerConfig`, `DatabaseConfig`, `LLMProviderConfig`, `AuthConfig`. These become the contract for all provider implementations.
 
 ⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/liam-chen, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/liam-chen. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
