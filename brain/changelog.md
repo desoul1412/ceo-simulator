@@ -906,3 +906,32 @@ Extract and consolidate Postgres RPC functions referenced in application code in
 - No runtime code — pure TypeScript contracts; zero bundle impact
 - `LLMBudgetConfig` mirrors existing `runtimeConfig` shape in `claudeRunner.ts`
 - `AnthropicProviderConfig.model` default `'sonnet'` matches `claudeRunner.ts:55`
+
+---
+
+## 2026-04-12 — Task 1.1.6: GitHub Actions CI/CD Pipeline (Raj Gupta)
+
+### Files Created
+- `.github/workflows/ci.yml` — Full CI/CD pipeline
+- `brain/wiki/CI-CD-Pipeline-Spec.md` — Spec with YAML frontmatter
+
+### What Was Built
+GitHub Actions CI pipeline with 5 jobs:
+
+1. **lint** — Runs `npm run lint` (ESLint)
+2. **type-check** — Runs `npx tsc --noEmit`
+3. **test** — Runs `npm test` (Vitest)
+4. **build** — `npm run build` (Vite), gated on jobs 1–3 all green; uploads `dist/` artifact
+5. **deploy** — Vercel production deploy (main/master only, gated on build)
+6. **deploy-preview** — Vercel preview deploy for PRs (gated on build), comments URL on PR
+
+### Key Design Decisions
+- `concurrency` block cancels stale runs on same ref (no queue bloat)
+- Supabase env vars injected via GitHub secrets for test/build steps
+- Adapted from task spec (`next lint`/`next build`) → Vite equivalents since this is a Vite project
+- Preview deploys auto-comment a markdown table with check statuses on the PR
+
+### Secrets Required (must be set in GitHub repo settings)
+- `VERCEL_TOKEN`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
