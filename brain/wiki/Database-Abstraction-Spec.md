@@ -1,1320 +1,1075 @@
 ---
-tags: [database, abstraction, adapter, supabase, postgresql, sqlite, backend]
-date: 2026-04-11
+tags: [database, abstraction, adapter, supabase, postgresql, sqlite, backend, infrastructure, api]
+date: 2026-04-12
 status: active
 ---
 
-# Database Abstraction Specification
+# Database Abstraction Spec
 
-**Linked from:** [[00-Index]], [[Factory-Operations-Manual]], [[Office-Simulator-Architecture]]
+**Linked from:** [[00-Index]], [[Migration-Spec]], [[Docker-Deployment-Spec]], [[Auth-System-Spec]], [[Factory-Operations-Manual]]
 
-**Status:** Active specification for database adapter interface
+**Version:** 1.0  
+**Author:** Liam Chen (Project Manager)  
+**Status:** Active specification — source of truth for the `DatabaseAdapter` interface and backend-switching architecture
 
 ---
 
 ## 1. Overview
 
-The CEO Simulator currently uses Supabase as the primary database backend, but needs to support multiple database engines (Supabase, raw PostgreSQL, SQLite for local development). This spec defines a unified `DatabaseAdapter` interface contract that abstracts database-specific implementations while maintaining compatibility with existing data access patterns.
+This spec defines a `DatabaseAdapter` interface that abstracts every Supabase API call pattern present in the CEO Simulator codebase. The abstraction enables three interchangeable backends gated by a single `DATABASE_MODE` environment variable:
 
-**Goals:**
-- Adapter-based database system — add new database backends without modifying `src/lib/api.ts`
-- Unified query builder interface across all backends
-- Support transactional operations where available
-- Efficient batch operations (bulk insert, bulk update, bulk delete)
-- Realtime subscriptions on Supabase, polling/webhooks on other backends
-- Local development with SQLite, production with Supabase or PostgreSQL
-- Type-safe query construction with TypeScript
+| Backend | Mode Value | Use Case |
+|---------|-----------|----------|
+| Supabase JS Client (`@supabase/supabase-js`) | `supabase` | Production (Vercel + Supabase cloud) — default |
+| Raw PostgreSQL (`pg` driver) | `postgres` | Self-hosted Docker deployment — see [[Docker-Deployment-Spec]] |
+| SQLite (`better-sqlite3`) | `sqlite` | Local dev / offline / unit tests — no network required |
+
+**Core principle:** all server-side code and `src/lib/api.ts` must reference `DatabaseAdapter`, never the Supabase client directly. The concrete adapter is resolved once at startup and injected.
+
+**Scope of this document:**
+- Section 2: `QueryBuilder` interface — fluent chain methods (mirrors Supabase PostgREST DSL)
+- Section 3: `DatabaseAdapter` interface — top-level entry points (`.from()`, `.rpc()`, `.channel()`)
+- Section 4: Call-pattern catalog — every distinct pattern found in the codebase, with source references
+- Section 5: Repository interfaces — per-table typed wrappers on top of `DatabaseAdapter`
+- Section 6: Backend implementations — notes per adapter
+- Section 7: `DATABASE_MODE` env gate and startup resolution
+- Section 8: Error handling and `AdapterError` type
+- Section 9: Realtime abstraction
+- Section 10: Acceptance criteria
 
 ---
 
-## 2. Core Interface Definition
+## 2. `QueryBuilder<T>` Interface
 
-### `DatabaseAdapter` Abstract Interface
-
-Located at: `src/lib/adapters/DatabaseAdapter.ts` (to be created)
+The `QueryBuilder<T>` mirrors the Supabase PostgREST fluent chain. Every method returns `this` (for chaining) except terminal methods that return `Promise<AdapterResult<T>>`.
 
 ```typescript
+// src/lib/db/QueryBuilder.ts
+
+export interface AdapterResult<T> {
+  data: T | null;
+  error: AdapterError | null;
+}
+
 /**
- * Abstract adapter interface for database operations.
- * All adapters must implement these core methods.
- * 
- * Patterns supported:
- * - SELECT: .from(table).select(...).where(...).order(...).limit(...)
- * - INSERT: .from(table).insert([...]).returning(...)
- * - UPDATE: .from(table).update({...}).where(...)
- * - DELETE: .from(table).delete().where(...)
- * - RPC: .rpc(functionName, params)
- * - Transactions: .transaction(async (tx) => {...})
- * - Subscriptions: .subscribe(table, event, callback)
+ * Fluent query builder — mirrors Supabase PostgREST chaining.
+ * All filter/modifier methods return `this` for chaining.
+ * Terminal methods return a Promise that executes the query.
+ */
+export interface QueryBuilder<T = any> extends Promise<AdapterResult<T[]>> {
+
+  // ── Column selection ──────────────────────────────────────────────────────
+  /**
+   * Specify which columns to return.
+   * Pass '*' for all columns (default), or a comma-separated string.
+   * Nested selects (e.g. 'id, agents(*)') are Supabase-native;
+   * non-Supabase backends may flatten or error.
+   *
+   * Source patterns: P-01, P-02, P-03, P-04, P-05, P-06, P-07, P-08, P-09, P-10, P-11
+   */
+  select(columns?: string, options?: { count?: 'exact'; head?: boolean }): QueryBuilder<T>;
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  /**
+   * Insert one row or an array of rows.
+   * Chain .select() after insert to return inserted rows.
+   *
+   * Source patterns: P-12 (single + .single()), P-13 (array + .select()), P-14 (no return)
+   */
+  insert(data: Partial<T> | Partial<T>[]): QueryBuilder<T>;
+
+  /**
+   * Update rows matching the current filter set.
+   * MUST be combined with at least one filter (.eq / .in) before execution.
+   *
+   * Source patterns: P-15 (single filter), P-16 (two filters), P-17 (null value)
+   */
+  update(data: Partial<T>): QueryBuilder<T>;
+
+  /**
+   * Delete rows matching the current filter set.
+   * MUST be combined with at least one filter (.eq / .in) before execution.
+   *
+   * Source patterns: P-18 (equality), P-19 (in-set)
+   */
+  delete(): QueryBuilder<T>;
+
+  // ── Equality filters ──────────────────────────────────────────────────────
+  /**
+   * Filter rows where column = value.
+   * Multiple .eq() calls are ANDed together.
+   *
+   * Source patterns: P-01 through P-19 (most common filter — used everywhere)
+   */
+  eq<K extends keyof T>(column: K, value: T[K]): QueryBuilder<T>;
+  eq(column: string, value: unknown): QueryBuilder<T>;
+
+  /**
+   * Filter rows where column != value.
+   *
+   * Source pattern: P-08 — .neq('id', ticketId) excludes current ticket
+   * when checking if agent has another in-progress ticket.
+   */
+  neq<K extends keyof T>(column: K, value: T[K]): QueryBuilder<T>;
+  neq(column: string, value: unknown): QueryBuilder<T>;
+
+  // ── Set membership filters ────────────────────────────────────────────────
+  /**
+   * Filter rows where column value is in the provided array.
+   * SQL: WHERE column IN (v1, v2, ...)
+   *
+   * Source patterns:
+   *   P-02 — .in('company_id', companyIds)  batch-load agents/delegations
+   *   P-10 — .in('status', ['approved','open'])  pending task check
+   *   P-11 — .in('status', ['open','awaiting_approval','approved','in_progress'])
+   *   P-19 — .in('agent_id', agentIds)  bulk delete token_usage/agent_sessions
+   */
+  in<K extends keyof T>(column: K, values: T[K][]): QueryBuilder<T>;
+  in(column: string, values: unknown[]): QueryBuilder<T>;
+
+  // ── Sorting and pagination ────────────────────────────────────────────────
+  /**
+   * Sort results by column.
+   *
+   * Source patterns:
+   *   P-01 — .order('created_at', { ascending: true })   companies list
+   *   P-07 — .order('created_at', { ascending: false })  activity log (newest first)
+   */
+  order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): QueryBuilder<T>;
+
+  /**
+   * Cap the number of rows returned.
+   *
+   * Source patterns:
+   *   P-07 — .limit(20)   activity log cap
+   *   P-08 — .limit(1)    in-progress ticket existence probe
+   *   P-10 — .limit(1)    pending task existence probe
+   */
+  limit(count: number): QueryBuilder<T>;
+
+  // ── Terminal modifiers ────────────────────────────────────────────────────
+  /**
+   * Assert exactly one row is returned.
+   * Resolves with AdapterResult<T> (singular, not T[]).
+   * Returns AdapterError (status 404) if 0 rows; error if >1 rows.
+   *
+   * Source patterns: P-06, P-12 (insert + .single()), P-03 (budget_spent)
+   * Used in: api.ts createCompany, assignGoal (goal), tickCompany (budget);
+   *          ticketProcessor.ts (ticket, agent, MR, budget_spent fetch)
+   */
+  single(): Promise<AdapterResult<T>>;
+}
+```
+
+---
+
+## 3. `DatabaseAdapter` Interface
+
+```typescript
+// src/lib/db/DatabaseAdapter.ts
+
+import type { QueryBuilder } from './QueryBuilder';
+import type { RealtimeChannel } from './RealtimeChannel';
+import type { AdapterResult } from './QueryBuilder';
+
+/**
+ * Top-level adapter — resolved once at startup via DATABASE_MODE.
+ * Inject everywhere; NEVER import the Supabase client directly
+ * in server code or src/lib/api.ts.
  */
 export interface DatabaseAdapter {
   /**
-   * Initialize the adapter connection.
-   * Opens connection pool, validates credentials, etc.
-   * 
-   * @returns Promise resolving when ready
-   * @throws Error if connection fails
+   * Start a fluent query chain for a named table.
+   * Equivalent to supabase.from('table_name').
+   *
+   * The generic T should be the Row type from database.types.ts
+   * (e.g. CompanyRow, AgentRow, TicketRow).
+   *
+   * Source: every Supabase call in src/lib/api.ts and server/
    */
-  connect(): Promise<void>;
+  from<T = any>(table: string): QueryBuilder<T>;
 
   /**
-   * Gracefully close the adapter connection.
-   * Drains connection pools, closes subscriptions, etc.
+   * Invoke a PostgreSQL stored function (RPC).
+   * Translates to: SELECT fn_name(params) or CALL fn_name(params)
+   *
+   * Source:
+   *   api.ts checkStaleAgents()        — rpc('check_stale_agents')
+   *   ticketProcessor.ts claimNext()   — rpc('claim_next_ticket', { p_company_id })
    */
-  disconnect(): Promise<void>;
+  rpc<T = any>(
+    fn: string,
+    params?: Record<string, unknown>
+  ): Promise<AdapterResult<T>>;
 
   /**
-   * Get current connection status.
-   * @returns true if online and healthy
+   * Open a Realtime channel for Postgres change notifications.
+   * Returns a fluent RealtimeChannel builder.
+   *
+   * Supabase backend   : native WebSocket multiplexed channel
+   * PostgreSQL backend : LISTEN/NOTIFY via dedicated pg.Client connection
+   * SQLite backend     : no-op stub (offline/test mode)
+   *
+   * Source: src/hooks/useRealtimeSync.ts
    */
-  isHealthy(): Promise<boolean>;
+  channel(name: string): RealtimeChannel;
 
   /**
-   * Execute a SELECT query with fluent builder pattern.
-   * 
-   * @param table - Table name
-   * @returns QueryBuilder for chaining .select(), .where(), .order(), .limit()
+   * Remove a previously subscribed Realtime channel.
+   *
+   * Source: src/hooks/useRealtimeSync.ts — useEffect cleanup callback
    */
-  from(table: string): QueryBuilder;
-
-  /**
-   * Execute raw SQL query.
-   * Use for complex queries not expressible via builder.
-   * 
-   * @param sql - SQL string with $1, $2 placeholders
-   * @param params - Parameter values (positional)
-   * @returns Promise resolving to { rows: any[], rowCount: number }
-   */
-  raw(sql: string, params?: any[]): Promise<{ rows: any[]; rowCount: number }>;
-
-  /**
-   * Execute a server-side stored procedure / function.
-   * 
-   * @param functionName - Function name in database
-   * @param params - Named parameters { key: value }
-   * @returns Promise resolving to function result (typically an object or array)
-   */
-  rpc(functionName: string, params?: Record<string, any>): Promise<any>;
-
-  /**
-   * Execute a transaction.
-   * Automatically ROLLBACK if callback throws; COMMIT on success.
-   * 
-   * @param callback - Async function receiving a tx (transaction adapter)
-   * @returns Promise resolving to callback's return value
-   * @throws Error if transaction fails
-   */
-  transaction<T>(
-    callback: (tx: DatabaseAdapter) => Promise<T>
-  ): Promise<T>;
-
-  /**
-   * Subscribe to real-time changes on a table.
-   * For Supabase: uses Realtime WebSocket.
-   * For PostgreSQL/SQLite: uses polling or trigger-based mechanism.
-   * 
-   * @param table - Table name
-   * @param events - Array of 'INSERT' | 'UPDATE' | 'DELETE'
-   * @param callback - Fired on change with { event, old, new }
-   * @returns Unsubscribe function
-   */
-  subscribe(
-    table: string,
-    events: ('INSERT' | 'UPDATE' | 'DELETE')[],
-    callback: (payload: SubscriptionPayload) => void
-  ): () => void;
-
-  /**
-   * Adapter name (lowercase).
-   * Used for routing and logging: "supabase", "postgres", "sqlite"
-   */
-  readonly name: string;
-
-  /**
-   * Adapter version/tag (e.g., "1.0.0").
-   * For audit + capability tracking.
-   */
-  readonly version: string;
-
-  /**
-   * List of supported operations for this adapter.
-   * E.g., ["select", "insert", "update", "delete", "rpc", "subscriptions", "transactions"]
-   */
-  readonly capabilities: string[];
-}
-
-/**
- * Query builder for fluent SELECT / UPDATE / DELETE chains.
- * Implements builder pattern to construct and execute queries.
- */
-export interface QueryBuilder {
-  /**
-   * SELECT which columns.
-   * 
-   * Examples:
-   *   .select('*')                    // All columns
-   *   .select('id, name, status')     // Specific columns
-   *   .select('*', { count: 'exact' }) // With metadata
-   * 
-   * @param columns - Column list or '*'
-   * @param options - Metadata options { count, head }
-   * @returns QueryBuilder for chaining
-   */
-  select(
-    columns?: string,
-    options?: { count?: 'exact' | 'estimated'; head?: boolean }
-  ): QueryBuilder;
-
-  /**
-   * INSERT rows.
-   * 
-   * Examples:
-   *   .insert({ name: 'Alice', role: 'CEO' })              // Single row
-   *   .insert([{ name: 'Alice' }, { name: 'Bob' }])        // Bulk insert
-   * 
-   * @param data - Single object or array of objects
-   * @param options - { onConflict: 'ignore' | 'merge', returning: 'minimal' | 'representation' }
-   * @returns QueryBuilder for chaining .returning() or .execute()
-   */
-  insert(
-    data: Record<string, any> | Record<string, any>[],
-    options?: InsertOptions
-  ): QueryBuilder;
-
-  /**
-   * UPDATE rows.
-   * Must be paired with .where() to specify which rows.
-   * 
-   * Examples:
-   *   .update({ status: 'active' }).where('id', '=', '123')
-   *   .update({ progress: 50 }).where('id', 'in', ['a', 'b', 'c'])
-   * 
-   * @param data - Object with column: value pairs
-   * @param options - { returning, onConflict }
-   * @returns QueryBuilder for chaining .where() or .execute()
-   */
-  update(
-    data: Record<string, any>,
-    options?: UpdateOptions
-  ): QueryBuilder;
-
-  /**
-   * DELETE rows.
-   * Must be paired with .where() to specify which rows.
-   * 
-   * Examples:
-   *   .delete().where('id', '=', '123')
-   *   .delete().where('status', '=', 'inactive').where('created_at', '<', '2025-01-01')
-   * 
-   * @returns QueryBuilder for chaining .where() or .execute()
-   */
-  delete(): QueryBuilder;
-
-  /**
-   * WHERE clause with operator.
-   * Can be chained multiple times (AND logic).
-   * 
-   * Supported operators: '=', '!=', '>', '<', '>=', '<=', 'like', 'in', 'is', 'between'
-   * 
-   * Examples:
-   *   .where('status', '=', 'active')
-   *   .where('id', 'in', ['1', '2', '3'])
-   *   .where('created_at', '>=', '2025-01-01')
-   *   .where('id', 'in', [1, 2, 3]).where('status', '=', 'active')  // chained
-   * 
-   * @param column - Column name
-   * @param operator - Comparison operator
-   * @param value - Filter value (or array for 'in')
-   * @returns QueryBuilder for chaining
-   */
-  where(
-    column: string,
-    operator: WhereOperator,
-    value: any
-  ): QueryBuilder;
-
-  /**
-   * ORDER BY clause.
-   * Can be chained multiple times.
-   * 
-   * Examples:
-   *   .order('created_at', { ascending: false })
-   *   .order('name', { ascending: true })
-   *   .order('name').order('created_at', { ascending: false })  // chained
-   * 
-   * @param column - Column name
-   * @param options - { ascending: boolean, nullsFirst: boolean }
-   * @returns QueryBuilder for chaining
-   */
-  order(
-    column: string,
-    options?: { ascending?: boolean; nullsFirst?: boolean }
-  ): QueryBuilder;
-
-  /**
-   * LIMIT clause.
-   * Restricts number of rows returned.
-   * 
-   * @param count - Maximum rows to return
-   * @returns QueryBuilder for chaining
-   */
-  limit(count: number): QueryBuilder;
-
-  /**
-   * OFFSET clause.
-   * Skips first N rows (for pagination).
-   * 
-   * @param count - Number of rows to skip
-   * @returns QueryBuilder for chaining
-   */
-  offset(count: number): QueryBuilder;
-
-  /**
-   * Expect exactly one row (not zero, not many).
-   * Throws error if result count != 1.
-   * 
-   * @returns QueryBuilder for chaining
-   */
-  single(): QueryBuilder;
-
-  /**
-   * Specify columns to return after INSERT/UPDATE.
-   * 
-   * Examples:
-   *   .insert({ name: 'Alice' }).returning('*')
-   *   .update({ status: 'active' }).returning('id, status')
-   * 
-   * @param columns - Column list or '*'
-   * @returns QueryBuilder for chaining
-   */
-  returning(columns?: string): QueryBuilder;
-
-  /**
-   * Execute the query and get results.
-   * 
-   * @returns Promise resolving to QueryResult
-   */
-  execute(): Promise<QueryResult>;
-}
-
-/**
- * Result of a query execution.
- */
-export interface QueryResult {
-  /**
-   * Rows returned (or empty array if none).
-   */
-  data: any[];
-
-  /**
-   * Error object if query failed, null otherwise.
-   */
-  error: Error | null;
-
-  /**
-   * Row count (number of affected rows for INSERT/UPDATE/DELETE).
-   * null if not applicable (e.g., SELECT queries).
-   */
-  rowCount?: number | null;
-
-  /**
-   * Metadata about the result (e.g., 'exact' or 'estimated' count).
-   */
-  meta?: {
-    count?: number | null;
-  };
-}
-
-/**
- * Subscription payload for real-time changes.
- */
-export interface SubscriptionPayload {
-  /**
-   * Event type: 'INSERT', 'UPDATE', or 'DELETE'
-   */
-  event: 'INSERT' | 'UPDATE' | 'DELETE';
-
-  /**
-   * Row state before change (for UPDATE/DELETE).
-   */
-  old?: any;
-
-  /**
-   * Row state after change (for INSERT/UPDATE).
-   */
-  new?: any;
-}
-
-/**
- * Operators for WHERE clauses.
- */
-export type WhereOperator =
-  | '='
-  | '!='
-  | '>'
-  | '<'
-  | '>='
-  | '<='
-  | 'like'
-  | 'in'
-  | 'is'
-  | 'between'
-  | 'ilike';
-
-/**
- * Options for INSERT operations.
- */
-export interface InsertOptions {
-  onConflict?: 'ignore' | 'merge';
-  returning?: 'minimal' | 'representation';
-}
-
-/**
- * Options for UPDATE operations.
- */
-export interface UpdateOptions {
-  returning?: 'minimal' | 'representation';
+  removeChannel(channel: RealtimeChannel): void;
 }
 ```
 
 ---
 
-## 3. Supabase Mapping (Current Implementation)
+## 4. Call-Pattern Catalog
 
-### Existing Patterns → `DatabaseAdapter`
+Every distinct Supabase call pattern found in the codebase, with source reference and SQL equivalent.
 
-| Supabase Pattern | DatabaseAdapter Equivalent |
-|------------------|---------------------------|
-| `db().from('table')` | `adapter.from('table')` |
-| `.select('*')` | `.select('*')` |
-| `.select('col1, col2')` | `.select('col1, col2')` |
-| `.insert(data)` | `.insert(data)` |
-| `.update(data)` | `.update(data)` |
-| `.delete()` | `.delete()` |
-| `.eq(col, val)` | `.where(col, '=', val)` |
-| `.in(col, arr)` | `.where(col, 'in', arr)` |
-| `.gt(col, val)` | `.where(col, '>', val)` |
-| `.lt(col, val)` | `.where(col, '<', val)` |
-| `.gte(col, val)` | `.where(col, '>=', val)` |
-| `.lte(col, val)` | `.where(col, '<=', val)` |
-| `.like(col, pattern)` | `.where(col, 'like', pattern)` |
-| `.order('col', {asc: true})` | `.order('col', {ascending: true})` |
-| `.limit(10)` | `.limit(10)` |
-| `.single()` | `.single()` |
-| `.rpc(fn, params)` | `.rpc(fn, params)` |
-| `.channel('name').on(...).subscribe()` | `.subscribe('table', ['UPDATE'], callback)` |
+### 4.1 Pattern Index
 
----
-
-## 4. Supported Backends
-
-### 4.1 Supabase (`supabase`)
-
-**Location:** `src/lib/adapters/SupabaseAdapter.ts`
-
-**Features:**
-- Real-time WebSocket subscriptions
-- Full-featured REST API
-- Authentication built-in (not in scope for this adapter)
-- JSONB support
-- PostGIS support
-- Auto-incrementing IDs
-- Row-level security (RLS) policies
-- Connection pooling via PostgREST
-
-**Configuration:**
-```typescript
-new SupabaseAdapter({
-  url: process.env.VITE_SUPABASE_URL,
-  anonKey: process.env.VITE_SUPABASE_ANON_KEY,
-  serviceKey: process.env.SUPABASE_SERVICE_KEY, // for admin operations
-  realtimeUrl: 'wss://...',
-})
-```
-
-**Implementation Notes:**
-- Wraps `@supabase/supabase-js` client
-- `.subscribe()` uses Postgres WAL (Write-Ahead Log) via Realtime extension
-- Automatic retry on network failure
-- Rate limiting: 200 requests/second per connection
-- Connection timeout: 60 seconds
-- Query timeout: 30 seconds (configurable)
-
-**Mapped Supabase-specific features:**
-- `onConflict: 'ignore'` → `.upsert(..., {onConflict: '...'})` 
-- `returning: 'minimal'` → avoid unnecessary payload
+| # | Pattern | Tables | Source File |
+|---|---------|--------|------------|
+| P-01 | `.from().select('*').order()` | companies | `api.ts:fetchCompanies` |
+| P-02 | `.from().select('*').in()` | agents, delegations | `api.ts:fetchCompanies` |
+| P-03 | `.from().select('col').eq().single()` | companies, agents | `api.ts:deleteCompany`, `tickCompany` |
+| P-04 | `.from().select('col1,col2,...').eq().single()` | agents | `ticketProcessor.ts` |
+| P-05 | `.from().select('*').eq()` | agents, delegations, tickets | `api.ts:assignGoal`, `tickCompany` |
+| P-06 | `.from().select('*').eq().single()` | tickets, agents | `ticketProcessor.ts` |
+| P-07 | `.from().select('*').eq().order().limit()` | activity_log | `api.ts:fetchActivityLog` |
+| P-08 | `.from().select('id').eq().eq().neq().limit()` | tickets | `ticketProcessor.ts` |
+| P-09 | `.from().select('col1,col2,col3').eq().eq()` | merge_requests | `ticketProcessor.ts` |
+| P-10 | `.from().select('id').eq().eq().in().limit()` | tickets | `ticketProcessor.ts` |
+| P-11 | `.from().select('id').eq().in()` | tickets | `ticketProcessor.ts` |
+| P-12 | `.from().insert({}).select().single()` | companies, goals, merge_requests | `api.ts:createCompany`, `assignGoal` |
+| P-13 | `.from().insert([]).select()` | agents, delegations | `api.ts:createCompany`, `assignGoal` |
+| P-14 | `.from().insert({})` | activity_log, audit_log, notifications, ticket_comments | multiple |
+| P-15 | `.from().update({}).eq()` | companies, agents, delegations, tickets | `api.ts`, `ticketProcessor.ts` |
+| P-16 | `.from().update({}).eq().eq()` | goals, delegations | `api.ts:tickCompany`, `ticketProcessor.ts` |
+| P-17 | `.from().update({ col: null }).eq()` | tickets | `api.ts:deleteCompany` |
+| P-18 | `.from().delete().eq()` | agents, configs, delegations, task_queue, companies | `api.ts:deleteCompany`, `tickCompany` |
+| P-19 | `.from().delete().in()` | token_usage, agent_sessions | `api.ts:deleteCompany` |
+| P-20 | `.rpc(fn)` | — (DB function) | `api.ts:checkStaleAgents` |
+| P-21 | `.rpc(fn, params)` | — (DB function) | `ticketProcessor.ts:processNextTicket` |
+| P-22 | `.channel().on('postgres_changes', ...).subscribe()` | agents, companies, delegations | `useRealtimeSync.ts` |
+| P-23 | `.removeChannel(channel)` | — | `useRealtimeSync.ts` |
 
 ---
 
-### 4.2 PostgreSQL (`postgres`)
+### 4.2 Pattern Details
 
-**Location:** `src/lib/adapters/PostgresAdapter.ts`
-
-**Features:**
-- Raw SQL via `node-postgres` (pg)
-- Connection pooling
-- Transactions via explicit BEGIN/COMMIT/ROLLBACK
-- Prepared statements (automatic parameter binding)
-- Manual polling for subscription emulation
-- No RLS (relies on application layer)
-
-**Configuration:**
+#### P-01 — Select All with Sort
 ```typescript
-new PostgresAdapter({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'ceo_simulator',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  ssl: process.env.DB_SSL === 'true',
-  poolSize: 10,
-  idleTimeout: 30000,
-})
-```
-
-**Implementation Notes:**
-- Uses `pg` npm package (native PostgreSQL driver)
-- Prepared statements with `$1, $2` placeholders
-- `.subscribe()` emulated via polling (background task every N seconds) or trigger functions (if available)
-- Transaction support via `.transaction()`
-- No connection pooling at HTTP level; pooling handled by driver
-- Query timeout: configurable per query
-- Automatic pool drain on `.disconnect()`
-
-**Polling Strategy (for subscriptions):**
-- Maintains last_seen timestamp per table
-- Polls every 5 seconds (configurable)
-- Emits INSERT/UPDATE/DELETE based on `updated_at` column
-- Falls back to full table scan if `updated_at` missing
-
----
-
-### 4.3 SQLite (`sqlite`)
-
-**Location:** `src/lib/adapters/SqliteAdapter.ts`
-
-**Features:**
-- Lightweight local-only database
-- Zero setup, file-based or in-memory
-- Full ACID compliance
-- Perfect for development/testing
-- `better-sqlite3` for synchronous API or `sqlite3` for async
-- No RLS (not applicable)
-- No real-time subscriptions (polling only)
-
-**Configuration:**
-```typescript
-new SqliteAdapter({
-  filename: process.env.DB_PATH || ':memory:', // ':memory:' for in-memory
-  readonly: false,
-  timeout: 5000,
-})
-```
-
-**Implementation Notes:**
-- Uses `better-sqlite3` for production (synchronous, faster)
-- Uses `sqlite3` for Node.js async compatibility (if needed)
-- No connection pooling (SQLite handles single writer)
-- Transactions via `SAVEPOINT` (nested) or `BEGIN IMMEDIATE`
-- `.subscribe()` emulated via polling only
-- Query timeout: respect JavaScript event loop (no per-query timeout)
-- Automatic database initialization on first connect
-
-**Schema Setup:**
-- Database file auto-created if missing
-- Migration system: `db/migrations/*.sql` applied on startup
-- Fallback: embedded schema in adapter if migrations unavailable
-
----
-
-## 5. Integration Points
-
-### 5.1 Adapter Selection (`src/lib/database.ts`)
-
-```typescript
-import type { DatabaseAdapter } from './adapters/DatabaseAdapter';
-import { SupabaseAdapter } from './adapters/SupabaseAdapter';
-import { PostgresAdapter } from './adapters/PostgresAdapter';
-import { SqliteAdapter } from './adapters/SqliteAdapter';
-
-const ADAPTER_TYPE = process.env.VITE_DATABASE_ADAPTER || 'supabase';
-
-let adapter: DatabaseAdapter;
-
-export async function initializeDatabase(): Promise<void> {
-  switch (ADAPTER_TYPE) {
-    case 'supabase':
-      adapter = new SupabaseAdapter({
-        url: process.env.VITE_SUPABASE_URL!,
-        anonKey: process.env.VITE_SUPABASE_ANON_KEY!,
-      });
-      break;
-    case 'postgres':
-      adapter = new PostgresAdapter({
-        host: process.env.DB_HOST,
-        port: parseInt(process.env.DB_PORT || '5432'),
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        ssl: process.env.DB_SSL === 'true',
-      });
-      break;
-    case 'sqlite':
-      adapter = new SqliteAdapter({
-        filename: process.env.DB_PATH || ':memory:',
-      });
-      break;
-    default:
-      throw new Error(`Unknown database adapter: ${ADAPTER_TYPE}`);
-  }
-
-  await adapter.connect();
-  console.log(`✓ Database connected: ${adapter.name} v${adapter.version}`);
-}
-
-export function getDatabase(): DatabaseAdapter {
-  if (!adapter) throw new Error('Database not initialized');
-  return adapter;
-}
-
-export async function closeDatabase(): Promise<void> {
-  if (adapter) {
-    await adapter.disconnect();
-  }
-}
-```
-
-### 5.2 API Layer (`src/lib/api.ts`) — Minimal Refactor
-
-Current code uses `db()` function to get Supabase client. Refactor to use new adapter:
-
-**Before:**
-```typescript
-await db().from('companies').select('*').order('created_at', { ascending: true });
-```
-
-**After:**
-```typescript
-const adapter = getDatabase();
-const result = await adapter.from('companies').select('*').order('created_at').execute();
-if (result.error) throw result.error;
-return result.data;
-```
-
-**Backward compatibility wrapper:**
-```typescript
-function db() {
-  return getDatabase(); // Returns DatabaseAdapter (not Supabase client)
-}
-```
-
-### 5.3 All Supabase Call Patterns in Codebase
-
-Found 40+ usage patterns. Here are the most common:
-
-#### Pattern 1: SELECT with filters
-
-```typescript
-// Supabase
-const { data } = await db()
-  .from('agents')
+// src/lib/api.ts → fetchCompanies()
+db.from('companies')
   .select('*')
-  .eq('company_id', companyId);
+  .order('created_at', { ascending: true });
 
-// With adapter
-const result = await adapter.from('agents')
-  .select('*')
-  .where('company_id', '=', companyId)
-  .execute();
+// SQL: SELECT * FROM companies ORDER BY created_at ASC;
 ```
 
-#### Pattern 2: SELECT with IN filter
-
+#### P-02 — Select All with Set Membership Filter (batch load)
 ```typescript
-// Supabase
-await db().from('agents').select('*').in('company_id', companyIds);
+// src/lib/api.ts → fetchCompanies() — load related rows for N companies in 2 queries
+db.from('agents').select('*').in('company_id', companyIds);
+db.from('delegations').select('*').in('company_id', companyIds);
 
-// With adapter
-const result = await adapter.from('agents')
-  .select('*')
-  .where('company_id', 'in', companyIds)
-  .execute();
+// SQL: SELECT * FROM agents WHERE company_id IN ('id1','id2',...);
 ```
 
-#### Pattern 3: SELECT with ORDER + LIMIT
-
+#### P-03 — Select Single Column, Single Row
 ```typescript
-// Supabase
-const { data } = await db()
-  .from('activity_log')
+// src/lib/api.ts → deleteCompany() — IDs for cascade
+db.from('agents').select('id').eq('company_id', companyId);
+
+// src/lib/api.ts → tickCompany() — budget read
+db.from('companies').select('budget_spent').eq('id', companyId).single();
+
+// SQL: SELECT id FROM agents WHERE company_id = $1;
+// SQL: SELECT budget_spent FROM companies WHERE id = $1 LIMIT 1;
+```
+
+#### P-04 — Select Named Columns (scalar projection)
+```typescript
+// server/ticketProcessor.ts — agent budget check before execution
+supabase.from('agents')
+  .select('budget_limit, budget_spent, lifecycle_status, name, role')
+  .eq('id', agentId)
+  .single();
+
+// SQL:
+// SELECT budget_limit, budget_spent, lifecycle_status, name, role
+// FROM agents WHERE id = $1 LIMIT 1;
+```
+
+#### P-05 — Select All Rows for a Parent Entity
+```typescript
+// src/lib/api.ts → assignGoal(), tickCompany()
+db.from('agents').select('*').eq('company_id', companyId);
+db.from('delegations').select('*').eq('company_id', companyId);
+
+// SQL: SELECT * FROM agents WHERE company_id = $1;
+```
+
+#### P-06 — Fetch Single Row by Primary Key
+```typescript
+// server/ticketProcessor.ts — fetch claimed ticket
+supabase.from('tickets').select('*').eq('id', ticketId).single();
+
+// SQL: SELECT * FROM tickets WHERE id = $1 LIMIT 1;
+// → AdapterError status:404 if 0 rows
+```
+
+#### P-07 — Select with Sort + Limit (paginated log)
+```typescript
+// src/lib/api.ts → fetchActivityLog(companyId, limit = 20)
+db.from('activity_log')
   .select('*')
   .eq('company_id', companyId)
   .order('created_at', { ascending: false })
-  .limit(10);
+  .limit(limit);
 
-// With adapter
-const result = await adapter.from('activity_log')
-  .select('*')
-  .where('company_id', '=', companyId)
-  .order('created_at', { ascending: false })
-  .limit(10)
-  .execute();
+// SQL:
+// SELECT * FROM activity_log
+// WHERE company_id = $1
+// ORDER BY created_at DESC
+// LIMIT $2;
 ```
 
-#### Pattern 4: INSERT + RETURNING
-
+#### P-08 — Multi-Filter Existence Check (neq)
 ```typescript
-// Supabase
-const { data } = await db()
-  .from('companies')
-  .insert({ name, budget })
-  .select()
-  .single();
+// server/ticketProcessor.ts — ensure agent not already processing another ticket
+supabase.from('tickets')
+  .select('id')
+  .eq('agent_id', agentId)
+  .eq('status', 'in_progress')
+  .neq('id', ticketId)
+  .limit(1);
 
-// With adapter
-const result = await adapter.from('companies')
-  .insert({ name, budget })
-  .returning('*')
-  .single()
-  .execute();
-const company = result.data[0];
+// SQL:
+// SELECT id FROM tickets
+// WHERE agent_id = $1 AND status = 'in_progress' AND id != $2
+// LIMIT 1;
 ```
 
-#### Pattern 5: BULK INSERT
-
+#### P-09 — Select Named Columns with Two Equality Filters
 ```typescript
-// Supabase
-await db().from('agents').insert(agentInserts).select();
+// server/ticketProcessor.ts — conflict avoidance: list open MRs
+supabase.from('merge_requests')
+  .select('branch_name, agent_id, diff_summary')
+  .eq('company_id', companyId)
+  .eq('status', 'open');
 
-// With adapter
-const result = await adapter.from('agents')
-  .insert(agentInserts)
-  .returning('*')
-  .execute();
+// SQL:
+// SELECT branch_name, agent_id, diff_summary FROM merge_requests
+// WHERE company_id = $1 AND status = 'open';
 ```
 
-#### Pattern 6: UPDATE with WHERE
-
+#### P-10 — In-Set Filter with Limit (existence probe)
 ```typescript
-// Supabase
-await db().from('agents').update({ progress: 50 }).eq('id', id);
+// server/ticketProcessor.ts — check if agent has more pending tasks
+supabase.from('tickets')
+  .select('id')
+  .eq('company_id', companyId)
+  .eq('agent_id', agentId)
+  .in('status', ['approved', 'open'])
+  .limit(1);
 
-// With adapter
-await adapter.from('agents')
-  .update({ progress: 50 })
-  .where('id', '=', id)
-  .execute();
+// SQL:
+// SELECT id FROM tickets
+// WHERE company_id = $1 AND agent_id = $2
+//   AND status IN ('approved','open')
+// LIMIT 1;
 ```
 
-#### Pattern 7: DELETE with WHERE
-
+#### P-11 — In-Set Filter (multi-value status check)
 ```typescript
-// Supabase
-await db().from('agents').delete().eq('id', agentId);
+// server/ticketProcessor.ts — check all tickets complete for company
+supabase.from('tickets')
+  .select('id')
+  .eq('company_id', companyId)
+  .in('status', ['open', 'awaiting_approval', 'approved', 'in_progress']);
 
-// With adapter
-await adapter.from('agents')
-  .delete()
-  .where('id', '=', agentId)
-  .execute();
+// SQL:
+// SELECT id FROM tickets
+// WHERE company_id = $1
+//   AND status IN ('open','awaiting_approval','approved','in_progress');
 ```
 
-#### Pattern 8: RPC (Stored Procedure)
-
+#### P-12 — Insert Single Row, Return Inserted Record
 ```typescript
-// Supabase
-await db().rpc('check_stale_agents');
+// src/lib/api.ts → createCompany(), assignGoal() (goal record)
+// server/ticketProcessor.ts → merge_requests
+db.from('companies').insert({ name, budget }).select().single();
+db.from('goals').insert({ company_id, title, ... }).select().single();
+db.from('merge_requests').insert({ ... }).select().single();
 
-// With adapter
-await adapter.rpc('check_stale_agents');
+// SQL: INSERT INTO companies (name, budget) VALUES ($1,$2) RETURNING *;
+// → AdapterError if not exactly 1 row inserted
 ```
 
-#### Pattern 9: Transaction
-
+#### P-13 — Insert Multiple Rows, Return All Inserted
 ```typescript
-// With adapter
-await adapter.transaction(async (tx) => {
-  // Inside transaction, tx is a DatabaseAdapter with same interface
-  const result1 = await tx.from('companies')
-    .update({ status: 'paused' })
-    .where('id', '=', companyId)
-    .execute();
-  
-  const result2 = await tx.from('agents')
-    .update({ status: 'idle' })
-    .where('company_id', '=', companyId)
-    .execute();
+// src/lib/api.ts → createCompany() (seed agents), assignGoal() (delegations)
+db.from('agents').insert(agentInserts).select();
+db.from('delegations').insert(delInserts).select();
 
-  return { result1, result2 };
-});
+// SQL: INSERT INTO agents (...) VALUES (...),(...) RETURNING *;
 ```
 
-#### Pattern 10: Real-time Subscription
-
+#### P-14 — Insert Single Row, No Return (fire-and-forget)
 ```typescript
-// Supabase (current)
-const channel = supabase
+// src/lib/api.ts — activity_log events (multiple locations)
+// server/ticketProcessor.ts — audit_log, notifications, ticket_comments
+db.from('activity_log').insert({ company_id, type, message });
+db.from('audit_log').insert({ company_id, agent_id, event_type, message, cost_usd });
+db.from('notifications').insert({ company_id, type, title, message, link });
+db.from('ticket_comments').insert({ ticket_id, agent_id, author_type, content });
+
+// SQL: INSERT INTO activity_log (company_id, type, message) VALUES ($1,$2,$3);
+// (No RETURNING clause)
+```
+
+#### P-15 — Update with Single Equality Filter
+```typescript
+// src/lib/api.ts (most updates), server/ticketProcessor.ts
+db.from('tickets').update({ agent_id: null }).eq('company_id', companyId);
+db.from('agents').update({ status: 'idle', ... }).eq('id', agentId);
+db.from('companies').update({ budget_spent: newSpent }).eq('id', companyId);
+
+// SQL: UPDATE agents SET status=$1, ... WHERE id=$2;
+```
+
+#### P-16 — Update with Two Equality Filters
+```typescript
+// src/lib/api.ts → tickCompany() — complete all in-progress goals
+db.from('goals')
+  .update({ status: 'completed', progress: 100 })
+  .eq('company_id', companyId)
+  .eq('status', 'in-progress');
+
+// server/ticketProcessor.ts — set delegation to 100% when ticket done
+supabase.from('delegations')
+  .update({ progress: 100 })
+  .eq('company_id', companyId)
+  .eq('to_agent_id', agentId);
+
+// SQL:
+// UPDATE goals SET status='completed', progress=100
+// WHERE company_id=$1 AND status='in-progress';
+```
+
+#### P-17 — Update to Null (soft-nullify FK reference)
+```typescript
+// src/lib/api.ts → deleteCompany() — preserve tickets but remove agent FK
+db.from('tickets').update({ agent_id: null }).eq('company_id', companyId);
+
+// SQL: UPDATE tickets SET agent_id=NULL WHERE company_id=$1;
+```
+
+#### P-18 — Delete with Equality Filter
+```typescript
+// src/lib/api.ts → deleteCompany(), tickCompany()
+db.from('agents').delete().eq('company_id', companyId);
+db.from('delegations').delete().eq('company_id', companyId);
+db.from('companies').delete().eq('id', companyId);
+
+// SQL: DELETE FROM agents WHERE company_id=$1;
+```
+
+#### P-19 — Delete with In-Set Filter (bulk delete by FK list)
+```typescript
+// src/lib/api.ts → deleteCompany()
+db.from('token_usage').delete().in('agent_id', agentIds);
+db.from('agent_sessions').delete().in('agent_id', agentIds);
+
+// SQL: DELETE FROM token_usage WHERE agent_id IN ($1,$2,...);
+```
+
+#### P-20 — RPC with No Parameters
+```typescript
+// src/lib/api.ts → checkStaleAgents()
+db.rpc('check_stale_agents');
+
+// SQL: SELECT check_stale_agents();
+// Function: marks agents stale (>5 min) or dead (>30 min) by heartbeat age
+// See [[Migration-Spec]] §5 for function DDL
+```
+
+#### P-21 — RPC with Parameters
+```typescript
+// server/ticketProcessor.ts → processNextTicket()
+supabase.rpc('claim_next_ticket', { p_company_id: companyId });
+
+// SQL: SELECT claim_next_ticket($1);
+// Function: FOR UPDATE SKIP LOCKED — atomic ticket claim, prevents race conditions
+```
+
+#### P-22 — Realtime Postgres Change Subscription
+```typescript
+// src/hooks/useRealtimeSync.ts
+supabase
   .channel('realtime-sync')
-  .on('postgres_changes', { event: 'UPDATE', table: 'agents' }, (payload) => {
-    // ...
-  })
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'agents' }, cb)
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'companies' }, cb)
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'delegations' }, cb)
+  .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'delegations' }, cb)
   .subscribe();
 
-// With adapter
-const unsubscribe = adapter.subscribe(
-  'agents',
-  ['UPDATE'],
-  (payload) => {
-    // payload.event === 'UPDATE'
-    // payload.old === previous row
-    // payload.new === updated row
-  }
-);
+// PostgreSQL equivalent: LISTEN realtime_agents; LISTEN realtime_companies; ...
+// Requires pg_notify() trigger functions on each table (see §9.3)
+```
+
+#### P-23 — Remove Realtime Channel (cleanup)
+```typescript
+// src/hooks/useRealtimeSync.ts — useEffect cleanup
+supabase.removeChannel(channel);
+
+// PostgreSQL equivalent: UNLISTEN realtime_agents; UNLISTEN realtime_companies; ...
 ```
 
 ---
 
-## 6. Error Handling
+## 5. Repository Interfaces
 
-Each adapter MUST handle:
-
-1. **Connection errors**
-   - Connection refused
-   - Invalid credentials
-   - Network timeout
-   - Return unhealthy status from `.isHealthy()`
-
-2. **Query errors**
-   - Syntax errors (column not found, table not found)
-   - Constraint violations (unique, foreign key)
-   - Type mismatches
-   - Return error in `QueryResult.error`
-
-3. **Transaction errors**
-   - Rollback automatically if callback throws
-   - Re-throw original error
-   - Nested transactions (savepoints) handled per adapter
-
-4. **Subscription errors**
-   - Connection dropped → auto-reconnect
-   - Permission denied → log warning, don't crash
-   - Graceful fallback to polling if subscriptions unavailable
-
-5. **Timeout errors**
-   - Query timeout → throw `TimeoutError`
-   - Connection timeout → return unhealthy status
-
----
-
-## 7. Migration & Schema Management
-
-### SQLite Schema Initialization
+Per-table typed wrappers providing domain-semantic method names on top of `DatabaseAdapter`. All application code should use repositories — they hide raw query building.
 
 ```typescript
-// db/migrations/001_init.sql
-CREATE TABLE IF NOT EXISTS companies (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  budget REAL NOT NULL DEFAULT 10000,
-  budget_spent REAL NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'bootstrapping',
-  ceo_goal TEXT,
-  office_layout_id TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+// ── Companies ──────────────────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS agents (
-  id TEXT PRIMARY KEY,
-  company_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  role TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'idle',
-  -- ... rest of schema
-  FOREIGN KEY (company_id) REFERENCES companies(id)
-);
-```
+export interface CompanyRepository {
+  /** P-01 */ listAll(): Promise<CompanyRow[]>;
+  /** P-12 */ create(data: CompanyInsert): Promise<CompanyRow>;
+  /** P-15 */ update(id: string, data: CompanyUpdate): Promise<void>;
+  /** P-03 */ getBudgetSpent(id: string): Promise<number>;
+  /** P-18 */ delete(id: string): Promise<void>;
+}
 
-### Adapter Migration Runner
+// ── Agents ─────────────────────────────────────────────────────────────────
 
-```typescript
-export interface DatabaseAdapter {
-  // ... other methods
-  
-  /**
-   * Run migrations from a directory.
-   * Migrations are SQL files in order: 001_init.sql, 002_add_column.sql, etc.
-   * 
-   * @param migrationsPath - Directory containing *.sql files
-   * @returns Array of migration names that were executed
-   */
-  runMigrations(migrationsPath: string): Promise<string[]>;
+export interface AgentRepository {
+  /** P-02 */ listForCompanies(companyIds: string[]): Promise<AgentRow[]>;
+  /** P-05 */ listForCompany(companyId: string): Promise<AgentRow[]>;
+  /** P-06 */ getById(id: string): Promise<AgentRow | null>;
+  /** P-04 */ getBudgetInfo(id: string): Promise<AgentBudgetInfo | null>;
+  /** P-03 */ getIds(companyId: string): Promise<string[]>;
+  /** P-13 */ createMany(data: AgentInsert[]): Promise<AgentRow[]>;
+  /** P-15 */ update(id: string, data: AgentUpdate): Promise<void>;
+  /** P-18 */ deleteForCompany(companyId: string): Promise<void>;
+  /** P-20 */ checkStale(): Promise<void>;
+}
+
+// ── Goals ──────────────────────────────────────────────────────────────────
+
+export interface GoalRepository {
+  /** P-12 */ create(data: GoalInsert): Promise<GoalRow>;
+  /** P-16 */ completeAllForCompany(companyId: string): Promise<void>;
+}
+
+// ── Delegations ────────────────────────────────────────────────────────────
+
+export interface DelegationRepository {
+  /** P-02 */ listForCompanies(companyIds: string[]): Promise<DelegationRow[]>;
+  /** P-05 */ listForCompany(companyId: string): Promise<DelegationRow[]>;
+  /** P-13 */ createMany(data: DelegationInsert[]): Promise<DelegationRow[]>;
+  /** P-15 */ updateProgress(id: string, progress: number): Promise<void>;
+  /** P-16 */ completeForAgent(companyId: string, agentId: string): Promise<void>;
+  /** P-18 */ deleteForCompany(companyId: string): Promise<void>;
+}
+
+// ── Activity Log ───────────────────────────────────────────────────────────
+
+export interface ActivityLogRepository {
+  /** P-07 */ listForCompany(companyId: string, limit?: number): Promise<ActivityRow[]>;
+  /** P-14 */ insert(data: ActivityInsert): Promise<void>;
+}
+
+// ── Tickets ────────────────────────────────────────────────────────────────
+
+export interface TicketRepository {
+  /** P-21 */ claimNext(companyId: string): Promise<string | null>;
+  /** P-06 */ getById(id: string): Promise<TicketRow | null>;
+  /** P-08 */ hasInProgress(agentId: string, excludeTicketId: string): Promise<boolean>;
+  /** P-11 */ listOpen(companyId: string): Promise<Pick<TicketRow, 'id'>[]>;
+  /** P-10 */ hasPending(companyId: string, agentId: string): Promise<boolean>;
+  /** P-15 */ update(id: string, data: TicketUpdate): Promise<void>;
+  /** P-17 */ nullifyAgent(companyId: string): Promise<void>;
+}
+
+// ── Merge Requests ─────────────────────────────────────────────────────────
+
+export interface MergeRequestRepository {
+  /** P-09 */ listOpen(companyId: string): Promise<MRConflictInfo[]>;
+  /** P-12 */ create(data: MergeRequestInsert): Promise<MergeRequestRow>;
+}
+
+// ── Supporting tables (fire-and-forget inserts) ────────────────────────────
+
+export interface NotificationRepository {
+  /** P-14 */ insert(data: NotificationInsert): Promise<void>;
+}
+
+export interface AuditLogRepository {
+  /** P-14 */ insert(data: AuditLogInsert): Promise<void>;
+}
+
+export interface TicketCommentRepository {
+  /** P-14 */ insert(data: TicketCommentInsert): Promise<void>;
 }
 ```
 
 ---
 
-## 8. Performance Considerations
+## 6. Backend Implementations
 
-### Query Optimization
+### 6.1 Supabase Backend (`DATABASE_MODE=supabase`)
 
-1. **Indexes**
-   - Primary keys on `id`
-   - Foreign keys on `company_id`, `agent_id`
-   - Text search on `name` (if needed)
-   - Timestamps on `created_at`, `updated_at` (for polling)
+**Package:** `@supabase/supabase-js`  
+**Auth:** Anon key (client-side, RLS-enforced) OR Service Role key (server-side, bypasses RLS)  
+**Realtime:** Native WebSocket channel multiplexing — zero extra infrastructure required
 
-2. **Batch Operations**
-   - Use bulk INSERT instead of loop + INSERT
-   - Use bulk UPDATE (if supported) instead of loop + UPDATE
-   - Supabase: batch 1000 rows per request
+```typescript
+// src/lib/db/adapters/SupabaseAdapter.ts
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-3. **Connection Pooling**
-   - Postgres adapter: 10 connections default
-   - SQLite: single writer (inherent limit)
-   - Supabase: pooled via PostgREST
+export class SupabaseAdapter implements DatabaseAdapter {
+  private client: SupabaseClient;
 
-### Subscription Polling
+  constructor(url: string, key: string) {
+    this.client = createClient(url, key);
+  }
 
-For non-real-time adapters (Postgres, SQLite):
-- Poll every 5 seconds by default
-- Configurable poll interval
-- Background task (separate thread/worker)
-- Store last_seen timestamp per table
-- Use indexed `updated_at` column for efficiency
+  from<T>(table: string): QueryBuilder<T> {
+    // Zero translation — delegates directly to Supabase client
+    return this.client.from(table) as unknown as QueryBuilder<T>;
+  }
+
+  rpc<T>(fn: string, params?: Record<string, unknown>) {
+    return this.client.rpc(fn, params) as Promise<AdapterResult<T>>;
+  }
+
+  channel(name: string): RealtimeChannel {
+    return this.client.channel(name) as unknown as RealtimeChannel;
+  }
+
+  removeChannel(channel: RealtimeChannel) {
+    this.client.removeChannel(channel as any);
+  }
+}
+```
+
+**Two client instances exist:**
+- `src/lib/supabase.ts` — anon key, browser client, RLS enforced
+- `server/supabaseAdmin.ts` — service role key, bypasses RLS (server only)
+
+Both are wrapped by `SupabaseAdapter` with the appropriate key injected at construction time.
 
 ---
 
-## 9. Testing Strategy
+### 6.2 PostgreSQL Backend (`DATABASE_MODE=postgres`)
 
-### Unit Tests
-
-**Location:** `src/lib/adapters/__tests__/`
+**Package:** `pg` (node-postgres)  
+**Connection:** `DATABASE_URL` env var (`postgresql://user:pass@host:5432/db`)  
+**Realtime:** `LISTEN`/`NOTIFY` via dedicated `pg.Client` (separate from the Pool)
 
 ```typescript
-// src/lib/adapters/__tests__/DatabaseAdapter.test.ts
+// src/lib/db/adapters/PostgresAdapter.ts
+import { Pool } from 'pg';
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { DatabaseAdapter } from '../DatabaseAdapter';
+export class PostgresAdapter implements DatabaseAdapter {
+  private pool: Pool;
 
-describe('DatabaseAdapter Interface', () => {
-  let adapter: DatabaseAdapter;
-
-  // Test each adapter implementation separately
-  const adapters = ['supabase', 'postgres', 'sqlite'];
-
-  for (const adapterName of adapters) {
-    describe(`${adapterName} adapter`, () => {
-      beforeEach(async () => {
-        // Initialize adapter for this backend
-        adapter = createAdapter(adapterName);
-        await adapter.connect();
-      });
-
-      afterEach(async () => {
-        await adapter.disconnect();
-      });
-
-      // ── SELECT Tests ──
-      it('should SELECT all rows', async () => {
-        const result = await adapter.from('companies')
-          .select('*')
-          .execute();
-        expect(result.error).toBeNull();
-        expect(Array.isArray(result.data)).toBe(true);
-      });
-
-      it('should SELECT with WHERE filter', async () => {
-        const result = await adapter.from('agents')
-          .select('*')
-          .where('company_id', '=', 'test-company')
-          .execute();
-        expect(result.error).toBeNull();
-        expect(result.data.every(r => r.company_id === 'test-company')).toBe(true);
-      });
-
-      it('should SELECT with IN filter', async () => {
-        const result = await adapter.from('agents')
-          .select('*')
-          .where('id', 'in', ['id1', 'id2'])
-          .execute();
-        expect(result.error).toBeNull();
-      });
-
-      it('should SELECT with ORDER + LIMIT', async () => {
-        const result = await adapter.from('agents')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(10)
-          .execute();
-        expect(result.error).toBeNull();
-        expect(result.data.length).toBeLessThanOrEqual(10);
-      });
-
-      it('should SELECT single row', async () => {
-        const result = await adapter.from('companies')
-          .select('*')
-          .where('id', '=', 'test-company')
-          .single()
-          .execute();
-        expect(result.error).toBeNull();
-        expect(result.data.length).toBe(1);
-      });
-
-      // ── INSERT Tests ──
-      it('should INSERT single row', async () => {
-        const result = await adapter.from('companies')
-          .insert({ id: 'test-co-1', name: 'Test Co', budget: 10000 })
-          .returning('*')
-          .execute();
-        expect(result.error).toBeNull();
-        expect(result.data[0].name).toBe('Test Co');
-      });
-
-      it('should INSERT bulk rows', async () => {
-        const rows = [
-          { id: 'test-agent-1', company_id: 'test-co', name: 'Alice', role: 'CEO' },
-          { id: 'test-agent-2', company_id: 'test-co', name: 'Bob', role: 'PM' },
-        ];
-        const result = await adapter.from('agents')
-          .insert(rows)
-          .returning('*')
-          .execute();
-        expect(result.error).toBeNull();
-        expect(result.data.length).toBe(2);
-      });
-
-      // ── UPDATE Tests ──
-      it('should UPDATE rows', async () => {
-        await adapter.from('companies')
-          .insert({ id: 'test-co-2', name: 'Test', budget: 1000 })
-          .execute();
-
-        const result = await adapter.from('companies')
-          .update({ budget: 2000 })
-          .where('id', '=', 'test-co-2')
-          .execute();
-        expect(result.error).toBeNull();
-
-        const check = await adapter.from('companies')
-          .select('*')
-          .where('id', '=', 'test-co-2')
-          .execute();
-        expect(check.data[0].budget).toBe(2000);
-      });
-
-      // ── DELETE Tests ──
-      it('should DELETE rows', async () => {
-        await adapter.from('companies')
-          .insert({ id: 'test-co-3', name: 'Test', budget: 1000 })
-          .execute();
-
-        const result = await adapter.from('companies')
-          .delete()
-          .where('id', '=', 'test-co-3')
-          .execute();
-        expect(result.error).toBeNull();
-
-        const check = await adapter.from('companies')
-          .select('*')
-          .where('id', '=', 'test-co-3')
-          .execute();
-        expect(check.data.length).toBe(0);
-      });
-
-      // ── Transaction Tests ──
-      it('should execute transaction and commit', async () => {
-        const result = await adapter.transaction(async (tx) => {
-          await tx.from('companies')
-            .insert({ id: 'tx-co-1', name: 'TX Test', budget: 5000 })
-            .execute();
-          return 'success';
-        });
-        expect(result).toBe('success');
-
-        const check = await adapter.from('companies')
-          .select('*')
-          .where('id', '=', 'tx-co-1')
-          .execute();
-        expect(check.data[0]).toBeDefined();
-      });
-
-      it('should rollback transaction on error', async () => {
-        await adapter.from('companies')
-          .insert({ id: 'tx-co-2', name: 'TX Test 2', budget: 5000 })
-          .execute();
-
-        try {
-          await adapter.transaction(async (tx) => {
-            await tx.from('companies')
-              .update({ name: 'Updated' })
-              .where('id', '=', 'tx-co-2')
-              .execute();
-            throw new Error('Intentional error');
-          });
-        } catch (e) {
-          // Expected
-        }
-
-        const check = await adapter.from('companies')
-          .select('*')
-          .where('id', '=', 'tx-co-2')
-          .execute();
-        expect(check.data[0].name).toBe('TX Test 2'); // Not updated
-      });
-
-      // ── RPC Tests (if supported) ──
-      if (adapter.capabilities.includes('rpc')) {
-        it('should execute RPC function', async () => {
-          // Requires mock RPC function in test database
-          const result = await adapter.rpc('test_function', { param: 'value' });
-          expect(result).toBeDefined();
-        });
-      }
-
-      // ── Subscription Tests (if supported) ──
-      if (adapter.capabilities.includes('subscriptions')) {
-        it('should subscribe to table changes', async () => {
-          const changes: SubscriptionPayload[] = [];
-          const unsubscribe = adapter.subscribe('agents', ['UPDATE'], (payload) => {
-            changes.push(payload);
-          });
-
-          // Trigger an update
-          await adapter.from('agents')
-            .update({ status: 'working' })
-            .where('id', '=', 'test-agent-1')
-            .execute();
-
-          // Wait for subscription to deliver (or polling interval)
-          await new Promise(r => setTimeout(r, 1000));
-
-          expect(changes.length).toBeGreaterThan(0);
-          unsubscribe();
-        });
-      }
-    });
+  constructor(connectionString: string) {
+    this.pool = new Pool({ connectionString });
   }
-});
 
-function createAdapter(name: string): DatabaseAdapter {
-  switch (name) {
-    case 'supabase':
-      return new SupabaseAdapter({ /* test config */ });
-    case 'postgres':
-      return new PostgresAdapter({ /* test config */ });
-    case 'sqlite':
-      return new SqliteAdapter({ filename: ':memory:' });
+  from<T>(table: string): QueryBuilder<T> {
+    return new PostgresQueryBuilder<T>(this.pool, table);
+  }
+
+  async rpc<T>(fn: string, params?: Record<string, unknown>): Promise<AdapterResult<T>> {
+    // Named params → positional $N placeholders
+    const keys = Object.keys(params ?? {});
+    const values = keys.map(k => params![k]);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const sql = keys.length
+      ? `SELECT * FROM ${fn}(${placeholders})`
+      : `SELECT * FROM ${fn}()`;
+    const res = await this.pool.query(sql, values);
+    return { data: res.rows[0] ?? null, error: null };
+  }
+
+  channel(name: string): RealtimeChannel {
+    return new PostgresListenChannel(this.pool, name);
+  }
+
+  removeChannel(channel: RealtimeChannel): void {
+    (channel as PostgresListenChannel).unlisten();
+  }
+}
+```
+
+**`PostgresQueryBuilder` translation rules:**
+
+| QueryBuilder method | SQL output |
+|---------------------|-----------|
+| `.select('*')` | `SELECT *` |
+| `.select('a, b, c')` | `SELECT a, b, c` |
+| `.eq(col, val)` | `WHERE col = $N` (ANDed) |
+| `.neq(col, val)` | `WHERE col != $N` |
+| `.in(col, vals)` | `WHERE col = ANY($N)` or `WHERE col IN ($1,$2,...)` |
+| `.order(col, { ascending: true })` | `ORDER BY col ASC` |
+| `.limit(n)` | `LIMIT n` |
+| `.insert(data)` | `INSERT INTO t (...) VALUES (...) RETURNING *` |
+| `.update(data)` | `UPDATE t SET ... WHERE ... RETURNING *` |
+| `.delete()` | `DELETE FROM t WHERE ...` |
+| `.single()` | Execute + assert exactly 1 row; `status:404` if 0 |
+
+**Security rule:** All values must be bound as parameterized `$N` — NO string concatenation of user input.
+
+---
+
+### 6.3 SQLite Backend (`DATABASE_MODE=sqlite`)
+
+**Package:** `better-sqlite3` (synchronous API)  
+**File path:** `DATABASE_SQLITE_PATH` env var (default: `./dev.db`)  
+**Realtime:** `NoopRealtimeChannel` — all `.on()` and `.subscribe()` calls are no-ops; callbacks never fire  
+**Use case:** Vitest unit tests, offline local dev, CI environments without Supabase access
+
+```typescript
+// src/lib/db/adapters/SQLiteAdapter.ts
+import Database from 'better-sqlite3';
+
+export class SQLiteAdapter implements DatabaseAdapter {
+  private db: Database.Database;
+
+  constructor(path: string) {
+    this.db = new Database(path);
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('foreign_keys = ON');
+    this._initSchema(); // create tables if db file is new
+  }
+
+  from<T>(table: string): QueryBuilder<T> {
+    return new SQLiteQueryBuilder<T>(this.db, table);
+  }
+
+  async rpc<T>(fn: string, params?: Record<string, unknown>): Promise<AdapterResult<T>> {
+    // Map known RPCs to inline SQL stubs
+    const RPC_MAP: Record<string, (p: any) => any> = {
+      check_stale_agents: () =>
+        this.db.prepare(`UPDATE agents SET heartbeat_status='stale'
+          WHERE datetime(last_heartbeat) < datetime('now','-5 minutes')
+            AND heartbeat_status='alive'`).run(),
+      claim_next_ticket: (p) =>
+        this.db.prepare(`UPDATE tickets SET status='in_progress'
+          WHERE id=(SELECT id FROM tickets WHERE company_id=? AND status='approved'
+                    ORDER BY created_at LIMIT 1) RETURNING id`)
+          .get(p.p_company_id),
+    };
+    const fn_impl = RPC_MAP[fn];
+    if (!fn_impl) throw new Error(`SQLiteAdapter: RPC '${fn}' not mapped`);
+    return { data: fn_impl(params) as T ?? null, error: null };
+  }
+
+  channel(_name: string): RealtimeChannel {
+    return new NoopRealtimeChannel();
+  }
+
+  removeChannel(_channel: RealtimeChannel): void { /* no-op */ }
+
+  private _initSchema(): void {
+    // Run embedded schema DDL if tables don't exist yet
+    // DDL mirrors Migration-Spec §2 — see src/lib/db/schema.sql
+  }
+}
+```
+
+**Schema init for SQLite:**  
+On first construction, `_initSchema()` runs a bundled `schema.sql` (mirroring the Supabase schema from [[Migration-Spec]] §2). Vitest tests always start against a clean, schema-complete database at `./test.db` (overridden via `DATABASE_SQLITE_PATH=./test.db`).
+
+---
+
+## 7. `DATABASE_MODE` Environment Gate
+
+```typescript
+// src/lib/db/index.ts  (and  server/db/index.ts for server-side)
+
+let _adapter: DatabaseAdapter | null = null;
+
+export function getAdapter(): DatabaseAdapter {
+  if (_adapter) return _adapter;  // singleton — resolved once at startup
+
+  const mode = process.env.DATABASE_MODE ?? 'supabase';
+
+  switch (mode) {
+    case 'supabase': {
+      const url = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL;
+      const key = process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!url || !key) throw new Error('[db] DATABASE_MODE=supabase but SUPABASE_URL/KEY missing');
+      _adapter = new SupabaseAdapter(url, key);
+      break;
+    }
+    case 'postgres': {
+      const connStr = process.env.DATABASE_URL;
+      if (!connStr) throw new Error('[db] DATABASE_MODE=postgres but DATABASE_URL missing');
+      _adapter = new PostgresAdapter(connStr);
+      break;
+    }
+    case 'sqlite': {
+      const path = process.env.DATABASE_SQLITE_PATH ?? './dev.db';
+      _adapter = new SQLiteAdapter(path);
+      break;
+    }
     default:
-      throw new Error(`Unknown adapter: ${name}`);
+      throw new Error(`[db] Unknown DATABASE_MODE: '${mode}'. Valid: supabase | postgres | sqlite`);
   }
+
+  console.log(`[db] Adapter initialized: ${mode}`);
+  return _adapter;
 }
+
+/** Convenience — use this everywhere instead of raw adapter access */
+export const db = () => getAdapter();
+```
+
+**Environment variable matrix:**
+
+| Variable | Required when | Default | Example |
+|----------|--------------|---------|---------|
+| `DATABASE_MODE` | Always | `supabase` | `sqlite` |
+| `VITE_SUPABASE_URL` | `mode=supabase` (client) | — | `https://qdhengvarelfdtmycnti.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | `mode=supabase` (client) | — | `eyJ...` |
+| `SUPABASE_URL` | `mode=supabase` (server) | — | same URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | `mode=supabase` (server) | — | `eyJ...` (NEVER `VITE_` prefix) |
+| `DATABASE_URL` | `mode=postgres` | — | `postgresql://ceo:pass@localhost:5432/ceo` |
+| `DATABASE_SQLITE_PATH` | `mode=sqlite` | `./dev.db` | `./test.db` |
+
+---
+
+## 8. Error Handling
+
+### 8.1 `AdapterError` Type
+
+```typescript
+export interface AdapterError {
+  /** Human-readable error message — always present */
+  message: string;
+
+  /**
+   * Standardized error code:
+   * - 'PGRST116' — .single() matched 0 rows (mirrors Supabase)
+   * - '23505'    — unique constraint violation
+   * - '23503'    — foreign key violation
+   * - 'TIMEOUT'  — query exceeded timeout threshold
+   */
+  code?: string;
+
+  /**
+   * HTTP-equivalent status for client-facing error mapping:
+   * - 400 Bad Request (malformed query)
+   * - 404 Not Found (.single() with 0 rows)
+   * - 409 Conflict (unique constraint violation)
+   * - 500 Internal (unexpected adapter error)
+   */
+  status?: number;
+
+  /** Raw driver error for debugging logs */
+  cause?: unknown;
+}
+```
+
+### 8.2 Conventions
+
+```typescript
+// ✅ Always destructure and check error before data
+const { data, error } = await db().from('companies').select('*');
+if (error) throw new Error(`[companies] fetch failed: ${error.message}`);
+
+// ✅ .single() returns error when 0 rows — always guard
+const { data: ticket, error: ticketError } = await db()
+  .from('tickets').select('*').eq('id', ticketId).single();
+if (ticketError || !ticket) return { processed: false, error: 'Ticket not found' };
+
+// ✅ Fire-and-forget inserts must still be awaited (so errors surface in logs)
+await db().from('activity_log').insert({ company_id, type, message });
+
+// ❌ Never access .data without first confirming .error is null
+const { data } = await db().from('companies').select('*');
+return data; // ← unsafe: may be null when error is non-null
 ```
 
 ---
 
-## 10. Configuration & Boot
+## 9. Realtime Abstraction
 
-### Environment Variables
-
-```bash
-# Database adapter selection
-VITE_DATABASE_ADAPTER=supabase
-
-# Supabase
-VITE_SUPABASE_URL=https://qdhengvarelfdtmycnti.supabase.co
-VITE_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_KEY=...
-
-# PostgreSQL
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=ceo_simulator
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_SSL=false
-
-# SQLite
-DB_PATH=./data/ceo_simulator.db
-MIGRATIONS_PATH=./db/migrations
-```
-
-### Initialization Sequence
+### 9.1 `RealtimeChannel` Interface
 
 ```typescript
-// src/main.tsx
+// src/lib/db/RealtimeChannel.ts
 
-import { initializeDatabase } from './lib/database';
+export type PostgresChangeEvent = 'INSERT' | 'UPDATE' | 'DELETE' | '*';
 
-async function bootstrap() {
-  // Initialize database adapter
-  await initializeDatabase();
+export interface PostgresChangeFilter {
+  event: PostgresChangeEvent;
+  schema: string;
+  table: string;
+  filter?: string;  // e.g. 'company_id=eq.abc123'
+}
 
-  // Rest of app initialization
-  const root = ReactDOM.createRoot(document.getElementById('root')!);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
+export interface RealtimeChannel {
+  /**
+   * Register a listener for Postgres change events.
+   * Chainable — all .on() calls on one channel are multiplexed.
+   *
+   * Source: src/hooks/useRealtimeSync.ts — 4 listeners on one 'realtime-sync' channel
+   *   event:UPDATE table:agents
+   *   event:UPDATE table:companies
+   *   event:UPDATE table:delegations
+   *   event:DELETE table:delegations
+   */
+  on(
+    type: 'postgres_changes',
+    filter: PostgresChangeFilter,
+    callback: (payload: { new: unknown; old: unknown }) => void
+  ): this;
+
+  /** Activate subscription. Call after all .on() registrations. */
+  subscribe(): this;
+}
+
+/** SQLite / offline stub — all methods no-op, callbacks never fire */
+export class NoopRealtimeChannel implements RealtimeChannel {
+  on(_type: any, _filter: any, _cb: any): this { return this; }
+  subscribe(): this { return this; }
+}
+```
+
+### 9.2 Backend Comparison
+
+| Aspect | Supabase | PostgreSQL | SQLite |
+|--------|----------|-----------|--------|
+| Mechanism | WebSocket (multiplexed) | `LISTEN/NOTIFY` + dedicated pg.Client | No-op stub |
+| Infrastructure | None (Supabase manages) | Trigger functions + dedicated listener conn | None |
+| Latency | ~100ms | ~50ms (local) | N/A |
+| Payload shape | `{ new, old, eventType, schema, table }` | Must match via trigger | N/A |
+
+### 9.3 PostgreSQL Trigger Convention
+
+Triggers must emit `pg_notify()` with a JSON payload matching the Supabase realtime shape:
+
+```sql
+-- Example: agents table realtime trigger
+CREATE OR REPLACE FUNCTION notify_agent_change() RETURNS trigger AS $$
+BEGIN
+  PERFORM pg_notify(
+    'realtime_agents',
+    json_build_object(
+      'event',  TG_OP,
+      'schema', TG_TABLE_SCHEMA,
+      'table',  TG_TABLE_NAME,
+      'new',    row_to_json(NEW),
+      'old',    row_to_json(OLD)
+    )::text
   );
-}
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-bootstrap().catch((err) => {
-  console.error('Failed to bootstrap app:', err);
-  process.exit(1);
-});
+CREATE TRIGGER agents_realtime_trigger
+AFTER INSERT OR UPDATE OR DELETE ON agents
+FOR EACH ROW EXECUTE FUNCTION notify_agent_change();
+```
+
+Tables requiring triggers: `agents`, `companies`, `delegations`  
+(matching the three tables subscribed in `useRealtimeSync.ts`)
+
+These triggers belong in `docker/postgres/init/05-functions.sql` per [[Docker-Deployment-Spec]] §8.
+
+---
+
+## 10. Acceptance Criteria
+
+| ID | Criterion | Priority |
+|----|-----------|----------|
+| DA-01 | `DatabaseAdapter` and `QueryBuilder<T>` interfaces compile with zero TypeScript errors against `database.types.ts` | 🔴 MUST |
+| DA-02 | `SupabaseAdapter.from()` delegates directly to `@supabase/supabase-js` client with no translation layer; all 23 patterns work identically to current `src/lib/api.ts` behavior | 🔴 MUST |
+| DA-03 | All 23 call patterns catalogued in Section 4 are expressible via `QueryBuilder<T>` — no pattern requires bypassing the interface | 🔴 MUST |
+| DA-04 | `getAdapter()` calls `process.exit(1)` (or throws) with a descriptive message on startup if `DATABASE_MODE` is invalid or required env vars are missing | 🔴 MUST |
+| DA-05 | `DATABASE_MODE=sqlite`: all repository methods work; `check_stale_agents` and `claim_next_ticket` RPCs are stubbed correctly | 🔴 MUST |
+| DA-06 | `DATABASE_MODE=postgres`: `PostgresQueryBuilder` uses parameterized queries only — zero string concatenation of user-provided values | 🔴 MUST |
+| DA-07 | `.single()` returns `AdapterError` with `code:'PGRST116'` and `status:404` when 0 rows match — consistent across all 3 backends | 🔴 MUST |
+| DA-08 | `AdapterError.message` is always a non-empty string; `cause` contains the raw driver error | 🔴 MUST |
+| DA-09 | `RealtimeChannel` interface is satisfied by all 3 backends; `NoopRealtimeChannel` never throws on any method call | 🔴 MUST |
+| DA-10 | All existing Vitest tests in `src/` pass with `DATABASE_MODE=sqlite` (zero network calls, zero Supabase dependency) | 🔴 MUST |
+| DA-11 | Repository interfaces exist for all tables referenced in `src/lib/api.ts` and `server/ticketProcessor.ts` | 🟡 SHOULD |
+| DA-12 | `PostgresAdapter` uses `pg.Pool` — no per-request `Client` construction; connection pool size is configurable via `DATABASE_POOL_SIZE` env var | 🟡 SHOULD |
+| DA-13 | `SQLiteAdapter._initSchema()` runs DDL automatically on first boot if `dev.db` does not exist | 🟡 SHOULD |
+| DA-14 | PostgreSQL realtime triggers for `agents`, `companies`, `delegations` are included in `docker/postgres/init/05-functions.sql` | 🟢 NICE |
+| DA-15 | Zod insert schemas for all repositories defined in `src/lib/db/schemas/` | 🟢 NICE |
+
+---
+
+## 11. Proposed File Structure
+
+```
+src/lib/db/
+├── index.ts                    ← getAdapter() factory + db() shorthand
+├── DatabaseAdapter.ts          ← DatabaseAdapter interface
+├── QueryBuilder.ts             ← QueryBuilder<T> + AdapterResult<T>
+├── AdapterError.ts             ← AdapterError type
+├── RealtimeChannel.ts          ← RealtimeChannel + NoopRealtimeChannel
+├── schema.sql                  ← embedded DDL for SQLite init
+├── adapters/
+│   ├── SupabaseAdapter.ts      ← wraps @supabase/supabase-js
+│   ├── PostgresAdapter.ts      ← wraps pg Pool + PostgresQueryBuilder
+│   └── SQLiteAdapter.ts        ← wraps better-sqlite3 + SQLiteQueryBuilder
+├── repositories/
+│   ├── CompanyRepository.ts
+│   ├── AgentRepository.ts
+│   ├── GoalRepository.ts
+│   ├── DelegationRepository.ts
+│   ├── ActivityLogRepository.ts
+│   ├── TicketRepository.ts
+│   ├── MergeRequestRepository.ts
+│   ├── NotificationRepository.ts
+│   ├── AuditLogRepository.ts
+│   └── TicketCommentRepository.ts
+└── schemas/
+    ├── company.schema.ts
+    ├── agent.schema.ts
+    ├── ticket.schema.ts
+    └── ...
+
+server/db/
+└── index.ts                    ← server adapter init (service role key)
 ```
 
 ---
 
-## 11. Migration Path (Phase-Based Rollout)
+## 12. Open Questions
 
-### Phase 1 (Current)
-- Spec document published
-- `DatabaseAdapter` interface defined
-- `SupabaseAdapter` wrapper stub created
-
-### Phase 2 (v2)
-- Implement full `SupabaseAdapter` wrapping `@supabase/supabase-js`
-- Refactor `src/lib/api.ts` to use adapter pattern
-- All tests pass for Supabase backend
-
-### Phase 3 (v3)
-- Implement `PostgresAdapter` (direct `pg` package usage)
-- Implement `SqliteAdapter` (local development)
-- Multi-adapter testing
-- Adapter selection via environment variable
-
-### Phase 4 (v4)
-- Full documentation + examples
-- Adapter selection UI in admin settings
-- Migration tooling (dump/restore across adapters)
-- Performance profiling per adapter
+| # | Question | Owner | Status |
+|---|----------|-------|--------|
+| OQ-01 | Refactor `src/lib/api.ts` to use `db()` + repositories immediately, or defer to a dedicated migration sprint? | CEO | OPEN |
+| OQ-02 | PostgreSQL LISTEN/NOTIFY latency acceptable for the canvas simulation game loop (target: 16ms tick)? Polling fallback needed? | Tech Lead | OPEN |
+| OQ-03 | Should `SupabaseAdapter` expose the raw client for auth operations (`.auth.signIn`, etc.)? Auth is out of scope for `DatabaseAdapter` per [[Auth-System-Spec]] §3 — confirm separation. | Auth Lead | OPEN |
+| OQ-04 | `better-sqlite3` is synchronous — potential conflict with Vitest's async test runner. Consider `@databases/sqlite` (async) as alternative. | Dev | OPEN |
 
 ---
 
-## 12. Future Extensions
+## 13. Related Documents
 
-### Query Complexity Enhancements
-
-```typescript
-/**
- * Complex queries not expressible via builder.
- * Use when performance optimization needed.
- */
-interface QueryBuilder {
-  // Existing methods ...
-
-  /**
-   * Join with another table.
-   */
-  join(
-    table: string,
-    on: { leftColumn: string; rightColumn: string; type?: 'inner' | 'left' | 'right' }
-  ): QueryBuilder;
-
-  /**
-   * GROUP BY clause (with aggregation).
-   */
-  groupBy(columns: string[]): QueryBuilder;
-
-  /**
-   * HAVING clause (filter on aggregates).
-   */
-  having(condition: string): QueryBuilder;
-
-  /**
-   * DISTINCT rows.
-   */
-  distinct(): QueryBuilder;
-}
-```
-
-### Caching Layer
-
-```typescript
-/**
- * Optional query result caching.
- * Cache layer sits between adapter and caller.
- */
-export class CachedDatabaseAdapter implements DatabaseAdapter {
-  constructor(
-    private inner: DatabaseAdapter,
-    private cache: Map<string, { data: any[]; expiresAt: number }> = new Map()
-  ) {}
-
-  async from(table: string): Promise<QueryBuilder> {
-    // Cache SELECT queries for N seconds
-    // Invalidate on INSERT/UPDATE/DELETE to same table
-  }
-}
-```
-
-### Bulk Operations
-
-```typescript
-interface QueryBuilder {
-  /**
-   * Bulk update multiple rows with different values in single request.
-   * More efficient than loop + update.
-   */
-  bulkUpdate(data: Array<{ id: string; [key: string]: any }>): QueryBuilder;
-
-  /**
-   * Bulk delete multiple rows.
-   */
-  bulkDelete(ids: string[]): QueryBuilder;
-}
-```
+- [[Migration-Spec]] — canonical column-level schema for all 17 tables; `check_stale_agents` DDL
+- [[Docker-Deployment-Spec]] — Docker Compose service topology; env var Zod schema; PostgreSQL init scripts
+- [[Auth-System-Spec]] — RLS policies, JWT, `users` table (auth is separate from `DatabaseAdapter`)
+- [[Factory-Operations-Manual]] — execution pipeline, TDD requirements, token optimization
 
 ---
 
-## 13. References
-
-- [[00-Index]] — Master project index
-- [[Office-Simulator-Architecture]] — System architecture
-- [[Factory-Operations-Manual]] — Execution pipeline & SOP
-- [[Provider-Abstraction-Spec]] — Similar abstraction for LLM providers
-- `src/lib/api.ts` — Current Supabase usage patterns
-- `src/hooks/useRealtimeSync.ts` — Real-time subscription pattern
-- Supabase documentation: https://supabase.com/docs/reference/javascript
-- PostgreSQL documentation: https://www.postgresql.org/docs/
-
----
-
-## 14. Acceptance Criteria
-
-- [ ] `DatabaseAdapter` interface defined with all query operations
-- [ ] `QueryBuilder` fluent interface specified with all operators
-- [ ] `QueryResult` and related types documented
-- [ ] All Supabase patterns (select, insert, update, delete, rpc, subscriptions) mapped to adapter
-- [ ] All 3 backends (Supabase, PostgreSQL, SQLite) documented with features
-- [ ] Configuration via environment variables documented
-- [ ] Error handling strategy per backend documented
-- [ ] Transaction support documented (with rollback semantics)
-- [ ] Subscription strategy documented (WebSocket for Supabase, polling fallback)
-- [ ] Schema initialization + migration strategy documented
-- [ ] Performance considerations (indexes, batch ops, pooling)
-- [ ] Boot/initialization sequence documented
-- [ ] Unit + integration test stubs written
-- [ ] Migration path (Phase 1-4) defined
-- [ ] Linked to [[00-Index]] and related specs
-- [ ] All 40+ current Supabase call patterns mapped to adapter interface
-
----
-
-## 15. Sign-Off
-
-**Spec Version:** 1.0 (active)
-**Last Updated:** 2026-04-11
-**Author:** PM / Technical Lead
-**Status:** Ready for Phase 2 implementation (SupabaseAdapter wrapper)
-
-**Coverage:**
-- ✅ Complete mapping of all Supabase patterns in codebase
-- ✅ 3 database backends (Supabase, PostgreSQL, SQLite)
-- ✅ Realtime subscriptions architecture
-- ✅ Transaction support and error handling
-- ✅ Performance & optimization strategies
-- ✅ Testing framework
-- ✅ Phased migration path
+*Document written by Liam Chen (Project Manager) — 2026-04-12*  
+*Source patterns catalogued from: `src/lib/api.ts`, `src/hooks/useRealtimeSync.ts`, `server/ticketProcessor.ts`, `server/supabaseAdmin.ts`, `src/lib/supabase.ts`*  
+*Next review: when any new Supabase call pattern is added to the codebase*

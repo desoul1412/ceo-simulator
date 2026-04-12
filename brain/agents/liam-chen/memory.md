@@ -18,6 +18,14 @@ status: active
 - Build Tools
 
 ## Short-Term Memory
+- Both files are written. Here's the complete delivery summary:
+
+---
+
+## ✅ Database Abstraction Spec v1.0 — Delivered
+
+**File:** `brain/wiki/Database-Abstraction-Spec.md` (full rewrite from stub)  
+**Ch
 - All four files written successfully. Here's the complete delivery summary for **Task 1.1.4**:
 
 ---
@@ -122,6 +130,25 @@ The reaso
 - Inherits global rules
 
 ## Completed Tasks
+### 2026-04-12 — **** — Write `brain/wiki/Database-Abstraction-Spec.md`: Define `DatabaseAdapter` interface covering every Supabase call pattern found in the codebase (`.from().select()`, `.rpc()`, `.insert()`, `.update()`, `.delete()`, `.eq()`, `.in()`, `.order()`, `.limit()`, `.single()`). Document supported backends: Supabase, raw PostgreSQL (via `pg`), SQLite (for local dev).
+
+⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/dev-sharma, agent/raj-gupta, agent/jin-zhao. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.
+Both files are written. Here's the complete delivery summary:
+
+---
+
+## ✅ Database Abstraction Spec v1.0 — Delivered
+
+**File:** `brain/wiki/Database-Abstraction-Spec.md` (full rewrite from stub)  
+**Changelog:** `brain/changelog.md` updated
+
+---
+
+### 📋 What Was Specified
+
+#### Source Files Audited
+E
+
 ### 2026-04-12 — **Task 1.1.4**  — Create Vercel project `vnsir-com`, link GitHub repo, configure environment variable groups (`preview`, `production`). Set `vercel.json` with headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`.
 
 ⚠ CONFLICT AVOIDANCE: Other agents have open MRs on branches: agent/dev-sharma, agent/dev-sharma, agent/dev-sharma. Avoid editing files they may be working on. If you must edit shared files, coordinate via comments.

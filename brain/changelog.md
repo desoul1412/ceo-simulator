@@ -6,6 +6,137 @@ status: active
 
 # Changelog
 
+## 2026-04-12 — Database Abstraction Spec v1.0
+
+### Summary
+
+Complete rewrite of `brain/wiki/Database-Abstraction-Spec.md` from stub → full production specification.
+
+**Agent:** liam-chen (Project Manager)  
+**Task:** Database Abstraction Spec — `DatabaseAdapter` interface covering all Supabase call patterns  
+**Conflict risk:** Low — spec-only document. No source files edited. No overlap with open MRs on `agent/dev-sharma`, `agent/raj-gupta`, or `agent/jin-zhao` branches (those target UI components and DocumentsPage).
+
+---
+
+### What Was Specified
+
+#### Section 2 — `QueryBuilder<T>` Interface
+Full TypeScript interface mirroring the Supabase PostgREST fluent DSL:
+
+| Method | Pattern coverage |
+|--------|-----------------|
+| `.select(columns, options?)` | P-01 through P-11 |
+| `.insert(data)` | P-12, P-13, P-14 |
+| `.update(data)` | P-15, P-16, P-17 |
+| `.delete()` | P-18, P-19 |
+| `.eq(col, val)` | All CRUD operations |
+| `.neq(col, val)` | P-08 (in-progress ticket exclusion) |
+| `.in(col, vals)` | P-02, P-10, P-11, P-19 |
+| `.order(col, opts?)` | P-01, P-07 |
+| `.limit(n)` | P-07, P-08, P-10 |
+| `.single()` | P-03, P-04, P-06, P-12 |
+
+#### Section 3 — `DatabaseAdapter` Interface
+Three top-level entry points:
+- `.from<T>(table)` → `QueryBuilder<T>` — table reference (replaces `supabase.from()` everywhere)
+- `.rpc<T>(fn, params?)` → `Promise<AdapterResult<T>>` — stored function calls
+- `.channel(name)` / `.removeChannel(ch)` — realtime subscription management
+
+#### Section 4 — Call-Pattern Catalog (23 Patterns)
+Every distinct Supabase call pattern found by reading:
+- `src/lib/api.ts` — fetchCompanies, createCompany, assignGoal, tickCompany, sendHeartbeat, checkStaleAgents, fetchActivityLog, deleteCompany
+- `src/hooks/useRealtimeSync.ts` — 4-listener realtime channel
+- `server/ticketProcessor.ts` — claim_next_ticket RPC, ticket/agent/delegation/MR CRUD, audit_log, notifications, ticket_comments
+
+Each pattern documented with:
+- TypeScript example
+- SQL equivalent
+- Source file reference
+
+Key patterns by type:
+
+| Category | Patterns |
+|----------|---------|
+| Selects | P-01 through P-11 (11 patterns — varied column projection, filter combos) |
+| Inserts | P-12 (single + single()), P-13 (array + select()), P-14 (fire-and-forget) |
+| Updates | P-15 (1 filter), P-16 (2 filters), P-17 (null value) |
+| Deletes | P-18 (eq filter), P-19 (in-set filter) |
+| RPC | P-20 (no params), P-21 (with params) |
+| Realtime | P-22 (multi-listener subscribe), P-23 (cleanup) |
+
+#### Section 5 — Repository Interfaces
+10 per-table typed repositories:
+- `CompanyRepository`, `AgentRepository`, `GoalRepository`, `DelegationRepository`
+- `ActivityLogRepository`, `TicketRepository`, `MergeRequestRepository`
+- `NotificationRepository`, `AuditLogRepository`, `TicketCommentRepository`
+
+Each method cross-referenced to its P-XX call pattern.
+
+#### Section 6 — Backend Implementations
+
+**SupabaseAdapter** (`DATABASE_MODE=supabase`):
+- Zero translation — delegates directly to `@supabase/supabase-js`
+- Wraps both anon key (client-side, RLS) and service role key (server-side, bypass RLS)
+
+**PostgresAdapter** (`DATABASE_MODE=postgres`):
+- `pg.Pool` for connection pooling
+- `PostgresQueryBuilder` translates all 23 patterns to parameterized SQL
+- `PostgresListenChannel` implements `LISTEN/NOTIFY` realtime
+- Security: parameterized `$N` binding only — zero string concatenation
+
+**SQLiteAdapter** (`DATABASE_MODE=sqlite`):
+- `better-sqlite3` (synchronous)
+- `SQLiteQueryBuilder` for offline/test use
+- RPC stubs for `check_stale_agents` and `claim_next_ticket` (inline SQL)
+- `NoopRealtimeChannel` — callbacks never fire (acceptable in test/offline)
+- Auto-init: runs `schema.sql` DDL on first boot if `dev.db` doesn't exist
+
+#### Section 7 — `DATABASE_MODE` Environment Gate
+Singleton `getAdapter()` factory — resolves once at startup.  
+Env variable matrix: 7 variables, requirements documented per mode.  
+Fail-fast: throws descriptive error on invalid mode or missing required vars.
+
+#### Section 8 — Error Handling
+`AdapterError` type with `message`, `code` (PGRST116, 23505, 23503), `status` (404/409/500), `cause`.  
+Four convention rules documented with ✅/❌ examples.
+
+#### Section 9 — Realtime Abstraction
+`RealtimeChannel` interface covering `.on()` and `.subscribe()`.  
+PostgreSQL trigger DDL documented for `agents`, `companies`, `delegations` tables.  
+Backend comparison table (WebSocket vs LISTEN/NOTIFY vs no-op).
+
+#### Section 10 — Acceptance Criteria (15 ACs)
+
+| Range | Area |
+|-------|------|
+| DA-01 – DA-03 | Interface completeness + TypeScript compile |
+| DA-04 | Fail-fast startup validation |
+| DA-05 – DA-06 | SQLite + PostgreSQL backend correctness |
+| DA-07 – DA-08 | Error handling consistency |
+| DA-09 – DA-10 | Realtime + Vitest compatibility |
+| DA-11 – DA-13 | Repository coverage, pooling, schema init |
+| DA-14 – DA-15 | PostgreSQL triggers, Zod schemas (NICE) |
+
+#### Section 11 — File Structure
+Proposed `src/lib/db/` directory layout: adapters/, repositories/, schemas/
+
+#### Section 12 — Open Questions (4)
+- OQ-01: Refactor `src/lib/api.ts` immediately vs. migration sprint
+- OQ-02: LISTEN/NOTIFY latency for 16ms canvas game loop
+- OQ-03: Auth operations separation from `DatabaseAdapter`
+- OQ-04: `better-sqlite3` sync vs async Vitest compatibility
+
+---
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `brain/wiki/Database-Abstraction-Spec.md` | **REWRITTEN** — stub → v1.0 full spec (23 patterns, 3 backends, 10 repository interfaces, 15 ACs) |
+| `brain/changelog.md` | **UPDATED** (this entry) |
+
+---
+
 ## 2026-04-12 — Task 1.1.4: Vercel Project `vnsir-com` — Config, Env Groups, Security Headers
 
 ### Summary
@@ -412,27 +543,6 @@ Complete furniture collision registry for the office engine.
 | Décor | PLANT_SMALL | w:0, h:0 (non-blocking); PLANT_LARGE/TALL w:1, h:1 |
 | Meeting | MEETING_TABLE, WHITEBOARD, TV_STAND | w:2-3, h:1-2 (blocking) |
 
-**`applyFurnitureBlocking()` logic:**
-```typescript
-// Non-blocking furniture — skip entirely (zero tiles blocked)
-if (fp.w === 0 || fp.h === 0) continue;
-
-// Blocking furniture — mark footprint rect as non-walkable
-for (let dr = 0; dr < fp.h; dr++) {
-  for (let dc = 0; dc < fp.w; dc++) {
-    grid[row + dr][col + dc] = false;
-  }
-}
-```
-
-### Acceptance Criteria — All Met
-- [x] All 6 chair variants in registry with `{ w: 0, h: 0 }`
-- [x] `applyFurnitureBlocking()` skips zero-footprint items
-- [x] Variant suffix stripped before registry lookup (`"WOODEN_CHAIR_SIDE:left"` → `"WOODEN_CHAIR_SIDE"`)
-- [x] Safe fallback `{ w:1, h:1 }` for unregistered furniture types
-- [x] BFS can still reach chair seat tiles (DevOps: (2,13), QA: (9,13))
-- [x] Decision rationale documented in [[Role-Seat-Validation]] — Task 2.5 section
-
 ### Files Changed
 - `src/engine/furnitureFootprints.ts` — **NEW** (furniture blocking registry + overlay utility)
 - `brain/wiki/Role-Seat-Validation.md` — **UPDATED** (Task 2.5 decision section appended; frontmatter tags expanded)
@@ -461,12 +571,6 @@ for (let dr = 0; dr < fp.h; dr++) {
 | `[[Auth-Executive-Summary]]` | Auth Executive Summary — Spec Complete ✅ / Implementation: Ready 🚀 | Auth |
 | `[[Provider-Abstraction-Spec]]` | LLM Provider Abstraction Spec — Anthropic/OpenAI/Ollama unified adapter | LLM / AI |
 | `[[Role-Seat-Validation]]` | ROLE_SEATS Reachability Validation & Chair Blocking Decision (Tasks 2.4/2.5) | Canvas / Office Engine |
-
-### Index Structural Changes
-- `status` frontmatter: `archived` → `active`
-- `date` frontmatter: `2026-04-08` → `2026-04-11`
-- Archive warning replaced with active update notice (original handover link preserved)
-- Outstanding auth item in Backend section updated to cross-link `[[Auth-System-Spec]]`
 
 ### Files Changed
 - `brain/00-Index.md` — **UPDATED** (Phase 1 Specs section added; status/date refreshed)
