@@ -1,12 +1,12 @@
 ---
 tags: [index, meta]
-date: 2026-04-11
+date: 2026-04-12
 status: active
 ---
 
 # CEO Simulator — Master Index
 
-> 📝 **UPDATED 2026-04-11** — Phase 1 spec documents added. See [[changelog]] for full history.
+> 📝 **UPDATED 2026-04-12** — VNSIR Implementation Spec added (Task 1.1.1). See [[changelog]] for full history.
 > ⚠️ Previous archive notice: See [[Offboarding-Handover-Report]] for original project handover (2026-04-08).
 
 ---
@@ -29,6 +29,9 @@ status: active
 ### Canvas / Office Engine
 - [[Role-Seat-Validation]] — **ROLE_SEATS Reachability Validation & Chair Blocking Decision** — Task 2.4 / 2.5: 6-seat audit, 2 bugs fixed (DevOps, QA), chairs declared non-blocking
 
+### Frontend / Navigation
+- [[VNSIR-Implementation-Spec]] — **VNSIR Implementation Spec v1.0** — Full page inventory (14 routes), per-page acceptance criteria, data flow diagrams, user stories
+
 ---
 
 ## Architecture
@@ -41,16 +44,21 @@ status: active
 - [[Offboarding-Handover-Report]] — **FINAL HANDOVER REPORT** — all projects, status, deliverables, risks, vendor contacts
 - [[Sprint-Backlog-Archive]] — All sprint backlogs, roadmap phases, icebox items, meeting notes
 
-## Navigation (React Router — 13 routes)
+## Navigation (React Router — 14 routes) → see [[VNSIR-Implementation-Spec]]
 - [x] `<MasterDashboard />` `/` — company grid with mini pixel canvases
 - [x] `<CompanyView />` `/company/:id` — pixel office + goal panel + feeds
-- [x] `<AgentsPage />` `/company/:id/agents` — agent card grid + hire button
-- [x] `<AgentDetail />` `/company/:id/agents/:id` — individual agent config (shell)
+- [x] `<CompanyView />` `/company/:id/agents` — agent card grid + hire button (same component, agents tab)
+- [x] `<AgentDetail />` `/company/:id/agents/:id` — individual agent config + lifecycle controls
 - [x] `<GoalsPage />` `/company/:id/goals` — goal tree + delegation progress
 - [x] `<DocumentsPage />` `/company/:id/documents` — brain/ vault browser (shell)
-- [x] `<CostsPage />` `/company/:id/costs` — budget analytics
+- [x] `<CostsPage />` `/company/:id/costs` — budget analytics + token usage
 - [x] `<OrgChartPage />` `/company/:id/org-chart` — CEO → reports hierarchy
+- [x] `<ScrumBoard />` `/company/:id/board` — Kanban: Todo / In Progress / Review / Done
+- [x] `<MergeRequestsPage />` `/company/:id/merge-requests` — Git MR review + approve/reject
+- [x] `<ProjectOverview />` `/company/:id/overview` — AI plans + env vars management
+- [x] `<ProjectSettings />` `/company/:id/settings` — per-company config
 - [x] `<SettingsPage />` `/settings` — General, Skills, MCP, Rules tabs
+- [x] `<SettingsPage />` `/settings/:tab` — deep-link tab variant
 - [x] `<NavBar />` — top navigation with context-aware company tabs
 
 ## Canvas Engine (v3 — Pixel Agents-inspired) — OUTSTANDING

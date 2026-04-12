@@ -1,10 +1,99 @@
 ---
 tags: [changelog, meta]
-date: 2026-04-11
+date: 2026-04-12
 status: active
 ---
 
 # Changelog
+
+## 2026-04-12 — Task 1.1.1: VNSIR Implementation Spec v1.0
+
+### VNSIR Implementation Spec — New Document
+- **File**: `brain/wiki/VNSIR-Implementation-Spec.md` (new, active)
+- **Task**: 1.1.1
+- **Agent**: liam-chen (Project Manager)
+- **Status**: Complete spec; source of truth for all frontend pages and route-level requirements
+
+### What Was Specified
+
+**VNSIR** = **V**irtual **N**avigation **S**imulation **I**nterface **R**efactor — codename for the complete frontend page architecture of CEO Simulator v3.
+
+#### Section 1 — Overview
+- Defined scope, purpose, and relationship to [[Auth-System-Spec]], [[Migration-Spec]], [[Office-Simulator-Architecture]]
+- Auth guard injection points called out for all 14 routes
+
+#### Section 2 — Page Inventory (14 routes)
+
+Full route table sourced directly from `src/router.tsx`:
+
+| # | Route | Component |
+|---|-------|-----------|
+| P-01 | `/` | `<MasterDashboard />` |
+| P-02 | `/company/:id` | `<CompanyView />` → `<CompanyDetail />` |
+| P-03 | `/company/:id/agents` | `<CompanyView />` (agents tab) |
+| P-04 | `/company/:id/agents/:agentId` | `<AgentDetail />` |
+| P-05 | `/company/:id/goals` | `<GoalsPage />` |
+| P-06 | `/company/:id/documents` | `<DocumentsPage />` |
+| P-07 | `/company/:id/costs` | `<CostsPage />` |
+| P-08 | `/company/:id/org-chart` | `<OrgChartPage />` |
+| P-09 | `/company/:id/board` | `<ScrumBoard />` |
+| P-10 | `/company/:id/merge-requests` | `<MergeRequestsPage />` |
+| P-11 | `/company/:id/overview` | `<ProjectOverview />` |
+| P-12 | `/company/:id/settings` | `<ProjectSettings />` |
+| P-13 | `/settings` | `<SettingsPage />` |
+| P-14 | `/settings/:tab` | `<SettingsPage />` (deep-link) |
+
+#### Section 3 — Layout Shell ACs
+- `<AppLayout />`: 5 ACs covering shell stability, HUD styling, no layout shift
+- `<NavBar />`: 7 ACs covering brand, tabs, active state, routing, responsive collapse
+
+#### Section 4 — Per-Page Acceptance Criteria (83 ACs total)
+
+| Page | ACs Written |
+|------|------------|
+| MasterDashboard | MD-01 → MD-10 (10 ACs) |
+| CompanyView | CV-01 → CV-08 (8 ACs) |
+| Agents Tab | AG-01 → AG-08 (8 ACs) |
+| AgentDetail | AD-01 → AD-09 (9 ACs) |
+| GoalsPage | GL-01 → GL-09 (9 ACs) |
+| DocumentsPage | DC-01 → DC-06 (6 ACs) |
+| CostsPage | CS-01 → CS-08 (8 ACs) |
+| OrgChartPage | OC-01 → OC-07 (7 ACs) |
+| ScrumBoard | SB-01 → SB-11 (11 ACs) |
+| MergeRequestsPage | MR-01 → MR-07 (7 ACs) |
+| ProjectOverview | PO-01 → PO-10 (10 ACs) |
+| ProjectSettings | PS-01 → PS-06 (6 ACs) |
+| SettingsPage | GS-01 → GS-09 (9 ACs) |
+
+#### Section 5 — Data Flow Diagrams (7 diagrams, ASCII art)
+1. Global State Architecture (Zustand ↔ Supabase ↔ OrchestratorAPI ↔ LocalState)
+2. Master Dashboard flow (Zustand hydration → CompanyTile render → Realtime sync)
+3. CompanyView flow (PixelOfficeCanvas + GoalPanel + ActivityFeed + ApprovalPanel)
+4. ScrumBoard flow (fetchTickets → columns → approve/complete sprint)
+5. ProjectOverview flow (plans + plan comments + env vars CRUD)
+6. AgentDetail lifecycle state machine (active/paused/throttled/terminated)
+7. Auth Guard flow (JWT check → owner_id validation → Outlet or Forbidden)
+
+#### Section 6 — User Stories (11 stories across 3 sprints)
+- Sprint 1 (Page Completeness): V-01 to V-05
+- Sprint 2 (Data Integrity): V-06 to V-09
+- Sprint 3 (Auth Integration): V-10 to V-11
+
+#### Section 7 — Open Questions (4 items)
+- Q-01: DocumentsPage vault endpoint ownership (avoid editing until resolved — potential conflict with agent/dev-sharma)
+- Q-02: CompanyView / agents tab split decision
+- Q-03: Auth integration — client-side filter vs server re-query
+- Q-04: ScrumBoard drag-and-drop — v1 or stretch?
+
+### Conflict Avoidance Note
+Flagged Q-01 explicitly: `DocumentsPage.tsx` may be in agent/dev-sharma's MR scope. No edits were made to that file. Open question documented for coordination.
+
+### Files Changed
+- `brain/wiki/VNSIR-Implementation-Spec.md` — **NEW** (spec, v1.0, active)
+- `brain/00-Index.md` — **UPDATED** (VNSIR wikilink added to Phase 1 Specs; Navigation section updated from 13 → 14 routes; date updated 2026-04-11 → 2026-04-12)
+- `brain/changelog.md` — **UPDATED** (this entry)
+
+---
 
 ## 2026-04-11 — Migration Specification v1.0
 
