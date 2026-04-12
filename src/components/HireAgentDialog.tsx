@@ -123,6 +123,14 @@ const AGENT_MODELS: Record<string, AgentModel> = {
     systemPrompt: 'You are a Full-Stack Developer. Build end-to-end features with TDD-first across React 19 + Vite + Supabase. Read existing code before writing.',
     description: 'End-to-end builder — React + API + DB, TDD-first, rapid prototyping',
   },
+  'Tech Lead': {
+    role: 'Tech Lead', color: '#e11d48', model: 'opus', budget: 20,
+    skills: ['Code Review', 'Quality Engineering', 'Systematic Debugging', 'Git Worktree', 'Context7 Docs'],
+    rules: ['Review Before Merge', 'Resolve All Conflicts', 'Verify Against Plan', 'No Direct Push to Main', 'Run Tests Before Merge'],
+    mcpServers: ['Context7', 'Supabase'],
+    systemPrompt: 'You are the Tech Lead. Review merge requests from all agents, resolve git conflicts, verify code matches the implementation plan, run tests, and merge approved branches into main.',
+    description: 'MR review & merge — resolve conflicts, verify plan compliance, gate main branch',
+  },
 };
 
 interface AgentModel {

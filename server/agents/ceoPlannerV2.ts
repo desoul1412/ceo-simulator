@@ -283,6 +283,8 @@ RULES:
 - ALL QA tasks must be AUTOMATED: use Playwright for visual/E2E tests, Vitest for unit tests
 - QA visual checks = "Write Playwright test that navigates to /page, takes screenshot, asserts elements visible"
 - QA should write test files, run them via Bash, and report results — never "open browser and check"
+- At the END of each phase, include a "(Role: Tech Lead)" task: "Review and merge all agent branches from Phase N. Resolve conflicts, run tests, verify against plan, merge to main."
+- Tech Lead tasks depend on all other phase tasks completing first
 
 Also include:
 - **Testing Strategy** — unit tests (Vitest), E2E tests (Playwright), visual regression (screenshots)

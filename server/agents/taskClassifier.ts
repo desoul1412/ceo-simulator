@@ -23,8 +23,8 @@ export const MODEL_IDS: Record<ModelTier, string> = {
  * Select the optimal model for a task based on role, story points, and task description.
  */
 export function selectModel(role: string, storyPoints: number, task: string): ModelTier {
-  // CEO planning always gets the best model
-  if (role === 'CEO') return 'opus';
+  // CEO and Tech Lead always get the best model
+  if (role === 'CEO' || role === 'Tech Lead') return 'opus';
 
   // PM always uses sonnet — specs require reading codebase + structured writing
   if (role === 'PM') return 'sonnet';

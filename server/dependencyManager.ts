@@ -129,6 +129,68 @@ export async function onTicketCompleted(ticketId: string): Promise<void> {
   }
 
   console.log(`[dependency] Propagated satisfaction from ticket ${ticketId}`);
+
+  // Check if all non-Tech-Lead tickets in the sprint are done — auto-create review ticket
+  try {
+    const { data: ticket } = await supabase
+      .from('tickets')
+      .select('sprint_id, company_id')
+      .eq('id', ticketId)
+      .single();
+
+    if (ticket && (ticket as any).sprint_id) {
+      const sprintId = (ticket as any).sprint_id;
+      const companyId = (ticket as any).company_id;
+
+      // Count remaining non-completed tickets (excluding Tech Lead review tickets)
+      const { data: remaining } = await supabase
+        .from('tickets')
+        .select('id')
+        .eq('sprint_id', sprintId)
+        .not('title', 'ilike', '%Tech Lead%Review%merge%')
+        .in('status', ['approved', 'in_progress', 'open', 'awaiting_approval']);
+
+      if (remaining?.length === 0) {
+        // All work tickets done — check if a Tech Lead review ticket already exists
+        const { data: existing } = await supabase
+          .from('tickets')
+          .select('id')
+          .eq('sprint_id', sprintId)
+          .ilike('title', '%Review and merge%');
+
+        if (!existing?.length) {
+          // Find Tech Lead agent
+          const { data: techLead } = await supabase
+            .from('agents')
+            .select('id')
+            .eq('company_id', companyId)
+            .eq('role', 'Tech Lead')
+            .eq('lifecycle_status', 'active')
+            .limit(1)
+            .single();
+
+          if (techLead) {
+            await supabase.from('tickets').insert({
+              company_id: companyId,
+              sprint_id: sprintId,
+              agent_id: (techLead as any).id,
+              title: 'Review and merge all agent branches — resolve conflicts, run tests, verify against plan',
+              description: 'Review all agent branches created during this sprint. For each branch:\n1. git diff main..agent/{name} to review changes\n2. Check for merge conflicts\n3. Resolve conflicts keeping the best code\n4. Run tests (npm test)\n5. Merge to main\n6. Report summary of all merges',
+              status: 'approved',
+              board_column: 'todo',
+              dependency_status: 'ready',
+              story_points: 3,
+              priority: 1,
+            });
+            console.log(`[dependency] Auto-created Tech Lead review ticket for sprint ${sprintId.slice(0, 8)}`);
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    // Non-critical — don't block completion
+    console.warn('[dependency] Tech Lead auto-ticket check failed:', err.message);
+  }
 }
 
 /**
