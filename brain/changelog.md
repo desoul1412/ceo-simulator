@@ -1077,3 +1077,36 @@ Test Files  6 passed (6)
 
 **Verification:** No TDD circuit breaker hits. All assertions passing. Ready for Phase 2.
 
+
+## 2026-04-12 — Phase 1 Test Suite: All Tests Passing ✅ (Ines Moreau)
+
+**Task:** Task 2.4 — Run `npx vitest run` — verify all Phase 1 tests pass.
+
+**Status:** ✅ **VERIFIED — All 44 tests passing across 6 test files**
+
+**Test Results:**
+| File | Tests | Status |
+|---|---|---|
+| `src/engine/pathfinding.test.ts` | 7 tests | ✅ |
+| `src/utils/isoProjection.test.ts` | 7 tests | ✅ |
+| `src/store/dashboardStore.test.ts` | 7 tests | ✅ |
+| `server/config/env.test.ts` | 8 tests | ✅ |
+| `src/hooks/useAgentPolling.test.ts` | 8 tests | ✅ |
+| `src/components/OfficeFloorPlan.test.tsx` | 9 tests | ✅ |
+| **TOTAL** | **44 tests** | **✅ ALL PASSING** |
+
+**Runtime:** 1.82s (transform 334ms, setup 517ms, import 539ms, tests 787ms)
+
+**Coverage Areas:**
+- ✅ Pathfinding: BFS algorithm, wall navigation, shortest paths
+- ✅ ISO Projection: Office grid generation, tile sorting (painter's algorithm), desk positions
+- ✅ Dashboard Store: Company CRUD, goal assignment, delegation, offline mode
+- ✅ Environment Config: Zod validation, defaults, type coercion, schema validation
+- ✅ Agent Polling: 3-agent initialization, status tracking, position updates, grid bounds
+- ✅ Office Floor Plan: 15×15 grid rendering, cell types, sprite rendering, agent tracking
+
+**Notes:**
+- All tests in `src/` and `server/` directories pass without modification
+- No TDD circuit breaker events triggered (0/3 failures)
+- Phase 1 requirements met ✅
+
