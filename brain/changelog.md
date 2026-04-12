@@ -6,6 +6,28 @@ status: active
 
 # Changelog
 
+## 2026-04-12 — VNSIR: Task 1.1.2 — Next.js 14 Project Initialization (Jin Zhao / DevOps)
+
+**Task:** Initialize Next.js 14 project with App Router, TypeScript, Tailwind, ESLint, src-dir layout, and `@/` path alias.
+
+**Files created:**
+- `vnsir/` — new Next.js 14 project directory
+- `vnsir/src/app/layout.tsx` — root layout with App Router
+- `vnsir/src/app/page.tsx` — default home page
+- `vnsir/src/app/globals.css` — global styles (ready for Task 1.1.3 design tokens)
+- `vnsir/tsconfig.json` — path alias `@/*` → `./src/*` configured
+- `vnsir/next.config.ts`, `vnsir/postcss.config.mjs`, `vnsir/eslint.config.mjs`
+- `brain/wiki/VNSIR-Project-Setup.md` — spec doc
+
+**Scaffold command used:**
+```bash
+npx create-next-app@latest vnsir --typescript --tailwind --eslint --app --src-dir --no-git --import-alias "@/*"
+```
+
+**Verification:** `next build` — 4/4 static pages ✅, TypeScript clean ✅
+
+**Notes for Task 1.1.3:** `src/app/globals.css` is ready for VNSIR design tokens (navy palette + gold accent via `@theme` CSS-first config).
+
 ## 2026-04-11 — Backend: Centralized Env Config (`server/config/env.ts`) (Raj Gupta)
 
 **Task:** Replace scattered `process.env.X!` assertions with typed, validated config using Zod.
