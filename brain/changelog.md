@@ -28,6 +28,42 @@ status: active
 
 **Tests:** 8/8 passed ✅
 
+## 2026-04-12 — QA: Task 2.5 Manual Visual Verification (Ines Moreau)
+
+**Task:** Manual visual verification of dev server (`npm run dev`) — Phase 1 feature set.
+
+**Verification Summary:**
+
+| Check | Result | Notes |
+|---|---|---|
+| Dev server starts (`npm run dev`) | ✅ PASS | Vite v8.0.7 ready in 223ms on port 5177 |
+| HTML shell served at `/` | ✅ PASS | `<title>ceo-simulator-tmp</title>` |
+| TypeScript compiles clean | ✅ PASS | `npx tsc --noEmit` — 0 errors |
+| All 44 unit tests pass | ✅ PASS | 6 test files, 44 tests, 1.85s |
+| CSS Design Tokens (`@theme`) | ✅ PASS | `--navy-950: #0a0e1a` through `--navy-50: #f5f7fb` |
+| HUD Token System | ✅ PASS | `--hud-bg`, `--neon-cyan`, `--neon-green`, `--font-hud`, all present |
+| Design token usage in components | ✅ PASS | 123+ references to CSS vars across TSX files |
+| Router (13 routes) | ✅ PASS | All routes defined in `router.tsx` |
+| AppLayout (`NavBar` + `Outlet`) | ✅ PASS | Loading state, NavBar, Outlet structure correct |
+| NavBar (Tab navigation) | ✅ PASS | Active tab glow, `--neon-cyan` underline |
+| MasterDashboard (CompanyTile grid) | ✅ PASS | Mini canvas tiles with budget bar |
+| PixelOfficeCanvas (Canvas 2D) | ✅ PASS | `SCALE=2`, BFS pathfinding, agent walk logic |
+| OfficeFloorPlan (15×15 CSS grid) | ✅ PASS | Wall/floor/desk/kitchen/meeting zones |
+| AgentSprite (walk-cycle animation) | ✅ PASS | PNG sprite sheet, `steps(4)` CSS animation |
+| isoProjection utils (30×22 grid) | ✅ PASS | `buildOfficeGrid`, `ROLE_DESKS` all within bounds |
+| BFS pathfinding engine | ✅ PASS | `buildWalkableGrid`, `bfsPath`, wall avoidance |
+| Public assets exist | ✅ PASS | `tiles/`, `sprites/`, `characters/`, `floors/`, `walls/` |
+
+**Visual Style Audit:**
+- HUD/Sci-Fi dark theme: `background: #05080f` (hud-bg) — ✅
+- Pixel art fonts: `Share Tech Mono` + `PixelSans` — ✅
+- Neon accents: cyan `#00ffff`, green `#00ff88`, orange `#ff8800`, red `#ff2244` — ✅
+- No generic corporate UI detected — ✅
+
+**Issues Found:** None. All Phase 1 acceptance criteria are met.
+
+**Verdict: ✅ APPROVED — Ready for Phase 2**
+
 ## 2026-04-11 — Backend: Database Migration Files Created (Raj Gupta)
 
 **Agent:** Raj Gupta (Backend Developer)
