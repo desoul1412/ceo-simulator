@@ -1,6 +1,6 @@
+/* ── VNSIR Design Tokens — Tailwind CSS v4 (CSS-First via @theme) ──────────── */
 @import "tailwindcss";
 
-/* ── VNSIR Design Tokens (CSS-First via @theme) ──────────────────────────── */
 @theme {
   /* Navy Palette (VNSIR Primary) */
   --navy-50: #f5f7fb;
@@ -21,7 +21,7 @@
   --gold: #c9a84c;
 }
 
-/* ── HUD Design System Tokens ─────────────────────────────────────────────── */
+/* ── HUD Design System Tokens (Neon Theme) ─────────────────────────────────── */
 :root {
   --hud-bg:      #05080f;
   --hud-surface: #0d1117;

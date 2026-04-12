@@ -128,7 +128,6 @@ export function AgentCard({ agent, companyId, allAgents, onTicketAction }: Agent
         <AgentDetailModal
           agent={agent}
           companyId={companyId}
-          allAgents={allAgents}
           displayName={displayName}
           onClose={() => setModalOpen(false)}
           onTicketAction={onTicketAction}
@@ -141,9 +140,9 @@ export function AgentCard({ agent, companyId, allAgents, onTicketAction }: Agent
 // ── Full detail modal (activity + tickets + approvals) ──────────────────────
 
 function AgentDetailModal({
-  agent, companyId, allAgents, displayName, onClose, onTicketAction,
+  agent, companyId, displayName, onClose, onTicketAction,
 }: {
-  agent: Employee; companyId: string; allAgents: Employee[];
+  agent: Employee; companyId: string;
   displayName: string; onClose: () => void; onTicketAction?: () => void;
 }) {
   const orchestratorConnected = useDashboardStore(s => s.orchestratorConnected);
