@@ -1,6 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { supabase } from '../supabaseAdmin';
 import { buildRelevantMemoryContext } from './worker';
+import { presetRegistry } from '../presets';
 
 /**
  * CEO Planner V2: multi-phase planning with incremental tab generation.
@@ -34,7 +35,7 @@ interface PhaseConfig {
   phase: number;
   name: string;
   targetTab: TabKey;
-  prompt: (directive: string, previousOutputs: Record<string, string>) => string;
+  prompt: (directive: string, previousOutputs: Record<string, string>) => string | Promise<string>;
   tools: string[];
   maxTurns: number;
   maxBudget: number;
@@ -205,7 +206,9 @@ Reference actual code patterns found in the codebase. Include mermaid diagrams w
       phase: 5,
       name: 'Hiring Plan',
       targetTab: 'hiring_plan',
-      prompt: (directive, prev) => `You are the CEO determining the team composition.
+      prompt: async (directive: string, prev: Record<string, string>) => {
+        const hiringMenu = await presetRegistry.buildHiringMenu();
+        return `You are the CEO determining the team composition.
 
 ## Directive
 "${directive}"
@@ -214,25 +217,26 @@ Reference actual code patterns found in the codebase. Include mermaid diagrams w
 ${prev.architecture ?? ''}
 
 ## Your Task
-Define the hiring plan as a structured table. For each role:
+Define the hiring plan as a structured table. You MUST hire at most 8 agents (the company caps at 9 including you as CEO). Choose the departments most critical to this project. Each agent covers ALL skills in their department.
 
-| Role | Model | Monthly Budget | Skills | Justification |
-|------|-------|---------------|--------|---------------|
-| PM | sonnet | $15 | requirements, specs, user stories | ... |
-| Frontend | sonnet | $15 | React, TypeScript, Tailwind | ... |
-
-Available roles: PM, Frontend, Backend, DevOps, QA, Designer, Full-Stack, Marketer, Content Writer, Sales, Operations, Data Architect, Data Scientist, AI Engineer, Automation
+${hiringMenu}
 
 Available models: opus (strategic, expensive), sonnet (balanced), haiku (fast, cheap)
 
-Budget guide: opus=$25, sonnet=$15, haiku=$5
+Output format — use the department slug as the first column:
+
+| Dept Slug | Role Name | Model | Monthly Budget | Justification |
+|-----------|-----------|-------|---------------|---------------|
+| engineering | Engineering | sonnet | $15 | Builds the core product... |
+| content | Content | haiku | $8 | Creates marketing copy... |
 
 Also specify:
 - **Team Structure** — who reports to whom
 - **Communication Protocol** — how agents coordinate
 - **Priority Hiring** — which roles to hire first
 
-IMPORTANT: Output the hiring plan as a markdown table. Each row = one agent to hire.`,
+IMPORTANT: Output the hiring plan as a markdown table. Each row = one agent to hire. Use department slugs from the table above.`;
+      },
       tools: ['Read', 'Glob', 'Grep'],
       maxTurns: 10,
       maxBudget: 1.5,
@@ -539,7 +543,7 @@ async function executePlanningPhase(
   cwd: string,
   memoryContext: string = '',
 ): Promise<{ content: string; costUsd: number }> {
-  const basePrompt = phase.prompt(directive, previousOutputs);
+  const basePrompt = await phase.prompt(directive, previousOutputs);
   const prompt = memoryContext ? `${memoryContext}\n\n${basePrompt}` : basePrompt;
 
   let result = '';

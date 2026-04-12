@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { DeptRoleBrowser } from './DeptRoleBrowser';
+import type { DeptRoleWithCount } from '../store/presetStore';
 
 // Agent models with pre-designed skills, rules, and system prompts
 const AGENT_MODELS: Record<string, AgentModel> = {
@@ -157,11 +159,13 @@ export interface HireConfig {
   runtimeType?: string;
   runtimeConfig?: any;
   budgetLimit?: number;
+  deptRoleId?: string;
 }
 
 export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogProps) {
-  const [mode, setMode] = useState<'auto' | 'manual'>('auto');
+  const [mode, setMode] = useState<'auto' | 'manual' | 'dept'>('auto');
   const [role, setRole] = useState('Frontend');
+  const [selectedDept, setSelectedDept] = useState<DeptRoleWithCount | null>(null);
   const [name, setName] = useState('');
   const [customRole, setCustomRole] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -252,10 +256,10 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
 
         {/* Mode toggle */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--hud-border)' }}>
-          {(['auto', 'manual'] as const).map(m => (
+          {([['auto', '\u26A1 Quick'], ['dept', '\u25A3 Departments'], ['manual', '\u2699 Custom']] as const).map(([m, label]) => (
             <button
               key={m}
-              onClick={() => setMode(m)}
+              onClick={() => setMode(m as 'auto' | 'dept' | 'manual')}
               style={{
                 flex: 1, padding: '10px',
                 background: mode === m ? '#1b203060' : 'transparent',
@@ -265,14 +269,55 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
                 textTransform: 'uppercase', cursor: 'pointer',
               }}
             >
-              {m === 'auto' ? '\u26A1 Quick Hire' : '\u2699 Custom Hire'}
+              {label}
             </button>
           ))}
         </div>
 
         <div style={{ padding: '14px 16px' }}>
-          {/* Role selector */}
-          <div style={{ marginBottom: 14 }}>
+          {/* Department mode: browse 21 departments */}
+          {mode === 'dept' && (
+            <div>
+              <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 8 }}>
+                Select a Department ({selectedDept ? selectedDept.short_name : 'none'})
+              </div>
+              <DeptRoleBrowser
+                onSelect={(dept) => setSelectedDept(dept)}
+                selectedId={selectedDept?.id}
+              />
+              {selectedDept && (
+                <button
+                  onClick={() => {
+                    onHire({
+                      companyId,
+                      mode: 'auto',
+                      role: selectedDept.short_name,
+                      systemPrompt: selectedDept.system_prompt,
+                      skills: selectedDept.default_skills,
+                      model: selectedDept.model_tier,
+                      budgetLimit: selectedDept.default_budget,
+                      deptRoleId: selectedDept.id,
+                    });
+                  }}
+                  style={{
+                    width: '100%', padding: '10px', marginTop: 12,
+                    background: `${selectedDept.color}18`,
+                    border: `1px solid ${selectedDept.color}60`,
+                    color: selectedDept.color,
+                    fontFamily: 'var(--font-hud)',
+                    fontSize: 'var(--font-sm)',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer', letterSpacing: '0.1em',
+                  }}
+                >
+                  {'\u26A1'} Hire {selectedDept.short_name} Agent
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Role selector (auto + manual modes) */}
+          {mode !== 'dept' && <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 6 }}>Role</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {ROLES.map(r => (
@@ -294,7 +339,7 @@ export function HireAgentDialog({ companyId, onHire, onClose }: HireAgentDialogP
             <div style={{ fontSize: 'var(--font-xs)', color: '#6a7a90', marginTop: 6 }}>
               {agentModel?.description ?? 'Custom role'}
             </div>
-          </div>
+          </div>}
 
           {/* Auto mode: show agent model summary */}
           {mode === 'auto' && agentModel && (

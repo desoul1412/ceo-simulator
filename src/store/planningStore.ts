@@ -164,8 +164,9 @@ export const usePlanningStore = create<PlanningStore>((set, get) => ({
     try {
       await replanSession(sessionId, tabKey, editedTabs);
 
-      // Start polling again
+      // Start polling again (reset attempt counter to avoid premature timeout)
       stopPolling();
+      pollAttempts = 0;
       pollIntervalId = setInterval(() => {
         get().pollSession().catch(() => {});
       }, 2500);

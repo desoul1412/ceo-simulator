@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
 import {
@@ -107,15 +107,20 @@ export function ScrumBoard() {
     setDepEdges(graph.edges);
   }, [companyId]);
 
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, 15_000);
-    return () => clearInterval(iv);
-  }, [load]);
+  // Use ref to avoid interval recreation on every load callback change
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
-  const filteredTickets = tickets
+  useEffect(() => {
+    loadRef.current();
+    const iv = setInterval(() => loadRef.current(), 15_000);
+    return () => clearInterval(iv);
+  }, [companyId]);
+
+  const filteredTickets = useMemo(() => tickets
     .filter(t => selectedSprint === 'all' || t.sprint_id === selectedSprint)
-    .filter(t => selectedAgentFilter === 'all' || t.agent_id === selectedAgentFilter);
+    .filter(t => selectedAgentFilter === 'all' || t.agent_id === selectedAgentFilter),
+    [tickets, selectedSprint, selectedAgentFilter]);
 
   const columnTickets = (col: Column) => filteredTickets.filter(t => getTicketColumn(t) === col);
 

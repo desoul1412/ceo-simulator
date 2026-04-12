@@ -7,7 +7,7 @@ import { isOrchestratorOnline, assignGoalToOrchestrator } from '../lib/orchestra
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type AgentStatus = 'idle' | 'working' | 'meeting' | 'break';
-export type EmployeeRole = 'CEO' | 'PM' | 'DevOps' | 'Frontend';
+export type EmployeeRole = string;
 export type CompanyStatus = 'bootstrapping' | 'growing' | 'scaling' | 'crisis';
 
 export interface Delegation {
@@ -27,6 +27,8 @@ export interface Employee {
   color: string;
   assignedTask: string | null;
   progress: number;
+  department?: string | null;
+  deptRoleId?: string | null;
 }
 
 export interface Company {
@@ -161,6 +163,8 @@ function apiCompanyToLocal(ac: api.ApiCompany): Company {
       color: a.color,
       assignedTask: a.assignedTask,
       progress: a.progress,
+      department: a.department,
+      deptRoleId: a.deptRoleId,
     })),
     delegations: ac.delegations.map(d => ({
       id: d.id,
@@ -327,6 +331,8 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
                   color: a.color,
                   assignedTask: a.assignedTask,
                   progress: a.progress,
+                  department: (a as any).department ?? null,
+                  deptRoleId: (a as any).deptRoleId ?? null,
                 })),
                 delegations: result.delegations.map(d => ({
                   id: d.id,

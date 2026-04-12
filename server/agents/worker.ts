@@ -3,6 +3,7 @@ import { supabase } from '../supabaseAdmin';
 import { usdToUnits } from '../budgetUtils';
 import { recordTaskCompletion, extractSkills, syncMemoryToObsidian } from '../memoryManager';
 import { selectModel, selectEffort, allocateBudget, MODEL_IDS } from './taskClassifier';
+import { presetRegistry } from '../presets';
 
 // ── Selective Memory Injection ───────────────────────────────────────────────
 
@@ -146,18 +147,49 @@ export async function executeWorkerTask(
   cwd: string,
   onActivity: (message: string) => Promise<void>,
 ): Promise<WorkerResult> {
-  const systemPrompt = ROLE_PROMPTS[role] ?? ROLE_PROMPTS.Frontend;
-  const tools = ROLE_TOOLS[role] ?? ROLE_TOOLS.Frontend;
-
   // Fetch agent info for context
-  const { data: agent } = await supabase
+  const { data: agentRow } = await supabase
     .from('agents')
     .select('*')
     .eq('id', agentId)
     .single();
 
-  const agentName = (agent as any)?.name ?? role;
-  const memory = (agent as any)?.memory ?? {};
+  const agent = agentRow as {
+    name: string; role: string; memory: Record<string, any>;
+    dept_role_id: string | null; system_prompt: string | null;
+  } | null;
+  const agentName = agent?.name ?? role;
+  const memory = agent?.memory ?? {};
+  const deptRoleId = agent?.dept_role_id ?? null;
+
+  // Resolve system prompt + tools: preset-aware with legacy fallback
+  let systemPrompt: string;
+  let tools: string[];
+  let skillContext = '';
+
+  if (deptRoleId) {
+    // Layer 1: Use department role config
+    const deptRole = await presetRegistry.getDeptRole(deptRoleId);
+    if (deptRole) {
+      systemPrompt = agent?.system_prompt || deptRole.system_prompt;
+      // Map tool_access tier to tool lists
+      const TOOL_TIERS: Record<string, string[]> = {
+        core: ['Read', 'Write', 'Glob', 'Grep'],
+        standard: ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep'],
+        full: ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'NotebookEdit'],
+      };
+      tools = TOOL_TIERS[deptRole.tool_access] ?? TOOL_TIERS.core;
+      // Layer 2: Inject matched skills as context
+      skillContext = await presetRegistry.buildSkillContext(deptRoleId, task);
+    } else {
+      systemPrompt = ROLE_PROMPTS[role] ?? ROLE_PROMPTS.Frontend;
+      tools = ROLE_TOOLS[role] ?? ROLE_TOOLS.Frontend;
+    }
+  } else {
+    // Legacy fallback: hardcoded role prompts
+    systemPrompt = ROLE_PROMPTS[role] ?? ROLE_PROMPTS.Frontend;
+    tools = ROLE_TOOLS[role] ?? ROLE_TOOLS.Frontend;
+  }
 
   const memoryContext = buildRelevantMemoryContext(memory, task);
 
@@ -191,7 +223,7 @@ export async function executeWorkerTask(
   let sessionId = '';
 
   const q = query({
-    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}Your task:\n\n${task}\n\nWork in the project directory. Read relevant files first to understand the codebase, then make your changes. Be thorough but focused.`,
+    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}${skillContext ? skillContext + '\n\n' : ''}Your task:\n\n${task}\n\nWork in the project directory. Read relevant files first to understand the codebase, then make your changes. Be thorough but focused.`,
     options: {
       cwd,
       systemPrompt: systemPrompt,

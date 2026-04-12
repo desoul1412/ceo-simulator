@@ -17,15 +17,25 @@ export const MODEL_IDS: Record<Model, string> = {
 
 /**
  * Select the optimal model for a task based on role, story points, and task description.
+ * Supports preset-based model tier override via optional deptModelTier parameter.
  */
-export function selectModel(role: string, storyPoints: number, task: string): Model {
-  // CEO planning always gets the best model
-  if (role === 'CEO') return 'opus';
+export function selectModel(role: string, storyPoints: number, task: string, deptModelTier?: Model): Model {
+  // CEO and Tech Lead always get the best model
+  if (role === 'CEO' || role === 'Tech Lead') return 'opus';
 
   // PM always uses sonnet — specs require reading codebase + structured writing
   if (role === 'PM') return 'sonnet';
 
-  // Simple read-only tasks: haiku (QA triage, Designer review)
+  // If a department role specifies a model tier, use it as the base
+  if (deptModelTier) {
+    // Still allow complexity-based upgrade: haiku -> sonnet for complex tasks
+    if (deptModelTier === 'haiku' && (storyPoints > 3 || COMPLEX_KEYWORDS.test(task))) {
+      return 'sonnet';
+    }
+    return deptModelTier;
+  }
+
+  // QA/Designer: only haiku for truly read-only tasks; sonnet if writing files
   if (storyPoints <= 2 && (role === 'QA' || role === 'Designer')) {
     return 'haiku';
   }

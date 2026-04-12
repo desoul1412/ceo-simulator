@@ -9,6 +9,7 @@ import { startHeartbeatDaemon, stopHeartbeatDaemon, isDaemonRunning } from './he
 import { listWorktrees } from './worktreeManager';
 import { getCompanyCwd, ensureRepo, syncRepo, listRepos } from './repoManager';
 import { supabase } from './supabaseAdmin';
+import { presetRegistry } from './presets';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -2390,6 +2391,13 @@ const server = app.listen(PORT, () => {
       if (error) console.warn('[startup] Failed to reset agents:', error.message);
       else console.log('  Stale agents: ● reset');
     });
+
+  // Seed department roles + skills (idempotent — only runs if table is empty)
+  presetRegistry.seed().then(() => {
+    console.log('  Presets: ● seeded');
+  }).catch(err => {
+    console.warn('[startup] Failed to seed presets:', err.message);
+  });
 
   // Auto-start heartbeat daemon
   startHeartbeatDaemon(process.cwd());

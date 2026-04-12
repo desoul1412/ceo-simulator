@@ -28,6 +28,8 @@ export interface ApiAgent {
   spriteIndex: number;
   reportsTo: string | null;
   monthlyCost: number;
+  department: string | null;
+  deptRoleId: string | null;
 }
 
 export interface ApiDelegation {
@@ -57,6 +59,8 @@ function mapAgent(row: AgentRow): ApiAgent {
     spriteIndex: row.sprite_index,
     reportsTo: row.reports_to,
     monthlyCost: row.monthly_cost,
+    department: row.department ?? null,
+    deptRoleId: row.dept_role_id ?? null,
   };
 }
 
