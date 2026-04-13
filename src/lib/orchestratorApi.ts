@@ -493,3 +493,84 @@ export async function updateTicketColumn(ticketId: string, column: string) {
   });
   return res.json();
 }
+
+// ── LLM Providers & Models ─────────────────────────────────────────────────
+
+export async function fetchLLMProviders() {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createLLMProvider(data: { slug: string; name: string; provider_type: string; config?: any }) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateLLMProvider(id: string, updates: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
+export async function deleteLLMProvider(id: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers/${id}`, { method: 'DELETE' });
+  return res.ok;
+}
+
+export async function fetchLLMModels(providerId?: string) {
+  const params = providerId ? `?provider_id=${providerId}` : '';
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models${params}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createLLMModel(data: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateLLMModel(id: string, updates: any) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
+export async function deleteLLMModel(id: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models/${id}`, { method: 'DELETE' });
+  return res.ok;
+}
+
+// ── LLM Routing ────────────────────────────────────────────────────────────
+
+export async function fetchGlobalRouting() {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/global`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function setGlobalRouting(models: { model_id: string; priority: number }[]) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/global`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ models }),
+  });
+  return res.json();
+}
+
+export async function fetchAgentRouting(agentId: string) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/agent/${agentId}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function setAgentRouting(agentId: string, models: { model_id: string; priority: number }[]) {
+  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/agent/${agentId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ models }),
+  });
+  return res.json();
+}

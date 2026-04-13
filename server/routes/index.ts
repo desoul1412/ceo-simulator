@@ -17,6 +17,7 @@ import daemon from './daemon';
 import providers from './providers';
 import marketplace from './marketplace';
 import presets from './presets';
+import { llmRouter } from './llm';
 import misc from './misc';
 
 const router = Router();
@@ -43,6 +44,7 @@ router.use(daemon);
 router.use(providers);
 router.use(marketplace);
 router.use(presets);
+router.use('/llm', llmRouter);
 router.use(misc);
 
 export default router;
