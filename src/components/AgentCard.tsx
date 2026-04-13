@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { fetchTickets, approveTicket, updateTicket, fireAgent, updateAgent, updateAgentLifecycle } from '../lib/orchestratorApi';
+import { useEffect, useState, useCallback } from 'react';
+import { fetchTickets, approveTicket, updateTicket, fireAgent, updateAgent, updateAgentLifecycle, fetchAgentRouting, setAgentRouting, fetchLLMModels } from '../lib/orchestratorApi';
 import { fetchActivityLog } from '../lib/api';
 import { useDashboardStore } from '../store/dashboardStore';
 import { usePlanningStore } from '../store/planningStore';
@@ -168,6 +168,22 @@ function AgentDetailModal({
 
   // Agent config editing
   const [showConfig, setShowConfig] = useState(false);
+  const [showRouting, setShowRouting] = useState(false);
+  const [routingChain, setRoutingChain] = useState<any[]>([]);
+  const [allModels, setAllModels] = useState<any[]>([]);
+
+  // Load routing chain for this agent
+  const loadRouting = useCallback(async () => {
+    if (!orchestratorConnected) return;
+    const [chain, models] = await Promise.all([
+      fetchAgentRouting(agent.id).catch(() => []),
+      fetchLLMModels().catch(() => []),
+    ]);
+    setRoutingChain(chain);
+    setAllModels(models);
+  }, [agent.id, orchestratorConnected]);
+
+  useEffect(() => { if (showRouting) loadRouting(); }, [showRouting, loadRouting]);
   const [cfgName, setCfgName] = useState(agent.name ?? '');
   const [cfgRole, setCfgRole] = useState<string>(agent.role);
   const [cfgBudget, setCfgBudget] = useState((agent as any).budgetLimit ?? 10);
@@ -331,6 +347,9 @@ function AgentDetailModal({
           <button onClick={() => setShowConfig(!showConfig)} style={actionBtnStyle(showConfig ? '#00ffff' : '#4a5568')}>
             {showConfig ? '▲ Config' : '▼ Config'}
           </button>
+          <button onClick={() => setShowRouting(!showRouting)} style={actionBtnStyle(showRouting ? '#c084fc' : '#4a5568')}>
+            {showRouting ? '▲ Routing' : '▼ Routing'}
+          </button>
           {agent.status !== 'working' && (
             <>
               {(agent as any).lifecycleStatus !== 'paused' ? (
@@ -388,6 +407,68 @@ function AgentDetailModal({
                 style={actionBtnStyle('#00ff88')}>
                 {cfgSaving ? 'Saving...' : 'Save Config'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Model Routing panel */}
+        {showRouting && (
+          <div style={{
+            padding: '10px 16px', borderBottom: '1px solid var(--hud-border)',
+            background: '#060910', flexShrink: 0, maxHeight: 200, overflowY: 'auto',
+          }}>
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--neon-purple)', textTransform: 'uppercase', marginBottom: 6 }}>
+              Model Routing (priority order)
+            </div>
+            {routingChain.length === 0 ? (
+              <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', fontStyle: 'italic', marginBottom: 6 }}>
+                Using global default. Add models below to override.
+              </div>
+            ) : routingChain.map((r: any, idx: number) => {
+              const m = r.model ?? allModels.find((mm: any) => mm.id === r.model_id);
+              if (!m) return null;
+              return (
+                <div key={r.id ?? idx} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0',
+                  borderBottom: '1px solid #0a0e14', fontSize: 'var(--font-xs)',
+                }}>
+                  <span style={{ color: '#4a5568', width: 16 }}>#{idx + 1}</span>
+                  <span style={{ color: 'var(--hud-text-h)', flex: 1 }}>{m.name}</span>
+                  <span style={{ color: m.provider?.provider_type === 'sdk' ? '#00ff88' : '#ff8800', fontSize: 10 }}>
+                    {m.provider?.provider_type === 'sdk' ? 'SDK' : 'HTTP'}
+                  </span>
+                  <button onClick={async () => {
+                    const arr = routingChain.filter((_: any, i: number) => i !== idx);
+                    await setAgentRouting(agent.id, arr.map((rr: any, i: number) => ({ model_id: rr.model_id ?? rr.model?.id, priority: i })));
+                    loadRouting();
+                  }} style={actionBtnStyle('#ff2244')}>×</button>
+                </div>
+              );
+            })}
+            {/* Add model */}
+            <div style={{ marginTop: 6 }}>
+              <select
+                onChange={async (e) => {
+                  const modelId = e.target.value;
+                  if (!modelId) return;
+                  const updated = [...routingChain.map((r: any, i: number) => ({ model_id: r.model_id ?? r.model?.id, priority: i })), { model_id: modelId, priority: routingChain.length }];
+                  await setAgentRouting(agent.id, updated);
+                  loadRouting();
+                  e.target.value = '';
+                }}
+                style={{
+                  width: '100%', background: '#05080f', border: '1px solid #1b2030',
+                  color: '#6a7a90', fontFamily: 'var(--font-hud)', fontSize: 'var(--font-xs)', padding: '4px 6px',
+                }}
+              >
+                <option value="">+ Add model to routing...</option>
+                {allModels
+                  .filter((m: any) => !routingChain.some((r: any) => (r.model_id ?? r.model?.id) === m.id))
+                  .map((m: any) => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.provider?.name ?? '?'}) — {m.tier}</option>
+                  ))
+                }
+              </select>
             </div>
           </div>
         )}

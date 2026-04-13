@@ -1823,6 +1823,24 @@ app.post('/api/brain/search', async (req, res) => {
   }
 });
 
+// ── Shared Configs ──────────────────────────────────────────────────────────
+
+app.get('/api/shared-configs/:key', async (req, res) => {
+  const { data, error } = await supabase.from('shared_configs')
+    .select('*').eq('key', req.params.key).single();
+  if (error) return res.status(404).json({ error: 'Not found' });
+  res.json(data);
+});
+
+app.put('/api/shared-configs/:key', async (req, res) => {
+  const { content } = req.body;
+  const { data, error } = await supabase.from('shared_configs')
+    .upsert({ key: req.params.key, content: content ?? '', updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    .select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // ── Notifications ───────────────────────────────────────────────────────────
 
 app.get('/api/notifications', async (_req, res) => {
@@ -2469,6 +2487,51 @@ const server = app.listen(PORT, () => {
   }).catch(err => {
     console.warn('[startup] Failed to seed presets:', err.message);
   });
+
+  // Sync brain documents from Supabase → local (if BRAIN_SYNC_ENABLED=true)
+  import('./brainSync').then(({ syncFromSupabase }) => {
+    syncFromSupabase().then(count => {
+      if (count > 0) console.log(`  Brain sync: ● ${count} docs synced to local`);
+      else console.log('  Brain sync: ○ local mirror disabled (PG primary)');
+    });
+  }).catch(() => {});
+
+  // Sync MCP configs from shared_configs → local .claude/settings.json
+  supabase.from('shared_configs').select('key, content').eq('key', 'mcp_servers').single()
+    .then(({ data }) => {
+      if (data && (data as any).content) {
+        try {
+          const mcpConfig = JSON.parse((data as any).content);
+          const settingsPath = path.join(process.cwd(), '.claude', 'settings.json');
+          // Read existing settings, merge MCP servers
+          let existing: any = {};
+          try { existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch { /* no existing */ }
+          existing.mcpServers = { ...(existing.mcpServers ?? {}), ...mcpConfig };
+          fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+          fs.writeFileSync(settingsPath, JSON.stringify(existing, null, 2), 'utf8');
+          console.log(`  MCP sync: ● ${Object.keys(mcpConfig).length} server(s) from Supabase`);
+        } catch (err: any) {
+          console.warn('  MCP sync: ○ parse error:', err.message);
+        }
+      } else {
+        console.log('  MCP sync: ○ no shared config (use Settings to add)');
+      }
+    }).catch(() => {});
+
+  // Auto-clone missing company repos
+  supabase.from('companies').select('id, repo_url, repo_status').not('repo_url', 'is', null)
+    .then(({ data }) => {
+      const companies = (data ?? []) as any[];
+      const toClone = companies.filter(c => c.repo_url && c.repo_status !== 'cloned');
+      if (toClone.length > 0) {
+        console.log(`  Repos: ${toClone.length} to sync`);
+        for (const c of toClone) {
+          ensureRepo(c.id).catch(err => console.warn(`  Repo ${c.id.slice(0,8)}: ${err.message}`));
+        }
+      } else {
+        console.log(`  Repos: ● ${companies.length} connected`);
+      }
+    }).catch(() => {});
 
   // Auto-start heartbeat daemon
   startHeartbeatDaemon(process.cwd());
