@@ -25,15 +25,13 @@ export function registerAdapter(slug: string, adapter: LLMAdapter): void {
   adapters.set(slug, adapter);
 }
 
-/** Get adapter for a provider */
-async function getAdapter(model: LLMModel): Promise<LLMAdapter | null> {
-  // Ensure model has provider loaded
-  if (!model.provider && model.provider_id) {
-    model.provider = (await getProviderById(model.provider_id)) ?? undefined;
-  }
-  const providerSlug = model.provider?.slug;
-  if (!providerSlug) return null;
-  return adapters.get(providerSlug) ?? null;
+/** Get adapter for a provider (does NOT mutate the model object) */
+async function getAdapter(model: LLMModel): Promise<{ adapter: LLMAdapter; provider: LLMProvider } | null> {
+  const provider = model.provider ?? (model.provider_id ? await getProviderById(model.provider_id) ?? undefined : undefined);
+  if (!provider) return null;
+  const adapter = adapters.get(provider.slug);
+  if (!adapter) return null;
+  return { adapter, provider };
 }
 
 /**
@@ -50,8 +48,9 @@ export async function routeAndExecute(
   companyId: string | null,
   request: LLMRequest,
   context: { role: string; task: string },
+  preloadedChain?: LLMModel[],
 ): Promise<LLMResponse> {
-  const chain = await getRoutingChain(agentId, companyId);
+  const chain = preloadedChain ?? await getRoutingChain(agentId, companyId);
 
   if (chain.length === 0) {
     throw new Error('[llm-router] No routing chain configured. Run the 013_llm_providers.sql migration and seed defaults.');
@@ -60,40 +59,34 @@ export async function routeAndExecute(
   const needsFs = requiresFilesystem(context.role, context.task);
 
   // Filter chain: if task needs filesystem, only SDK providers
-  const eligible = chain.filter(m => {
-    if (!needsFs) return true;
-    return m.provider?.provider_type === 'sdk';
-  });
+  const sdkOnly = (m: LLMModel) => m.provider?.provider_type === 'sdk';
+  let eligible = needsFs ? chain.filter(sdkOnly) : chain;
 
   if (eligible.length === 0) {
-    // Fallback: if no eligible models but chain exists, try SDK models from full chain
-    const sdkModels = chain.filter(m => m.provider?.provider_type === 'sdk');
-    if (sdkModels.length > 0) {
-      eligible.push(...sdkModels);
-    } else {
+    if (needsFs) {
       throw new Error(`[llm-router] Task requires filesystem access (role: ${context.role}) but no SDK providers in routing chain.`);
     }
+    throw new Error('[llm-router] Routing chain is empty after filtering.');
   }
 
   const errors: string[] = [];
 
   for (const model of eligible) {
-    const adapter = await getAdapter(model);
-    if (!adapter) {
+    const resolved = await getAdapter(model);
+    if (!resolved) {
       errors.push(`No adapter for provider: ${model.provider?.slug ?? 'unknown'}`);
       continue;
     }
 
     try {
-      console.log(`[llm-router] Trying ${model.name} (${model.provider?.slug}) for "${context.task.slice(0, 50)}..."`);
-      const response = await adapter.execute(model, request);
+      console.log(`[llm-router] Trying ${model.name} (${resolved.provider.slug}) for "${context.task.slice(0, 50)}..."`);
+      const response = await resolved.adapter.execute(model, request);
       console.log(`[llm-router] Success: ${model.name} — $${response.costUsd.toFixed(4)}`);
       return response;
     } catch (err: any) {
-      const errMsg = `${model.name} (${model.provider?.slug}): ${err.message}`;
+      const errMsg = `${model.name} (${resolved.provider.slug}): ${err.message}`;
       console.warn(`[llm-router] Failed: ${errMsg}`);
       errors.push(errMsg);
-      // Continue to next model in chain
     }
   }
 

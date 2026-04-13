@@ -3,15 +3,14 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { PixelOfficeCanvas } from './PixelOfficeCanvas';
 import type { Company } from '../store/dashboardStore';
 import * as api from '../lib/api';
-import { DAILY_BUDGET_CAP, WEEKLY_BUDGET_CAP, calcUsage } from '../lib/budgetConfig';
+import { calcUsage } from '../lib/budgetConfig';
 import { isOnline } from '../lib/supabase';
 
 function CompanyTile({ company }: { company: Company }) {
   const navigate = useNavigate();
   const activeAgents = company.employees.filter(e => e.status === 'working' || e.status === 'meeting').length;
   const isWorking = activeAgents > 0;
-  const { dailyPct, weeklyPct: weeklyPctTile } = calcUsage(company.budgetSpent);
-  const budgetColor = dailyPct < 50 ? '#00ff88' : dailyPct < 80 ? '#ff8800' : '#ff2244';
+  const { dailyPct, weeklyPct: weeklyPctTile, barColor: budgetColor } = calcUsage(company.budgetSpent);
 
   return (
     <div
@@ -235,7 +234,7 @@ export function MasterDashboard() {
   const totalAgents = companies.reduce((s, c) => s + c.employees.length, 0);
   const activeAgents = companies.reduce((s, c) => s + c.employees.filter(e => e.status === 'working' || e.status === 'meeting').length, 0);
   const totalSpentUsd = companies.reduce((s, c) => s + c.budgetSpent, 0);
-  const { weeklyPct } = calcUsage(totalSpentUsd);
+  const { weeklyPct, barColor: weeklyBarColor } = calcUsage(totalSpentUsd);
 
   return (
     <div style={{ padding: 'var(--pad)', height: '100%', overflow: 'auto' }}>
@@ -259,7 +258,7 @@ export function MasterDashboard() {
         </div>
         <div>
           <span style={{ color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Weekly</span>
-          <span style={{ color: weeklyPct < 50 ? '#00ff88' : weeklyPct < 80 ? '#ff8800' : '#ff2244' }}>{weeklyPct}%</span>
+          <span style={{ color: weeklyBarColor }}>{weeklyPct}%</span>
         </div>
         {orchestratorConnected && (
           <div style={{ marginLeft: 'auto', color: '#c084fc' }}>

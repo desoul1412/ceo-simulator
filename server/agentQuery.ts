@@ -21,6 +21,8 @@ import { supabase } from './supabaseAdmin';
 import { sendMessage } from './agentMessenger';
 import { searchBrain } from './brainSearch';
 import { loadMemory } from './memoryManager';
+import { routeAndExecute } from './llm/router';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 
 interface QueryResult {
   response: string;
@@ -85,7 +87,6 @@ ${brainContext ? `\nRelevant documents:\n${brainContext}` : ''}`;
   let tokens = 0;
 
   try {
-    const { routeAndExecute } = await import('./llm/router');
     const result = await routeAndExecute(target.id, companyId, {
       systemPrompt,
       userPrompt: question,
@@ -101,7 +102,6 @@ ${brainContext ? `\nRelevant documents:\n${brainContext}` : ''}`;
   } catch {
     // Fallback: use Claude SDK directly with haiku
     try {
-      const { query } = await import('@anthropic-ai/claude-agent-sdk');
       const q = query({
         prompt: question,
         options: {

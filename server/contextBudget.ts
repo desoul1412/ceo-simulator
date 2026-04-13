@@ -71,12 +71,14 @@ function deduplicateSections(sections: ContextSection[]): ContextSection[] {
       // Check if this line (or a close match) was seen before
       if (seenSentences.has(normalized)) continue;
 
-      // Check for substring containment (fuzzy dedup)
+      // Check for substring containment (fuzzy dedup) — capped to avoid O(n*m) on large contexts
       let isDuplicate = false;
-      for (const seen of seenSentences) {
-        if (seen.includes(normalized) || normalized.includes(seen)) {
-          isDuplicate = true;
-          break;
+      if (seenSentences.size < 300) {
+        for (const seen of seenSentences) {
+          if (seen.includes(normalized) || normalized.includes(seen)) {
+            isDuplicate = true;
+            break;
+          }
         }
       }
       if (isDuplicate) continue;

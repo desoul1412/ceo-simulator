@@ -97,14 +97,14 @@ llmRouter.get('/routing/global', async (_req, res) => {
 llmRouter.put('/routing/global', async (req, res) => {
   const { models } = req.body; // [{ model_id, priority }]
   if (!Array.isArray(models)) return res.status(400).json({ error: 'models array required' });
-  // Delete existing global routing
-  await supabase.from('agent_model_routing').delete().is('agent_id', null).is('company_id', null);
-  // Insert new
+  const { error: delErr } = await supabase.from('agent_model_routing').delete().is('agent_id', null).is('company_id', null);
+  if (delErr) return res.status(500).json({ error: delErr.message });
   if (models.length > 0) {
     const rows = models.map((m: any, i: number) => ({
       agent_id: null, company_id: null, model_id: m.model_id, priority: m.priority ?? i,
     }));
-    await supabase.from('agent_model_routing').insert(rows);
+    const { error: insErr } = await supabase.from('agent_model_routing').insert(rows);
+    if (insErr) return res.status(500).json({ error: insErr.message });
   }
   invalidateCache();
   res.json({ success: true });
@@ -123,12 +123,14 @@ llmRouter.get('/routing/company/:companyId', async (req, res) => {
 llmRouter.put('/routing/company/:companyId', async (req, res) => {
   const { models } = req.body;
   if (!Array.isArray(models)) return res.status(400).json({ error: 'models array required' });
-  await supabase.from('agent_model_routing').delete().is('agent_id', null).eq('company_id', req.params.companyId);
+  const { error: delErr } = await supabase.from('agent_model_routing').delete().is('agent_id', null).eq('company_id', req.params.companyId);
+  if (delErr) return res.status(500).json({ error: delErr.message });
   if (models.length > 0) {
     const rows = models.map((m: any, i: number) => ({
       agent_id: null, company_id: req.params.companyId, model_id: m.model_id, priority: m.priority ?? i,
     }));
-    await supabase.from('agent_model_routing').insert(rows);
+    const { error: insErr } = await supabase.from('agent_model_routing').insert(rows);
+    if (insErr) return res.status(500).json({ error: insErr.message });
   }
   invalidateCache();
   res.json({ success: true });
@@ -147,12 +149,14 @@ llmRouter.get('/routing/agent/:agentId', async (req, res) => {
 llmRouter.put('/routing/agent/:agentId', async (req, res) => {
   const { models } = req.body;
   if (!Array.isArray(models)) return res.status(400).json({ error: 'models array required' });
-  await supabase.from('agent_model_routing').delete().eq('agent_id', req.params.agentId);
+  const { error: delErr } = await supabase.from('agent_model_routing').delete().eq('agent_id', req.params.agentId);
+  if (delErr) return res.status(500).json({ error: delErr.message });
   if (models.length > 0) {
     const rows = models.map((m: any, i: number) => ({
       agent_id: req.params.agentId, company_id: null, model_id: m.model_id, priority: m.priority ?? i,
     }));
-    await supabase.from('agent_model_routing').insert(rows);
+    const { error: insErr } = await supabase.from('agent_model_routing').insert(rows);
+    if (insErr) return res.status(500).json({ error: insErr.message });
   }
   invalidateCache();
   res.json({ success: true });

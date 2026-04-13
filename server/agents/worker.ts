@@ -188,12 +188,14 @@ export async function executeWorkerTask(
   let systemPrompt: string;
   let tools: string[];
   let skillContext = '';
+  let deptModelTier: 'haiku' | 'sonnet' | 'opus' | undefined;
 
   if (deptRoleId) {
     // Layer 1: Use department role config
     const deptRole = await presetRegistry.getDeptRole(deptRoleId);
     if (deptRole) {
       systemPrompt = agent?.system_prompt || deptRole.system_prompt;
+      deptModelTier = (deptRole as any).model_tier;
       // Map tool_access tier to tool lists
       const TOOL_TIERS: Record<string, string[]> = {
         core: ['Read', 'Write', 'Glob', 'Grep'],
@@ -235,33 +237,19 @@ export async function executeWorkerTask(
   const remainingBudget = ((company as any)?.budget ?? 100000) - ((company as any)?.budget_spent ?? 0);
   const storyPoints = 3; // default for worker tasks (no SP context here)
 
-  // Resolve department model tier if agent has a preset role
-  let deptModelTier: 'haiku' | 'sonnet' | 'opus' | undefined;
-  if (deptRoleId) {
-    const { data: deptRole } = await supabase
-      .from('department_roles').select('model_tier').eq('id', deptRoleId).single();
-    if (deptRole) deptModelTier = (deptRole as any).model_tier;
-  }
-
   const model = selectModel(role, storyPoints, task, deptModelTier);
   const effort = selectEffort(role, storyPoints, task);
   const maxBudget = allocateBudget(role, storyPoints, remainingBudget);
 
-  // Semantic memory: search brain for relevant past work
-  let brainMemory = '';
-  try {
-    const { buildMemoryContext } = await import('../brainSearch');
-    brainMemory = await buildMemoryContext(task, companyId, agentId);
-  } catch { /* brain search not available */ }
-
-  // Upstream agent messages (from dependency chain)
-  let agentMessages = '';
-  try {
-    const unread = await getUnreadMessages(agentId);
-    if (unread.length > 0) {
-      agentMessages = await injectMessagesIntoContext(agentId, '');
-    }
-  } catch { /* messenger not available */ }
+  // Fetch brain memory + agent messages in parallel
+  const [brainMemory, agentMessages] = await Promise.all([
+    import('../brainSearch')
+      .then(m => m.buildMemoryContext(task, companyId, agentId))
+      .catch(() => ''),
+    getUnreadMessages(agentId)
+      .then(unread => unread.length > 0 ? injectMessagesIntoContext(agentId, '') : '')
+      .catch(() => ''),
+  ]);
 
   // Build budget-controlled context (deduped, capped at ~4000 tokens)
   const budgetedPrompt = buildBudgetedContext({

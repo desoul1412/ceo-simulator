@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  fetchLLMProviders, createLLMProvider, updateLLMProvider, deleteLLMProvider,
+  fetchLLMProviders, createLLMProvider, deleteLLMProvider,
   fetchLLMModels, createLLMModel, updateLLMModel, deleteLLMModel,
   fetchGlobalRouting, setGlobalRouting,
 } from '../lib/orchestratorApi';

@@ -97,7 +97,7 @@ export async function executeAgent(ctx: AgentContext): Promise<AgentRunResult> {
       }, {
         role: ctx.role,
         task: ctx.task,
-      });
+      }, routingChain);
 
       result = {
         output: routerResult.output,

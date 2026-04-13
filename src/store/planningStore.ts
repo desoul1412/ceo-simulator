@@ -5,7 +5,6 @@ import {
   approvePlanningSession,
   replanSession,
   type PlanningTab,
-  type PlanningSession,
 } from '../lib/planningApi';
 
 interface EditedTabs {

@@ -5,6 +5,7 @@
 
 import { supabase } from './supabaseAdmin';
 import { generateEmbedding, isEmbeddingEnabled } from './llm/embeddings';
+import { escapeLike } from './utils';
 
 export interface SearchResult {
   id: string;
@@ -37,30 +38,29 @@ export async function searchBrain(
   if (isEmbeddingEnabled()) {
     const embedding = await generateEmbedding(query);
     if (embedding) {
-      return vectorSearch(embedding, opts.companyId, opts.docType, limit, minScore);
+      return vectorSearch(embedding, opts.companyId, opts.agentId, opts.docType, limit, minScore);
     }
   }
 
   // Fallback: text search (ILIKE)
-  return textSearch(query, opts.companyId, opts.docType, limit);
+  return textSearch(query, opts.companyId, opts.agentId, opts.docType, limit);
 }
 
 async function vectorSearch(
   embedding: number[],
   companyId?: string,
+  agentId?: string,
   docType?: string,
   limit = 5,
   minScore = 0.3,
 ): Promise<SearchResult[]> {
-  // Use Supabase RPC for pgvector similarity search
-  // This requires a function in Supabase — we'll create it via migration.
-  // Fallback: use raw SQL via .rpc()
   try {
     const { data, error } = await supabase.rpc('search_brain_documents', {
       query_embedding: JSON.stringify(embedding),
       match_threshold: minScore,
       match_count: limit,
       filter_company_id: companyId ?? null,
+      filter_agent_id: agentId ?? null,
       filter_doc_type: docType ?? null,
     });
 
@@ -86,14 +86,17 @@ async function vectorSearch(
 async function textSearch(
   query: string,
   companyId?: string,
+  agentId?: string,
   docType?: string,
   limit = 5,
 ): Promise<SearchResult[]> {
   try {
     let q = supabase.from('brain_documents').select('id, path, doc_type, content, updated_at');
     if (companyId) q = q.eq('company_id', companyId);
+    if (agentId) q = q.eq('agent_id', agentId);
     if (docType) q = q.eq('doc_type', docType);
-    q = q.ilike('content', `%${query}%`);
+    if (query.length < 3) return []; // too short for text search
+    q = q.ilike('content', `%${escapeLike(query)}%`);
     const { data } = await q.order('updated_at', { ascending: false }).limit(limit);
     return (data ?? []).map((r: any) => ({ ...r, score: 1.0 }));
   } catch {

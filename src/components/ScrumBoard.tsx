@@ -14,7 +14,6 @@ import {
 import {
   fetchDependencyGraph,
   fetchTicketDependencies,
-  addTicketDependency,
   removeTicketDependency,
   type DependencyEdge,
 } from '../lib/planningApi';
@@ -332,7 +331,6 @@ export function ScrumBoard() {
                 const isBlocked = depStatus === 'blocked';
                 const isPartial = depStatus === 'partial';
                 const hasBlockers = depEdges.some(e => e.blocked_ticket_id === ticket.id);
-                const hasDependents = depEdges.some(e => e.blocker_ticket_id === ticket.id);
                 const hasRetries = (ticket.retry_count ?? 0) > 0;
 
                 return (

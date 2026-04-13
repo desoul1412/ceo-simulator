@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import { fetchCosts } from '../lib/orchestratorApi';
-import { DAILY_BUDGET_CAP, WEEKLY_BUDGET_CAP } from '../lib/budgetConfig';
+import { DAILY_BUDGET_CAP, WEEKLY_BUDGET_CAP, calcUsage } from '../lib/budgetConfig';
 
 interface TokenEntry {
   id: string;
@@ -48,12 +48,8 @@ export function CostsPage() {
   if (!company) return <div style={{ padding: 16, color: '#2a3a50' }}>Company not found</div>;
 
   // Usage as % of Claude Team Premium limits
-  const DAILY_CAP = DAILY_BUDGET_CAP;
-  const WEEKLY_CAP = WEEKLY_BUDGET_CAP;
   const spent = totalRealCost;
-  const dailyPct = Math.min(100, Math.round((spent / DAILY_CAP) * 100));
-  const weeklyPct = Math.min(100, Math.round((spent / WEEKLY_CAP) * 100));
-  const barColor = dailyPct < 50 ? '#00ff88' : dailyPct < 80 ? '#ff8800' : '#ff2244';
+  const { dailyPct, weeklyPct, barColor } = calcUsage(spent);
 
   // Per-agent cost aggregation from real token data
   const agentCosts = new Map<string, number>();
@@ -81,11 +77,11 @@ export function CostsPage() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ fontSize: 'var(--font-sm)', color: '#4a5568' }}>DAILY USAGE</span>
-          <span style={{ fontSize: 'var(--font-md)', color: barColor }}>{dailyPct}% <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568' }}>of ${DAILY_CAP}/day</span></span>
+          <span style={{ fontSize: 'var(--font-md)', color: barColor }}>{dailyPct}% <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568' }}>of ${DAILY_BUDGET_CAP}/day</span></span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ fontSize: 'var(--font-sm)', color: '#4a5568' }}>WEEKLY USAGE</span>
-          <span style={{ fontSize: 'var(--font-md)', color: weeklyPct < 50 ? '#00ff88' : weeklyPct < 80 ? '#ff8800' : '#ff2244' }}>{weeklyPct}% <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568' }}>of ${WEEKLY_CAP}/week</span></span>
+          <span style={{ fontSize: 'var(--font-md)', color: barColor }}>{weeklyPct}% <span style={{ fontSize: 'var(--font-xs)', color: '#4a5568' }}>of ${WEEKLY_BUDGET_CAP}/week</span></span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
           <span style={{ fontSize: 'var(--font-sm)', color: '#4a5568' }}>TOTAL SPENT</span>

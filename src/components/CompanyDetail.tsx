@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import { usePlanningStore } from '../store/planningStore';
 import { PixelOfficeCanvas } from './PixelOfficeCanvas';
-import { CeoPlanFlow } from './CeoPlanFlow';
 import { AgentCard } from './AgentCard';
 import { sendHeartbeat, checkStaleAgents } from '../lib/api';
 import * as api from '../lib/api';
