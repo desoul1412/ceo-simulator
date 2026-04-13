@@ -1,3 +1,6 @@
+import { validateEnv } from './env';
+validateEnv(); // Fail fast if required env vars are missing
+
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -11,6 +14,7 @@ import { getCompanyCwd, ensureRepo, syncRepo, listRepos } from './repoManager';
 import { supabase } from './supabaseAdmin';
 import { presetRegistry } from './presets';
 import { writeBrain, appendBrain } from './brainSync';
+import { searchBrain, buildMemoryContext } from './brainSearch';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1778,6 +1782,18 @@ app.get('/api/brain/documents/by-path/*', async (req, res) => {
     .select('*').eq('path', docPath).single();
   if (error) return res.status(404).json({ error: 'Document not found' });
   res.json(data);
+});
+
+// Semantic search over brain documents
+app.post('/api/brain/search', async (req, res) => {
+  const { query, company_id, doc_type, limit } = req.body;
+  if (!query) return res.status(400).json({ error: 'Missing query' });
+  try {
+    const results = await searchBrain(query, { companyId: company_id, docType: doc_type, limit });
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Notifications ───────────────────────────────────────────────────────────

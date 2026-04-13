@@ -9,6 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import { supabase } from './supabaseAdmin';
+import { generateEmbedding, isEmbeddingEnabled } from './llm/embeddings';
 
 const BRAIN_ROOT = path.join(process.cwd(), 'brain');
 const LOCAL_SYNC = process.env.BRAIN_SYNC_ENABLED === 'true'; // default OFF
@@ -31,14 +32,24 @@ export async function writeBrain(
 ): Promise<void> {
   // 1. Supabase (primary — always)
   try {
-    await supabase.from('brain_documents').upsert({
+    const row: any = {
       path: docPath,
       content,
       company_id: meta.companyId ?? null,
       agent_id: meta.agentId ?? null,
       doc_type: meta.docType,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'path' });
+    };
+
+    // Auto-embed if embedding provider is configured
+    if (isEmbeddingEnabled() && content.length > 20) {
+      const embedding = await generateEmbedding(content);
+      if (embedding) {
+        row.embedding = JSON.stringify(embedding);
+      }
+    }
+
+    await supabase.from('brain_documents').upsert(row, { onConflict: 'path' });
   } catch (err: any) {
     console.warn(`[brain-sync] Supabase write failed for ${docPath}:`, err.message);
   }

@@ -225,6 +225,13 @@ export async function executeWorkerTask(
   const effort = selectEffort(role, storyPoints, task);
   const maxBudget = allocateBudget(role, storyPoints, remainingBudget);
 
+  // Semantic memory: search brain for relevant past work
+  let brainMemory = '';
+  try {
+    const { buildMemoryContext } = await import('../brainSearch');
+    brainMemory = await buildMemoryContext(task, companyId, agentId);
+  } catch { /* brain search not available */ }
+
   let result = '';
   let costUsd = 0;
   let inputTokens = 0;
@@ -232,7 +239,7 @@ export async function executeWorkerTask(
   let sessionId = '';
 
   const q = query({
-    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}${skillContext ? skillContext + '\n\n' : ''}Your task:\n\n${task}\n\nWork in the project directory. Read relevant files first to understand the codebase, then make your changes. Be thorough but focused.`,
+    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}${skillContext ? skillContext + '\n\n' : ''}${brainMemory ? brainMemory + '\n\n' : ''}Your task:\n\n${task}\n\nWork in the project directory. Read relevant files first to understand the codebase, then make your changes. Be thorough but focused.`,
     options: {
       cwd,
       systemPrompt: systemPrompt,
