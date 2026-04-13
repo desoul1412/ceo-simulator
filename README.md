@@ -114,7 +114,31 @@ On startup, the orchestrator automatically:
 - Auto-clones missing company Git repos
 - Resets stale tickets/agents from previous crashes
 
-### 5. Optional: Embedding Provider
+### 5. Optional: Orchestrator Auth (recommended for LAN/cross-device)
+
+By default the orchestrator is open (local dev). To require authentication:
+
+```bash
+# Generate a secret
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# server/.env
+ORCHESTRATOR_SECRET=your-generated-secret
+
+# .env (frontend) — or set via Settings UI at runtime
+VITE_ORCHESTRATOR_SECRET=your-generated-secret
+```
+
+When `ORCHESTRATOR_SECRET` is set, every API request must include the header `X-Orchestrator-Secret: <value>`. The frontend `orchFetch()` wrapper sends it automatically. `/api/health` is always open for connectivity checks.
+
+You can also set the secret at runtime in the browser without rebuilding:
+```js
+// Browser console or Settings page
+import { setOrchestratorSecret } from './lib/orchestratorApi';
+setOrchestratorSecret('your-generated-secret'); // stored in localStorage
+```
+
+### 6. Optional: Embedding Provider
 
 For semantic memory search (pgvector), add to `server/.env`:
 
@@ -310,10 +334,12 @@ ceo-simulator/
 
 ## API Reference (123 Endpoints)
 
+All endpoints (except `/api/health`) require `X-Orchestrator-Secret` when `ORCHESTRATOR_SECRET` is configured.
+
 ### Core
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/health` | Server status |
+| `GET` | `/api/health` | Server status (no auth required) |
 | `POST` | `/api/assign-goal` | CEO reasons + delegates |
 | `POST` | `/api/process-queue` | Process next approved ticket |
 
