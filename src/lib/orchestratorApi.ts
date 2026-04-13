@@ -3,7 +3,24 @@
  * The orchestrator manages real Claude Code agent sessions.
  */
 
-const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:3001';
+// Runtime-configurable: localStorage > env var > default
+function getOrchestratorUrl(): string {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('orchestrator_url');
+    if (stored) return stored;
+  }
+  return import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:3001';
+}
+
+export function setOrchestratorUrl(url: string): void {
+  localStorage.setItem('orchestrator_url', url);
+}
+
+export function clearOrchestratorUrl(): void {
+  localStorage.removeItem('orchestrator_url');
+}
+
+const ORCHESTRATOR_URL = getOrchestratorUrl();
 
 export interface DelegationPlan {
   reasoning: string;

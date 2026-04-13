@@ -10,6 +10,7 @@ import { listWorktrees } from './worktreeManager';
 import { getCompanyCwd, ensureRepo, syncRepo, listRepos } from './repoManager';
 import { supabase } from './supabaseAdmin';
 import { presetRegistry } from './presets';
+import { writeBrain, appendBrain, syncFromSupabase } from './brainSync';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -263,9 +264,9 @@ ${completedSprintsList}
 ${agentList}
 `;
 
-  const summaryPath = path.join(companyDir, 'summary.md');
-  fs.writeFileSync(summaryPath, content, 'utf8');
-  return summaryPath;
+  // Dual-write via brainSync
+  await writeBrain(`${companySlug}/summary.md`, content, { companyId, docType: 'summary' });
+  return path.join(BRAIN_ROOT, companySlug, 'summary.md');
 }
 
 /**
@@ -358,11 +359,15 @@ _Ticket summaries will be appended here as work is completed._
 ## Completed Tasks
 `;
 
-  fs.writeFileSync(path.join(agentDir, 'soul.md'), soulContent, 'utf8');
-  fs.writeFileSync(path.join(agentDir, 'context.md'), contextContent, 'utf8');
-  fs.writeFileSync(path.join(agentDir, 'memory.md'), memoryContent, 'utf8');
+  // Dual-write via brainSync
+  const basePath = `${companySlug}/${agentSlug}`;
+  await Promise.all([
+    writeBrain(`${basePath}/soul.md`, soulContent, { companyId, agentId, docType: 'soul' }),
+    writeBrain(`${basePath}/context.md`, contextContent, { companyId, agentId, docType: 'context' }),
+    writeBrain(`${basePath}/memory.md`, memoryContent, { companyId, agentId, docType: 'memory' }),
+  ]);
 
-  return agentDir;
+  return path.join(BRAIN_ROOT, basePath);
 }
 
 /**
@@ -378,16 +383,11 @@ async function updateAgentMemory(companyId: string, agentId: string, ticketTitle
 
     const companySlug = slugify((companyRes.data as any).name);
     const agentSlug = slugify((agentRes.data as any).name);
-    const memoryPath = path.join(BRAIN_ROOT, companySlug, agentSlug, 'memory.md');
-
-    if (!fs.existsSync(memoryPath)) {
-      // Init brain first if it doesn't exist
-      await initAgentBrain(companyId, agentId);
-    }
+    const docPath = `${companySlug}/${agentSlug}/memory.md`;
 
     const timestamp = new Date().toISOString().split('T')[0];
     const entry = `\n- [${timestamp}] Completed: ${ticketTitle}`;
-    fs.appendFileSync(memoryPath, entry, 'utf8');
+    await appendBrain(docPath, entry, { companyId, agentId, docType: 'memory' });
   } catch (err: any) {
     console.error('[updateAgentMemory] Error:', err.message);
   }

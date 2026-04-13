@@ -1,7 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import { ConfigManager } from './ConfigManager';
 import { LLMSettings } from './LLMSettings';
+import { setOrchestratorUrl, clearOrchestratorUrl } from '../lib/orchestratorApi';
 
 const TABS = [
   { id: 'general', label: 'General' },
@@ -73,20 +75,7 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
-                Orchestrator URL
-              </div>
-              <div style={{
-                padding: '6px 10px', background: '#090d14',
-                border: '1px solid #1b2030', fontSize: 'var(--font-sm)', color: '#6a7a90',
-              }}>
-                http://localhost:3001
-              </div>
-              <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 2 }}>
-                Start with: npm run server
-              </div>
-            </div>
+            <OrchestratorUrlSetting />
 
             <div style={{
               padding: '10px 12px', background: '#090d14',
@@ -106,6 +95,59 @@ export function SettingsPage() {
         {tab === 'skills' && <ConfigManager type="skill" scope="global" />}
         {tab === 'mcp' && <ConfigManager type="mcp_server" scope="global" />}
         {tab === 'rules' && <ConfigManager type="rule" scope="global" />}
+      </div>
+    </div>
+  );
+}
+
+function OrchestratorUrlSetting() {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('orchestrator_url') : null;
+  const [url, setUrl] = useState(stored ?? '');
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    if (url.trim()) {
+      setOrchestratorUrl(url.trim());
+    } else {
+      clearOrchestratorUrl();
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 'var(--font-xs)', color: '#4a5568', textTransform: 'uppercase', marginBottom: 4 }}>
+        Orchestrator URL
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="http://localhost:3001 (default)"
+          style={{
+            flex: 1, padding: '6px 10px', background: '#05080f',
+            border: '1px solid #1b2030', color: '#e0eaf4',
+            fontFamily: 'var(--font-hud)', fontSize: 'var(--font-sm)',
+          }}
+        />
+        <button
+          onClick={handleSave}
+          style={{
+            padding: '6px 12px', fontSize: 'var(--font-xs)',
+            background: saved ? '#00ff8815' : '#00ffff10',
+            border: `1px solid ${saved ? '#00ff8840' : '#00ffff30'}`,
+            color: saved ? '#00ff88' : 'var(--neon-cyan)',
+            cursor: 'pointer', fontFamily: 'var(--font-hud)',
+            textTransform: 'uppercase',
+          }}
+        >
+          {saved ? 'Saved!' : 'Save'}
+        </button>
+      </div>
+      <div style={{ fontSize: 'var(--font-xs)', color: '#2a3a50', marginTop: 4 }}>
+        Leave empty for default (http://localhost:3001). Reload page after changing.
+        {stored && <span style={{ color: '#4a5568', marginLeft: 8 }}>Custom URL active</span>}
       </div>
     </div>
   );
