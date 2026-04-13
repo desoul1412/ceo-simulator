@@ -12,6 +12,7 @@ import { hireAgent } from '../lib/orchestratorApi';
 import { isOnline } from '../lib/supabase';
 import { PlanningPopup } from './PlanningPopup';
 import type { Company } from '../store/dashboardStore';
+import { calcUsage } from '../lib/budgetConfig';
 
 interface CompanyDetailProps {
   company: Company;
@@ -115,14 +116,8 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
     setShowHireDialog(false);
   };
 
-  // Usage — configurable via env, fallback to sensible defaults
-  const DAILY_CAP_USD = Number(import.meta.env.VITE_DAILY_BUDGET_CAP) || 3.3;
-  const WEEKLY_CAP_USD = Number(import.meta.env.VITE_WEEKLY_BUDGET_CAP) || 23;
-  const spent = company.budgetSpent;
-  const dailyPct = Math.min(100, Math.round((spent / DAILY_CAP_USD) * 100));
-  const weeklyPct = Math.min(100, Math.round((spent / WEEKLY_CAP_USD) * 100));
-  const usagePct = Math.max(dailyPct, weeklyPct);
-  const barColor = usagePct < 50 ? 'var(--neon-green)' : usagePct < 80 ? 'var(--neon-orange)' : 'var(--neon-red)';
+  // Usage — Team Premium budget estimates
+  const { dailyPct, weeklyPct, barColor } = calcUsage(company.budgetSpent);
   const activeCount = company.employees.filter(e => e.status === 'working' || e.status === 'meeting').length;
 
   return (

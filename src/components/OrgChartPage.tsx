@@ -4,6 +4,7 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { getRoleDisplayName } from '../lib/agentDisplay';
 import { fetchCosts } from '../lib/orchestratorApi';
 import { PixelAvatar } from './AgentCard';
+import { calcUsage, DAILY_BUDGET_CAP, WEEKLY_BUDGET_CAP } from '../lib/budgetConfig';
 
 interface TokenEntry {
   id: string; agent_id: string; input_tokens: number; output_tokens: number;
@@ -40,11 +41,11 @@ export function OrgChartPage() {
   for (const entry of tokenEntries) {
     agentCosts.set(entry.agent_id, (agentCosts.get(entry.agent_id) ?? 0) + entry.cost_usd);
   }
-  const DAILY_CAP = 3.3;
-  const WEEKLY_CAP = 23;
+  const DAILY_CAP = DAILY_BUDGET_CAP;
+  const WEEKLY_CAP = WEEKLY_BUDGET_CAP;
   const totalTokensIn = tokenEntries.reduce((s, e) => s + e.input_tokens, 0);
   const totalTokensOut = tokenEntries.reduce((s, e) => s + e.output_tokens, 0);
-  const dailyTotalPct = Math.min(100, Math.round((totalRealCost / DAILY_CAP) * 100));
+  const { dailyPct: dailyTotalPct } = calcUsage(totalRealCost);
 
   const sectionStyle: React.CSSProperties = {
     background: '#0d1117', border: '1px solid var(--hud-border)', marginBottom: 16,

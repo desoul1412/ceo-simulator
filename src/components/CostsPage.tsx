@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import { fetchCosts } from '../lib/orchestratorApi';
+import { DAILY_BUDGET_CAP, WEEKLY_BUDGET_CAP } from '../lib/budgetConfig';
 
 interface TokenEntry {
   id: string;
@@ -46,9 +47,9 @@ export function CostsPage() {
 
   if (!company) return <div style={{ padding: 16, color: '#2a3a50' }}>Company not found</div>;
 
-  // Usage as % of Claude plan limits ($100/mo ≈ $3.3/day, $23/week)
-  const DAILY_CAP = 3.3;
-  const WEEKLY_CAP = 23;
+  // Usage as % of Claude Team Premium limits
+  const DAILY_CAP = DAILY_BUDGET_CAP;
+  const WEEKLY_CAP = WEEKLY_BUDGET_CAP;
   const spent = totalRealCost;
   const dailyPct = Math.min(100, Math.round((spent / DAILY_CAP) * 100));
   const weeklyPct = Math.min(100, Math.round((spent / WEEKLY_CAP) * 100));

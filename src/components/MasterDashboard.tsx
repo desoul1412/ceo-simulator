@@ -3,16 +3,14 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { PixelOfficeCanvas } from './PixelOfficeCanvas';
 import type { Company } from '../store/dashboardStore';
 import * as api from '../lib/api';
+import { DAILY_BUDGET_CAP, WEEKLY_BUDGET_CAP, calcUsage } from '../lib/budgetConfig';
 import { isOnline } from '../lib/supabase';
 
 function CompanyTile({ company }: { company: Company }) {
   const navigate = useNavigate();
   const activeAgents = company.employees.filter(e => e.status === 'working' || e.status === 'meeting').length;
   const isWorking = activeAgents > 0;
-  const DAILY_CAP = 3.3;
-  const WEEKLY_CAP_TILE = 23;
-  const dailyPct = Math.min(100, Math.round((company.budgetSpent / DAILY_CAP) * 100));
-  const weeklyPctTile = Math.min(100, Math.round((company.budgetSpent / WEEKLY_CAP_TILE) * 100));
+  const { dailyPct, weeklyPct: weeklyPctTile } = calcUsage(company.budgetSpent);
   const budgetColor = dailyPct < 50 ? '#00ff88' : dailyPct < 80 ? '#ff8800' : '#ff2244';
 
   return (
@@ -236,9 +234,8 @@ export function MasterDashboard() {
 
   const totalAgents = companies.reduce((s, c) => s + c.employees.length, 0);
   const activeAgents = companies.reduce((s, c) => s + c.employees.filter(e => e.status === 'working' || e.status === 'meeting').length, 0);
-  const WEEKLY_CAP = 23;
   const totalSpentUsd = companies.reduce((s, c) => s + c.budgetSpent, 0);
-  const weeklyPct = Math.min(100, Math.round((totalSpentUsd / WEEKLY_CAP) * 100));
+  const { weeklyPct } = calcUsage(totalSpentUsd);
 
   return (
     <div style={{ padding: 'var(--pad)', height: '100%', overflow: 'auto' }}>
