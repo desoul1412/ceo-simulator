@@ -1790,8 +1790,9 @@ app.get('/api/brain/documents/:id', async (req, res) => {
   res.json(data);
 });
 
-app.get('/api/brain/documents/by-path/*', async (req, res) => {
-  const docPath = req.params[0];
+app.get('/api/brain/documents/by-path', async (req, res) => {
+  const docPath = req.query.path as string;
+  if (!docPath) return res.status(400).json({ error: 'path query param required' });
   const { data, error } = await supabase.from('brain_documents')
     .select('*').eq('path', docPath).single();
   if (error) return res.status(404).json({ error: 'Document not found' });
