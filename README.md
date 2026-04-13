@@ -1,6 +1,8 @@
 # CEO Simulator — Zero-Human Software Factory
 
-A **Paperclip-style AI agent orchestration platform** that manages multiple software projects through autonomous Claude Code agents. Each project connects to its own Git repo. Agents write code in isolated branches, submit merge requests for your review, and track progress on a Scrum board — all from a single pixel-art dashboard.
+A **multi-LLM agent orchestration platform** that manages multiple software projects through autonomous AI agents. Each project connects to its own Git repo. Agents write code in isolated branches, submit merge requests for your review, and track progress on a Scrum board — all from a single pixel-art dashboard.
+
+Supports **Claude SDK, Claude API, OpenRouter, Gemini, QwenCode** — with per-agent priority-based model routing and automatic fallback chains.
 
 **Live Demo:** [ceo-simulator-iota.vercel.app](https://ceo-simulator-iota.vercel.app)
 
@@ -8,7 +10,7 @@ A **Paperclip-style AI agent orchestration platform** that manages multiple soft
 
 ## What This Tool Does
 
-CEO Simulator is the **control plane for a Zero-Human Software Factory**. You manage high-level business goals across multiple projects. The system handles delegation, coding, testing, and deployment.
+CEO Simulator is the **control plane for a Zero-Human Software Factory**. You manage high-level business goals across multiple projects. The system handles delegation, coding, testing, and deployment — across any LLM provider.
 
 ### The Flow
 
@@ -28,27 +30,24 @@ CEO Simulator is the **control plane for a Zero-Human Software Factory**. You ma
 
 | Feature | Description |
 |---------|-------------|
+| **Multi-LLM Router** | 5 providers (Claude SDK, Claude API, OpenRouter, Gemini, QwenCode) with priority-based fallback per agent |
 | **Multi-Project** | One server manages unlimited projects, each connected to its own Git repo |
 | **Planning v2** | CEO generates structured plans (architecture, hiring, implementation) with interactive review |
-| **Agent-Agnostic** | Hire Claude, HTTP endpoints, or Bash scripts as agents |
 | **21 Department Roles** | Engineering, Marketing, Data, Design, Finance, Legal, and more — each with preset skills |
+| **4-Layer Memory** | Semantic (pgvector), Episodic (JSONB), Structured (SQL), Working (in-process) |
+| **Semantic Search** | pgvector embeddings on brain docs — agents retrieve relevant past work via ANN similarity search |
+| **Token Budget Manager** | Caps context injection at ~4000 tokens, deduplicates across memory layers, smart sentence-boundary truncation |
+| **Agent-to-Agent Queries** | Active mid-task communication — agents can ask other agents questions and get responses |
 | **Per-Agent Branches** | Every agent works in an isolated `agent/{role}-{task}` branch |
 | **Merge Requests** | Review diffs, approve, merge to main — or reject |
 | **Scrum Board** | 4-column Kanban (Todo → In Progress → Review → Done) with sprint selector |
-| **Sprint Auto-Transition** | When all tickets in a sprint are done, next sprint auto-creates from master plan phases |
+| **Sprint Auto-Transition** | When all tickets done, next sprint auto-creates from master plan phases |
+| **Dependency DAG** | Task dependency graph with cycle detection — agents wait for upstream work |
 | **Approval Gates** | Nothing executes without your approval |
-| **Inbox Notifications** | New MRs, plan submissions, agent blockers, sprint completions |
-| **Per-Agent Budgets** | USD caps with auto-throttle on exhaust |
+| **Per-Agent Budgets** | USD caps calibrated to Team Premium ($5.86/day, $41/week Sonnet reference) |
 | **Heartbeat Daemon** | Auto-processes approved tickets every 30s |
-| **Ticket System** | Threaded work items with comments, role-based assignment, approval flow |
-| **Agent Memory** | Short-term + long-term + skills → persisted to Obsidian brain directories |
-| **Per-Agent Brain** | `brain/{project}/{agent}/soul.md`, `context.md`, `memory.md` — auto-created on hire |
-| **3-Level Config** | Global → Project → Agent cascade for skills, rules, MCP servers |
-| **Cost Tracking** | Real Claude API token usage per agent, daily/weekly %, merged into Org & Costs view |
 | **Circuit Breaker** | Auto-detects failing agents, prevents infinite retry loops |
-| **Dependency Manager** | Manages task dependencies and execution ordering |
-| **Agent Messaging** | Inter-agent communication for coordination |
-| **Env Var Management** | Per-project, encrypted, injected into agent execution |
+| **Cross-Device Ready** | PostgreSQL-primary brain, runtime orchestrator URL, MCP config sync on startup |
 | **Pixel Office** | Canvas 2D animated office with BFS pathfinding and heartbeat visuals |
 | **E2E Test Suite** | 10 Playwright specs covering dashboard, agents, board, planning, API |
 
@@ -84,51 +83,109 @@ cp .env.example server/.env
 #   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-### 3. Start
+### 3. Run Migrations
+
+Run these SQL files in the Supabase SQL Editor (in order):
+
+1. `supabase/planning-flow-setup.sql` — planning sessions, dependencies
+2. `supabase/migrations/011_agent_presets.sql` — department roles + skills
+3. `supabase/migrations/013_llm_providers.sql` — LLM providers, models, routing
+4. `supabase/migrations/014_brain_documents.sql` — brain docs + pgvector
+5. `supabase/migrations/015_brain_search_function.sql` — semantic search RPC
+
+### 4. Start
 
 ```bash
 # Terminal 1: Frontend
 npm run dev          # → http://localhost:5173
 
-# Terminal 2: Orchestrator (real Claude agents)
-npm run server       # → http://localhost:3001 (heartbeat daemon auto-starts)
+# Terminal 2: Orchestrator (real agents)
+npm run server       # → http://localhost:3001
 
 # Or run both:
 npm run dev:all      # Concurrent frontend + server
 ```
 
-### 4. Connect a Project
+On startup, the orchestrator automatically:
+- Seeds department role presets (21 roles, 120+ skills)
+- Seeds default LLM provider (Claude SDK + 3 models)
+- Syncs MCP configs from Supabase → local `.claude/settings.json`
+- Syncs brain documents to local filesystem (if `BRAIN_SYNC_ENABLED=true`)
+- Auto-clones missing company Git repos
+- Resets stale tickets/agents from previous crashes
 
-1. Open `http://localhost:5173`
-2. Click **+ New Company** → enter project name
-3. Paste Git repo URL (e.g. `https://github.com/org/project.git`)
-4. Optionally add GitHub PAT for private repos
-5. Enter a CEO directive in the Office view → agents start planning
-6. Review and approve the plan → agents start working
+### 5. Optional: Embedding Provider
+
+For semantic memory search (pgvector), add to `server/.env`:
+
+```bash
+EMBEDDING_API_URL=https://api.openai.com/v1/embeddings
+EMBEDDING_API_KEY=sk-...
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+Brain documents are auto-embedded on write. Agents retrieve relevant past work via similarity search before each task.
 
 ---
 
-## Multi-Project Architecture
+## Multi-LLM Architecture
 
 ```
-CEO Simulator (1x server, 1x frontend)
-         │
-    ┌────┼────┬────┐
-    ↓    ↓    ↓    ↓
- Project A    Project B    Project C
- repo: github/org/app-a    repo: github/org/app-b    repo: github/org/app-c
- agents → own branches     agents → own branches     agents → own branches
- scrum board               scrum board               scrum board
- merge requests             merge requests             merge requests
+Settings > LLM Models
+  ├── Claude SDK (Local)     → haiku, sonnet, opus     [SDK — filesystem access]
+  ├── Claude API (Direct)    → any Claude model         [HTTP — text only]
+  ├── OpenRouter             → 100+ models              [HTTP — text only]
+  ├── Gemini                 → flash, pro               [HTTP — text only]
+  └── QwenCode               → qwen-coder-32b, etc.     [HTTP — text only]
+
+Per-Agent Routing (priority order):
+  Agent "Frontend" → 1. QwenCode  2. Claude Sonnet  3. Gemini Pro
+  Agent "PM"       → 1. Gemini Pro  2. Claude Haiku
+  Global default   → 1. Claude Sonnet
+
+Role-Based Constraint:
+  Code tasks (Frontend/Backend/DevOps/QA) → SDK providers only (filesystem access)
+  Planning/writing (PM/CEO/Content)       → any provider
 ```
 
-Each project gets:
-- Its own cloned repo at `.company-repos/{id}/`
-- Its own agents, sprints, tickets, merge requests
-- Its own environment variables (encrypted)
-- Its own brain directory at `brain/{project-name}/`
-- Per-agent brain directories with soul, context, and memory files
-- Complete data isolation
+The LLM Router (`server/llm/router.ts`) tries models in priority order. On failure, it automatically falls back to the next model. If no routing rules are configured, it falls back to the existing `taskClassifier.selectModel()` behavior.
+
+---
+
+## 4-Layer Memory Architecture
+
+| Layer | Storage | What | How |
+|-------|---------|------|-----|
+| **Semantic** | `brain_documents.embedding` (pgvector) | Past work, docs, plans | ANN similarity search on task start |
+| **Episodic** | `agents.memory` JSONB | Completed tasks, learned skills | Auto-promotes recurring themes to long-term |
+| **Structured** | SQL tables | Agents, tickets, configs, deps | Exact FK lookups |
+| **Working** | In-process Zustand + prompt | Current session context | Token-budgeted injection (~4000 tokens cap) |
+
+The **Token Budget Manager** (`contextBudget.ts`) controls context injection:
+- Messages: 40% (upstream dependency context)
+- Brain semantic: 25% (pgvector search results)
+- Episodic memory: 15% (completed tasks, skills)
+- Skill context: 15% (department role skills)
+- Deduplicates across all layers, smart sentence-boundary truncation
+
+---
+
+## Cross-Device Architecture
+
+```
+Device A (laptop)                    Device B (desktop)
+  Browser → Vercel SPA                 Browser → Vercel SPA
+       ↓                                    ↓
+  localhost:3001 (orchestrator)        localhost:3001 (orchestrator)
+       ↓                                    ↓
+       └──── both read/write ────→ Supabase (shared) ←────┘
+```
+
+- **Brain documents** stored in PostgreSQL (Supabase) — primary source of truth
+- **Local filesystem mirror** optional (`BRAIN_SYNC_ENABLED=true` for Obsidian viewing)
+- **Orchestrator URL** configurable at runtime (Settings > General, stored in localStorage)
+- **MCP configs** synced from `shared_configs` table → local `.claude/settings.json` on startup
+- **Company repos** auto-cloned on startup if missing locally
 
 ---
 
@@ -138,23 +195,22 @@ Each project gets:
 |-------|-----|-------------|
 | `/` | Dashboard | All projects with usage %, working/idle status |
 | `/company/:id` | Office | Pixel office canvas + 3x3 agent card grid + CEO directive |
-| `/company/:id/agents/:id` | Agent Detail | Memory, skills, sessions, configs |
+| `/company/:id/agents/:id` | Agent Detail | Memory, skills, sessions, model routing |
 | `/company/:id/goals` | Goals | Master plan progress, delegation tree, sprint history |
-| `/company/:id/board` | Board | 4-column Kanban (Todo/In Progress/Review/Done), sprints, velocity |
+| `/company/:id/board` | Board | 4-column Kanban, sprints, velocity |
 | `/company/:id/merge-requests` | MRs | Agent PRs — review diffs, merge, reject |
-| `/company/:id/documents` | Docs | Obsidian vault browser |
-| `/company/:id/org-chart` | Org & Costs | Org chart + budget overview + per-agent cost cards + API call log |
+| `/company/:id/documents` | Docs | Brain documents from PostgreSQL |
+| `/company/:id/org-chart` | Org & Costs | Org chart + budget + per-agent cost cards |
 | `/company/:id/settings` | Config | Repo, skills, MCP, rules, env vars |
-| `/settings` | Global Settings | Connection status, config cascade |
-| `/settings/:tab` | Settings Tab | skills, mcp, rules sub-pages |
+| `/settings` | Global Settings | Connection, orchestrator URL, config cascade |
+| `/settings/llm` | LLM Models | Provider CRUD, model management, global routing |
+| `/settings/:tab` | Settings Tab | skills, mcp, rules |
 
 Plus: **Inbox** (bell icon) for notifications across all projects.
 
 ---
 
 ## Department Roles (21)
-
-The preset system provides 21 department roles, each with default skills, system prompts, model tiers, and budget limits:
 
 | # | Department | Model | Budget | Focus |
 |---|-----------|-------|--------|-------|
@@ -180,34 +236,7 @@ The preset system provides 21 department roles, each with default skills, system
 | 20 | Social Media | sonnet | $8 | Content calendar, engagement, analytics |
 | 21 | Strategy | opus | $20 | Vision, roadmap, market positioning |
 
-Plus **20 legacy agent presets** in `brain/library/agent-presets/` for backward compatibility.
-
----
-
-## Skills Library
-
-`brain/library/skills/` — 61 skill files across 18 role directories:
-
-```
-_shared/ (5)          — quality-engineering, systematic-debugging, context7, tavily, git-worktree
-ceo/ (5)              — strategic-delegation, business-reasoning, budget, team-orchestration, ...
-planner/ (4)          — discovery, project-planning, writing-plans, risk-assessment
-frontend-designer/ (5)— ui-ux-pro-max, react, tailwind, canvas, tdd
-backend/ (2)          — api-design, database
-full-stack/ (2)       — end-to-end, rapid-prototyping
-devops/ (3)           — ci/cd, infrastructure, deployment-verification
-qa/ (3)               — test-strategy, automated-testing, data-validation
-designer/ (3)         — pixel-art-hud, responsive-design, design-tokens
-marketer/ (5)         — launch, seo, analytics, social, brand
-content-writer/ (3)   — copywriting, content-strategy, technical-writing
-sales/ (2)            — pricing, customer-success
-operations/ (2)       — process-finance, compliance
-data-engineer/ (3)    — pipeline-debugging, pandas, data-quality
-data-architect/ (3)   — data-modeling, etl, migration-safety
-data-scientist/ (3)   — ml-pipelines, experiment-design, statistics
-ai-engineer/ (5)      — llm, prompts, orchestration, rag, sdk
-automation/ (3)       — n8n, pipelines, webhooks
-```
+Skills are stored in Supabase `department_roles` + `agent_skills` tables (seeded on startup, 120+ skills).
 
 ---
 
@@ -215,79 +244,71 @@ automation/ (3)       — n8n, pipelines, webhooks
 
 ```
 ceo-simulator/
-├── src/                          # React 19 frontend
-│   ├── components/               # 39 React components
+├── src/                          # React 19 frontend (40 components)
+│   ├── components/
 │   │   ├── MasterDashboard.tsx   # Project grid with usage %, working/idle
 │   │   ├── CompanyDetail.tsx     # Pixel office + 3x3 agent grid + CEO directive
-│   │   ├── AgentCard.tsx         # Compact card + detail modal (activity, tickets, config)
+│   │   ├── AgentCard.tsx         # Compact card + detail modal (config, routing, tickets)
 │   │   ├── PixelOfficeCanvas.tsx # Canvas 2D game loop with BFS pathfinding
 │   │   ├── ScrumBoard.tsx        # 4-column Kanban with sprints
-│   │   ├── GoalsPage.tsx         # Master plan progress + delegation tree + sprints
+│   │   ├── GoalsPage.tsx         # Master plan progress + delegation tree
 │   │   ├── OrgChartPage.tsx      # Org chart + budget + agent cost cards
-│   │   ├── MergeRequestsPanel.tsx# MR review with merge/reject
-│   │   ├── InboxPanel.tsx        # Notification bell + dropdown
+│   │   ├── DocumentsPage.tsx     # Brain documents from PostgreSQL
+│   │   ├── LLMSettings.tsx       # Provider CRUD, model management, routing editor
 │   │   ├── PlanningPopup.tsx     # Interactive plan review overlay
-│   │   ├── PlanningProgress.tsx  # Live planning status indicator
-│   │   ├── HireAgentDialog.tsx   # Role browser, auto/manual hire
-│   │   ├── DeptRoleBrowser.tsx   # Browse 21 department presets
-│   │   ├── ConfigManager.tsx     # 3-level config CRUD
+│   │   ├── HireAgentDialog.tsx   # 21 dept roles, auto/manual hire
 │   │   └── ...
-│   ├── engine/                   # Canvas renderer + pathfinding
+│   ├── lib/
+│   │   ├── orchestratorApi.ts    # 60+ API client functions
+│   │   ├── budgetConfig.ts       # Team Premium budget caps + calcUsage()
+│   │   └── supabase.ts           # Supabase client with offline fallback
 │   ├── store/                    # Zustand (dashboard, planning, presets)
-│   ├── lib/                      # Supabase + orchestrator + planning API clients
-│   └── hooks/                    # Realtime sync + polling
-├── server/                       # Local orchestrator (Express, 78+ endpoints)
-│   ├── index.ts                  # Main API routes
-│   ├── routes/                   # Modular route files (agents, planning, presets)
+│   └── engine/                   # Canvas renderer + pathfinding
+├── server/                       # Orchestrator (Express, 123 endpoints)
+│   ├── index.ts                  # Main routes + startup sync
+│   ├── routes/                   # Modular: agents, planning, presets, llm
+│   ├── llm/                      # Multi-LLM router
+│   │   ├── router.ts             # Priority fallback, role-based constraints
+│   │   ├── registry.ts           # Provider/model cache from Supabase
+│   │   ├── embeddings.ts         # OpenAI-compatible embedding API
+│   │   └── adapters/             # claude-sdk, claude-api, openrouter, gemini, qwen-code
+│   ├── agents/
+│   │   ├── agentRunner.ts        # Universal dispatcher (router → legacy fallback)
+│   │   ├── claudeRunner.ts       # Claude Agent SDK (filesystem access)
+│   │   ├── ceoPlannerV2.ts       # Structured planning engine
+│   │   ├── taskClassifier.ts     # Model tier + effort + budget selection
+│   │   ├── worker.ts             # Task execution with budgeted context
+│   │   └── ceo.ts                # CEO reasoning + delegation
+│   ├── contextBudget.ts          # Token budget manager (4000 token cap)
+│   ├── brainSync.ts              # PG-primary brain, optional local mirror
+│   ├── brainSearch.ts            # pgvector semantic search
+│   ├── agentQuery.ts             # Agent-to-agent active queries
+│   ├── agentMessenger.ts         # Inter-agent messaging (dependency chain)
+│   ├── dependencyManager.ts      # Task DAG with cycle detection
+│   ├── circuitBreaker.ts         # Failure detection + dead letter queue
 │   ├── ticketProcessor.ts        # Worktree → execute → commit → push → MR
-│   ├── repoManager.ts            # Per-company Git repo management
-│   ├── heartbeatDaemon.ts        # 30s auto-processor
-│   ├── worktreeManager.ts        # Git worktree isolation
-│   ├── memoryManager.ts          # Agent memory → Obsidian
-│   ├── circuitBreaker.ts         # Failure detection + auto-recovery
-│   ├── dependencyManager.ts      # Task dependency resolution
-│   ├── agentMessenger.ts         # Inter-agent communication
-│   ├── presets/                   # 21 department role presets + seeder
-│   │   ├── presetRegistry.ts     # Runtime preset lookup
-│   │   ├── presetSeeder.ts       # DB seeding (21 roles, 120+ skills)
-│   │   └── types.ts              # DepartmentRole, AgentSkill types
-│   └── agents/
-│       ├── agentRunner.ts        # Universal runtime dispatcher
-│       ├── claudeRunner.ts       # Claude Agent SDK
-│       ├── ceoPlannerV2.ts       # Structured planning engine
-│       ├── taskClassifier.ts     # Auto-classify task complexity
-│       ├── httpRunner.ts         # HTTP endpoint agents
-│       ├── bashRunner.ts         # Bash script agents
-│       ├── worker.ts             # Agent task execution loop
-│       └── ceo.ts                # CEO reasoning + delegation
+│   ├── memoryManager.ts          # Episodic memory (short/long-term + skills)
+│   ├── env.ts                    # Zod env validation (fail-fast startup)
+│   └── presets/                  # 21 dept roles, 120+ skills
 ├── e2e/                          # Playwright E2E tests (10 specs)
-│   ├── 01-dashboard.spec.ts      # Master dashboard
-│   ├── 02-company-view.spec.ts   # Office view
-│   ├── 03-agent-card.spec.ts     # Agent cards + modals
-│   ├── 04-scrum-board.spec.ts    # Kanban board
-│   ├── 05-planning.spec.ts       # Planning flow
-│   ├── 07-api-health.spec.ts     # API health checks
-│   ├── 09-planning-execution-flow.spec.ts # Full pipeline
-│   └── ...
-├── brain/                        # Obsidian vault
-│   ├── library/
-│   │   ├── skills/               # 61 skill files (18 role dirs)
-│   │   ├── agent-presets/        # 20 agent preset configs
-│   │   ├── rules/                # 6 rule definitions
-│   │   └── mcp-servers/          # 3 MCP server configs
+├── supabase/migrations/          # 4 SQL migrations
+│   ├── 011_agent_presets.sql     # Department roles + skills tables
+│   ├── 013_llm_providers.sql     # LLM provider/model/routing tables
+│   ├── 014_brain_documents.sql   # Brain docs + pgvector + user_settings
+│   └── 015_brain_search_function.sql # Semantic search RPC
+├── brain/                        # Local mirror (PG is primary)
+│   ├── 00-Index.md, changelog.md
 │   ├── wiki/                     # Architecture specs
-│   └── {project-name}/           # Per-project plans, agent brains, sprint docs
-├── supabase/                     # Database migrations
+│   └── {project-slug}/           # Agent brains, plans, sprints
 ├── public/assets/                # Pixel art sprites, tiles, furniture
 ├── .company-repos/               # Cloned project repos (gitignored)
 ├── CLAUDE.md                     # Autonomy engine directives
-├── playwright.config.ts          # E2E test config
-└── vercel.json                   # SPA deployment config
+└── playwright.config.ts          # E2E test config
 ```
 
 ---
 
-## API Reference (100+ Endpoints)
+## API Reference (123 Endpoints)
 
 ### Core
 | Method | Endpoint | Description |
@@ -295,6 +316,15 @@ ceo-simulator/
 | `GET` | `/api/health` | Server status |
 | `POST` | `/api/assign-goal` | CEO reasons + delegates |
 | `POST` | `/api/process-queue` | Process next approved ticket |
+
+### LLM Providers & Routing
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET/POST/PATCH/DELETE` | `/api/llm/providers` | CRUD providers |
+| `GET/POST/PATCH/DELETE` | `/api/llm/models` | CRUD models per provider |
+| `GET/PUT` | `/api/llm/routing/global` | Global default routing chain |
+| `GET/PUT` | `/api/llm/routing/company/:id` | Company default chain |
+| `GET/PUT` | `/api/llm/routing/agent/:id` | Per-agent routing chain |
 
 ### Planning (v2)
 | Method | Endpoint | Description |
@@ -304,6 +334,21 @@ ceo-simulator/
 | `POST` | `/api/plan-sessions/:id/approve` | Approve plan |
 | `POST` | `/api/plan-sessions/:id/regenerate` | Regenerate with feedback |
 | `GET` | `/api/plan-sessions/:id/dependency-graph` | Task dependency graph |
+
+### Brain & Memory
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/brain/documents` | List brain docs (filter by company, type) |
+| `GET` | `/api/brain/documents/:id` | Read document |
+| `POST` | `/api/brain/search` | Semantic similarity search (pgvector) |
+| `POST` | `/api/companies/:id/brain/update-summary` | Update project summary |
+| `POST` | `/api/companies/:cid/agents/:aid/brain/init` | Init agent brain |
+
+### Agent-to-Agent
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/agents/query` | Ask an agent a question (by ID or role) |
+| `POST` | `/api/agents/query-team` | Broadcast question to all agents |
 
 ### Merge Requests
 | Method | Endpoint | Description |
@@ -318,9 +363,8 @@ ceo-simulator/
 |--------|----------|-------------|
 | `GET` | `/api/companies/:id/sprints` | List sprints |
 | `POST` | `/api/companies/:id/sprints` | Create sprint |
-| `POST` | `/api/sprints/:id/complete` | Complete sprint (triggers auto-transition) |
+| `POST` | `/api/sprints/:id/complete` | Complete sprint (auto-transition) |
 | `PATCH` | `/api/tickets/:id/column` | Move ticket on board |
-| `PATCH` | `/api/tickets/:id` | Update ticket |
 
 ### Agents
 | Method | Endpoint | Description |
@@ -329,64 +373,26 @@ ceo-simulator/
 | `PATCH` | `/api/agents/:id` | Update agent config |
 | `DELETE` | `/api/agents/:id` | Fire agent |
 | `PATCH` | `/api/agents/:id/lifecycle` | Pause/resume/terminate |
-| `PATCH` | `/api/agents/:id/budget` | Adjust budget |
-| `POST` | `/api/agents/:id/inject-skill` | Add skill at runtime |
-| `GET` | `/api/agents/:id/messages` | Agent message history |
-| `POST` | `/api/agents/:id/messages` | Send message to agent |
 
-### Presets
+### Shared Configs
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/presets/departments` | List 21 department roles |
-| `GET` | `/api/presets/departments/:slug` | Get department details |
-| `GET` | `/api/presets/skills` | List all preset skills |
-| `POST` | `/api/presets/seed` | Seed presets to DB |
+| `GET` | `/api/shared-configs/:key` | Read shared config (MCP, CLAUDE.md) |
+| `PUT` | `/api/shared-configs/:key` | Write shared config |
 
-### Brain (Agent Memory)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/companies/:id/brain/update-summary` | Update project brain summary |
-| `POST` | `/api/companies/:cid/agents/:aid/brain/init` | Init agent brain directory |
-| `POST` | `/api/companies/:cid/agents/:aid/brain/update-memory` | Append to agent memory |
+---
 
-### Project Plans
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/companies/:id/plans` | List plans |
-| `POST` | `/api/companies/:id/plans` | Create plan |
-| `PATCH` | `/api/plans/:id` | Edit plan content |
-| `POST` | `/api/plans/:id/approve` | Approve plan (triggers sprint/hiring) |
-| `POST` | `/api/plans/:id/comments` | Add comment |
+## Budget (Team Premium)
 
-### Repository
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/companies/:id/repo` | Connect Git repo |
-| `POST` | `/api/companies/:id/repo/sync` | Pull latest |
-| `DELETE` | `/api/companies/:id/repo` | Disconnect repo |
+Based on Claude Team Premium subscription (6.25x Pro):
 
-### Notifications
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/notifications` | Unread notifications |
-| `GET` | `/api/notifications/count` | Unread count |
-| `POST` | `/api/notifications/:id/read` | Mark read |
+| Model | Cost per 1% Weekly | Daily Cap | Weekly Cap |
+|-------|-------------------|-----------|------------|
+| Haiku 4.5 | $0.14 | $2.00 | $14 |
+| **Sonnet 4.6** | **$0.41** | **$5.86** | **$41** |
+| Opus 4.6 | $0.69 | $9.86 | $69 |
 
-### Environment Variables
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/companies/:id/env-vars` | List (secrets masked) |
-| `POST` | `/api/companies/:id/env-vars` | Create |
-| `DELETE` | `/api/env-vars/:id` | Delete |
-
-### Config (3-Level Cascade)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/configs?scope=&type=` | List configs |
-| `GET` | `/api/configs/effective/:agentId` | Merged config for agent |
-| `POST` | `/api/configs` | Create config |
-| `PATCH` | `/api/configs/:id` | Update |
-| `DELETE` | `/api/configs/:id` | Remove |
+Weekly token budget: ~9.24M tokens. Override via `VITE_DAILY_BUDGET_CAP` / `VITE_WEEKLY_BUDGET_CAP`.
 
 ---
 
@@ -408,11 +414,12 @@ npm run test:all     # Unit + E2E
 
 - **Frontend:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Zustand
 - **Canvas:** 2D pixel-art office, BFS pathfinding, sprite animation
-- **Backend:** Supabase (PostgreSQL + Realtime + RLS)
-- **Orchestrator:** Express + @anthropic-ai/claude-agent-sdk
+- **Database:** Supabase (PostgreSQL + pgvector + Realtime + RLS)
+- **Orchestrator:** Express + multi-LLM router (5 providers, priority fallback)
+- **Memory:** 4-layer (semantic/pgvector, episodic/JSONB, structured/SQL, working/in-process)
 - **Testing:** Vitest (unit) + Playwright (E2E, 10 specs)
-- **Deployment:** Vercel (frontend) + local server (orchestrator)
-- **Brain:** Obsidian vault for specs, plans, agent memory, per-agent brain dirs
+- **Validation:** Zod (server env), token budget manager (context cap)
+- **Deployment:** Vercel (frontend) + local/any server (orchestrator)
 
 ---
 
