@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { supabase } from './supabaseAdmin';
+import { slugify } from './utils';
 
 interface AgentMemory {
   shortTerm: string[];
@@ -139,7 +140,7 @@ export async function syncMemoryToObsidian(
   if (!agent) return;
   const a = agent as any;
   const memory: AgentMemory = { ...DEFAULT_MEMORY, ...(a.memory ?? {}) };
-  const agentSlug = a.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const agentSlug = slugify(a.name);
 
   // Get company name for correct path: brain/{company-slug}/{agent-slug}/
   let companySlug = 'unknown';
@@ -147,7 +148,7 @@ export async function syncMemoryToObsidian(
     const { data: company } = await supabase
       .from('companies').select('name').eq('id', a.company_id).single();
     if (company) {
-      companySlug = (company as any).name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      companySlug = slugify((company as any).name);
     }
   }
 

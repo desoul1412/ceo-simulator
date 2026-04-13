@@ -1,14 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
+import { getOrchestratorUrl } from '../lib/orchestratorApi';
 
-const ORCHESTRATOR_URL = (() => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('orchestrator_url');
-    if (stored) return stored;
-  }
-  return import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:3001';
-})();
+const ORCHESTRATOR_URL = getOrchestratorUrl();
 
 interface BrainDoc {
   id: string;

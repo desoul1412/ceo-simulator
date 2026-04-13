@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS brain_documents (
   doc_type TEXT NOT NULL DEFAULT 'general'
     CHECK (doc_type IN ('soul','context','memory','plan','wiki','changelog','index','summary','sprint','general')),
   -- pgvector embedding for future semantic search
-  embedding vector(1536),
+  embedding vector(768),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

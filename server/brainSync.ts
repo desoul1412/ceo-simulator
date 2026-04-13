@@ -7,12 +7,12 @@
  */
 
 import fs from 'fs';
-import path from 'path';
 import { supabase } from './supabaseAdmin';
 import { generateEmbedding, isEmbeddingEnabled } from './llm/embeddings';
+import { BRAIN_ROOT } from './utils';
+import path from 'path';
 
-const BRAIN_ROOT = path.join(process.cwd(), 'brain');
-const LOCAL_SYNC = process.env.BRAIN_SYNC_ENABLED === 'true'; // default OFF
+const LOCAL_SYNC = process.env.BRAIN_SYNC_ENABLED === 'true';
 
 interface BrainMeta {
   companyId?: string;
@@ -41,15 +41,19 @@ export async function writeBrain(
       updated_at: new Date().toISOString(),
     };
 
-    // Auto-embed if embedding provider is configured
-    if (isEmbeddingEnabled() && content.length > 20) {
-      const embedding = await generateEmbedding(content);
-      if (embedding) {
-        row.embedding = JSON.stringify(embedding);
-      }
-    }
-
     await supabase.from('brain_documents').upsert(row, { onConflict: 'path' });
+
+    // Auto-embed async (fire-and-forget — don't block writes)
+    if (isEmbeddingEnabled() && content.length > 20) {
+      generateEmbedding(content).then(embedding => {
+        if (embedding) {
+          supabase.from('brain_documents')
+            .update({ embedding: JSON.stringify(embedding) })
+            .eq('path', docPath)
+            .then(() => {});
+        }
+      }).catch(() => {});
+    }
   } catch (err: any) {
     console.warn(`[brain-sync] Supabase write failed for ${docPath}:`, err.message);
   }

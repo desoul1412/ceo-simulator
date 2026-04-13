@@ -54,14 +54,12 @@ export interface LLMAdapter {
 
 /** Roles that require filesystem access (code tasks) */
 export const CODE_ROLES = new Set([
-  'Engineering', 'Frontend', 'Backend', 'DevOps', 'QA', 'Full-Stack',
-  'frontend', 'backend', 'devops', 'qa', 'full-stack', 'engineering',
+  'engineering', 'frontend', 'backend', 'devops', 'qa', 'full-stack',
 ]);
 
 /** Check if a role/task requires filesystem (SDK-only) providers */
 export function requiresFilesystem(role: string, task: string): boolean {
-  const roleLower = role.toLowerCase();
-  if (CODE_ROLES.has(role) || CODE_ROLES.has(roleLower)) return true;
+  if (CODE_ROLES.has(role.toLowerCase())) return true;
   // Task-based detection: if task mentions code editing
   const codeKeywords = /\b(implement|code|fix|build|refactor|write.*component|create.*api|add.*endpoint|edit.*file|modify|debug)\b/i;
   return codeKeywords.test(task);
