@@ -1,9 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
 import { ConfigManager } from './ConfigManager';
+import { LLMSettings } from './LLMSettings';
 
 const TABS = [
   { id: 'general', label: 'General' },
+  { id: 'llm', label: 'LLM Models' },
   { id: 'skills', label: 'Skills' },
   { id: 'mcp', label: 'MCP Servers' },
   { id: 'rules', label: 'Rules' },
@@ -100,6 +102,7 @@ export function SettingsPage() {
           </div>
         )}
 
+        {tab === 'llm' && <LLMSettings />}
         {tab === 'skills' && <ConfigManager type="skill" scope="global" />}
         {tab === 'mcp' && <ConfigManager type="mcp_server" scope="global" />}
         {tab === 'rules' && <ConfigManager type="rule" scope="global" />}
