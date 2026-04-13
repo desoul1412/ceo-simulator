@@ -1,29 +1,32 @@
 /**
  * Embedding module — generates vector embeddings for brain documents.
- * Uses OpenAI-compatible embedding API (works with OpenAI, OpenRouter, local Ollama).
- * Falls back gracefully if no embedding provider is configured.
+ * Uses OpenAI-compatible embedding API.
  *
- * Config via env vars:
- *   EMBEDDING_API_URL=https://api.openai.com/v1/embeddings  (or OpenRouter, Ollama)
- *   EMBEDDING_API_KEY=sk-...
- *   EMBEDDING_MODEL=text-embedding-3-small
- *   EMBEDDING_DIMS=1536
+ * Supported providers (set via env vars):
+ *   Ollama (local, free):  EMBEDDING_API_URL=http://localhost:11434/v1/embeddings
+ *                          EMBEDDING_MODEL=nomic-embed-text  EMBEDDING_DIMS=768
+ *   OpenAI:               EMBEDDING_API_URL=https://api.openai.com/v1/embeddings
+ *                          EMBEDDING_API_KEY=sk-...  EMBEDDING_MODEL=text-embedding-3-small
+ *   Voyage AI:            EMBEDDING_API_URL=https://api.voyageai.com/v1/embeddings
+ *                          EMBEDDING_API_KEY=pa-...  EMBEDDING_MODEL=voyage-3-lite
+ *
+ * Falls back gracefully (text search) if EMBEDDING_API_URL is not set.
  */
 
 const EMBEDDING_URL = process.env.EMBEDDING_API_URL ?? '';
-const EMBEDDING_KEY = process.env.EMBEDDING_API_KEY ?? '';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'text-embedding-3-small';
-const EMBEDDING_DIMS = parseInt(process.env.EMBEDDING_DIMS ?? '1536', 10);
+const EMBEDDING_KEY = process.env.EMBEDDING_API_KEY ?? ''; // optional for Ollama
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'nomic-embed-text';
+const EMBEDDING_DIMS = parseInt(process.env.EMBEDDING_DIMS ?? '768', 10);
 
 let _enabled: boolean | null = null;
 
 export function isEmbeddingEnabled(): boolean {
   if (_enabled !== null) return _enabled;
-  _enabled = !!(EMBEDDING_URL && EMBEDDING_KEY);
+  _enabled = !!EMBEDDING_URL; // key is optional (Ollama doesn't require one)
   if (_enabled) {
-    console.log(`[embeddings] Enabled: ${EMBEDDING_MODEL} via ${EMBEDDING_URL}`);
+    console.log(`[embeddings] Enabled: ${EMBEDDING_MODEL} @ ${EMBEDDING_URL}`);
   } else {
-    console.log('[embeddings] Disabled (EMBEDDING_API_URL or EMBEDDING_API_KEY not set). Brain docs will not have vector embeddings.');
+    console.log('[embeddings] Disabled (EMBEDDING_API_URL not set) — using text search fallback.');
   }
   return _enabled;
 }
@@ -43,16 +46,17 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
   const truncated = text.slice(0, 30000);
 
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (EMBEDDING_KEY) headers['Authorization'] = `Bearer ${EMBEDDING_KEY}`;
+
     const res = await fetch(EMBEDDING_URL, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${EMBEDDING_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: EMBEDDING_MODEL,
         input: truncated,
-        dimensions: EMBEDDING_DIMS,
+        // dimensions only sent when explicitly configured (ignored by Ollama)
+        ...(process.env.EMBEDDING_DIMS ? { dimensions: EMBEDDING_DIMS } : {}),
       }),
     });
 

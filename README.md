@@ -138,17 +138,37 @@ import { setOrchestratorSecret } from './lib/orchestratorApi';
 setOrchestratorSecret('your-generated-secret'); // stored in localStorage
 ```
 
-### 6. Optional: Embedding Provider
+### 6. Optional: Embedding Provider (semantic memory search)
 
-For semantic memory search (pgvector), add to `server/.env`:
+Without embeddings the system falls back to ILIKE text search — everything still works, agents just can't do "find docs similar to this task" style retrieval.
+
+**Recommended: Ollama (local, free, no API key)**
 
 ```bash
-EMBEDDING_API_URL=https://api.openai.com/v1/embeddings
-EMBEDDING_API_KEY=sk-...
-EMBEDDING_MODEL=text-embedding-3-small
+# 1. Install Ollama: https://ollama.com
+# 2. Pull the model (~274 MB)
+ollama pull nomic-embed-text
 ```
 
-Brain documents are auto-embedded on write. Agents retrieve relevant past work via similarity search before each task.
+```env
+# server/.env
+EMBEDDING_API_URL=http://localhost:11434/v1/embeddings
+EMBEDDING_MODEL=nomic-embed-text
+EMBEDDING_DIMS=768
+# No EMBEDDING_API_KEY needed for Ollama
+```
+
+**Alternatives:**
+
+| Provider | Model | Dims | Key required |
+|----------|-------|------|-------------|
+| OpenAI | `text-embedding-3-small` | 1536 | Yes |
+| Voyage AI (free tier) | `voyage-3-lite` | 512 | Yes |
+| Ollama | `nomic-embed-text` | 768 | No |
+
+> If using a non-768-dim model, update the `embedding vector(768)` column in migration 014 to match.
+
+Brain documents are auto-embedded on write (fire-and-forget, non-blocking). Agents retrieve relevant past work via ANN similarity search before each task.
 
 ---
 
