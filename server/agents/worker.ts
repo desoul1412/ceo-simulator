@@ -4,6 +4,9 @@ import { usdToUnits } from '../budgetUtils';
 import { recordTaskCompletion, extractSkills, syncMemoryToObsidian } from '../memoryManager';
 import { selectModel, selectEffort, allocateBudget, MODEL_IDS } from './taskClassifier';
 import { presetRegistry } from '../presets';
+import { buildBudgetedContext, estimateTokens } from '../contextBudget';
+import { getUnreadMessages, injectMessagesIntoContext } from '../agentMessenger';
+import { canExecute } from '../dependencyManager';
 
 // ── Selective Memory Injection ───────────────────────────────────────────────
 
@@ -147,6 +150,25 @@ export async function executeWorkerTask(
   cwd: string,
   onActivity: (message: string) => Promise<void>,
 ): Promise<WorkerResult> {
+  // Check if this agent has a ticket with unsatisfied dependencies
+  const { data: agentTicket } = await supabase.from('tickets')
+    .select('id, dependency_status')
+    .eq('agent_id', agentId)
+    .eq('status', 'in_progress')
+    .limit(1).single();
+
+  if (agentTicket && (agentTicket as any).dependency_status === 'blocked') {
+    const blockers = await import('../dependencyManager').then(m => m.getBlockers((agentTicket as any).id));
+    const pendingBlockers = blockers.filter(b => b.status === 'pending');
+    if (pendingBlockers.length > 0) {
+      console.log(`[worker] Agent ${agentId.slice(0,8)} blocked by ${pendingBlockers.length} dependencies — skipping`);
+      return {
+        output: `Blocked: waiting for ${pendingBlockers.length} upstream task(s) to complete`,
+        costUsd: 0, inputTokens: 0, outputTokens: 0, sessionId: '',
+      };
+    }
+  }
+
   // Fetch agent info for context
   const { data: agentRow } = await supabase
     .from('agents')
@@ -232,6 +254,26 @@ export async function executeWorkerTask(
     brainMemory = await buildMemoryContext(task, companyId, agentId);
   } catch { /* brain search not available */ }
 
+  // Upstream agent messages (from dependency chain)
+  let agentMessages = '';
+  try {
+    const unread = await getUnreadMessages(agentId);
+    if (unread.length > 0) {
+      agentMessages = await injectMessagesIntoContext(agentId, '');
+    }
+  } catch { /* messenger not available */ }
+
+  // Build budget-controlled context (deduped, capped at ~4000 tokens)
+  const budgetedPrompt = buildBudgetedContext({
+    agentMessages,
+    brainMemory,
+    episodicMemory: memoryContext,
+    skillContext,
+    task,
+  });
+
+  console.log(`[worker] Context budget: ~${estimateTokens(budgetedPrompt)} tokens for ${agentName}`);
+
   let result = '';
   let costUsd = 0;
   let inputTokens = 0;
@@ -239,7 +281,7 @@ export async function executeWorkerTask(
   let sessionId = '';
 
   const q = query({
-    prompt: `${memoryContext ? memoryContext + '\n\n' : ''}${skillContext ? skillContext + '\n\n' : ''}${brainMemory ? brainMemory + '\n\n' : ''}Your task:\n\n${task}\n\nWork in the project directory. Read relevant files first to understand the codebase, then make your changes. Be thorough but focused.`,
+    prompt: budgetedPrompt,
     options: {
       cwd,
       systemPrompt: systemPrompt,

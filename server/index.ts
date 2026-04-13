@@ -15,6 +15,7 @@ import { supabase } from './supabaseAdmin';
 import { presetRegistry } from './presets';
 import { writeBrain, appendBrain } from './brainSync';
 import { searchBrain, buildMemoryContext } from './brainSearch';
+import { queryAgent, queryTeam } from './agentQuery';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1782,6 +1783,32 @@ app.get('/api/brain/documents/by-path/*', async (req, res) => {
     .select('*').eq('path', docPath).single();
   if (error) return res.status(404).json({ error: 'Document not found' });
   res.json(data);
+});
+
+// ── Agent-to-Agent Queries ──────────────────────────────────────────────────
+
+// Ask a specific agent (by ID or role) a question
+app.post('/api/agents/query', async (req, res) => {
+  const { from_agent_id, target_agent_id, target_role, company_id, question } = req.body;
+  if (!company_id || !question) return res.status(400).json({ error: 'Missing company_id or question' });
+  try {
+    const result = await queryAgent(from_agent_id, target_agent_id, target_role, company_id, question);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ask all agents on the team a question
+app.post('/api/agents/query-team', async (req, res) => {
+  const { from_agent_id, company_id, question } = req.body;
+  if (!company_id || !question) return res.status(400).json({ error: 'Missing company_id or question' });
+  try {
+    const results = await queryTeam(from_agent_id, company_id, question);
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Semantic search over brain documents
