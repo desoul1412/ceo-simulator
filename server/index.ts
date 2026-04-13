@@ -10,7 +10,7 @@ import { listWorktrees } from './worktreeManager';
 import { getCompanyCwd, ensureRepo, syncRepo, listRepos } from './repoManager';
 import { supabase } from './supabaseAdmin';
 import { presetRegistry } from './presets';
-import { writeBrain, appendBrain, syncFromSupabase } from './brainSync';
+import { writeBrain, appendBrain } from './brainSync';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1750,6 +1750,34 @@ app.post('/api/companies/:companyId/agents/:agentId/brain/update-memory', async 
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Brain Documents (browse/read from Supabase) ────────────────────────────
+
+app.get('/api/brain/documents', async (req, res) => {
+  let query = supabase.from('brain_documents').select('id, path, doc_type, company_id, agent_id, updated_at, created_at');
+  if (req.query.company_id) query = query.eq('company_id', req.query.company_id as string);
+  if (req.query.agent_id) query = query.eq('agent_id', req.query.agent_id as string);
+  if (req.query.doc_type) query = query.eq('doc_type', req.query.doc_type as string);
+  if (req.query.prefix) query = query.like('path', `${req.query.prefix}%`);
+  const { data, error } = await query.order('updated_at', { ascending: false }).limit(100);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.get('/api/brain/documents/:id', async (req, res) => {
+  const { data, error } = await supabase.from('brain_documents')
+    .select('*').eq('id', req.params.id).single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.get('/api/brain/documents/by-path/*', async (req, res) => {
+  const docPath = req.params[0];
+  const { data, error } = await supabase.from('brain_documents')
+    .select('*').eq('path', docPath).single();
+  if (error) return res.status(404).json({ error: 'Document not found' });
+  res.json(data);
 });
 
 // ── Notifications ───────────────────────────────────────────────────────────
