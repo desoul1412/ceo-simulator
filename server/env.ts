@@ -22,6 +22,11 @@ const envSchema = z.object({
 
   // Optional: Brain filesystem mirror (default OFF)
   BRAIN_SYNC_ENABLED: z.enum(['true', 'false']).optional().default('false'),
+
+  // Optional: Shared secret for orchestrator API authentication.
+  // When set, all /api/* requests (except /api/health) must include
+  // the header: X-Orchestrator-Secret: <value>
+  ORCHESTRATOR_SECRET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;

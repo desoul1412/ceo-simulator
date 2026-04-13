@@ -4,7 +4,7 @@
  */
 
 // Runtime-configurable: localStorage > env var > default
-function getOrchestratorUrl(): string {
+export function getOrchestratorUrl(): string {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('orchestrator_url');
     if (stored) return stored;
@@ -20,7 +20,25 @@ export function clearOrchestratorUrl(): void {
   localStorage.removeItem('orchestrator_url');
 }
 
-const ORCHESTRATOR_URL = getOrchestratorUrl();
+/** Read the shared secret from localStorage or VITE env var. */
+export function getOrchestratorSecret(): string {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('orchestrator_secret') || import.meta.env.VITE_ORCHESTRATOR_SECRET || '';
+  }
+  return import.meta.env.VITE_ORCHESTRATOR_SECRET || '';
+}
+
+export function setOrchestratorSecret(secret: string): void {
+  localStorage.setItem('orchestrator_secret', secret);
+}
+
+/** Fetch wrapper that automatically adds X-Orchestrator-Secret when configured. */
+function orchFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const secret = getOrchestratorSecret();
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
+  if (secret) headers['X-Orchestrator-Secret'] = secret;
+  return fetch(`${getOrchestratorUrl()}${path}`, { ...init, headers });
+}
 
 export interface DelegationPlan {
   reasoning: string;
@@ -40,7 +58,7 @@ export interface AssignGoalResult {
 
 export async function isOrchestratorOnline(): Promise<boolean> {
   try {
-    const res = await fetch(`${ORCHESTRATOR_URL}/api/health`, { signal: AbortSignal.timeout(2000) });
+    const res = await orchFetch(`/api/health`, { signal: AbortSignal.timeout(2000) });
     return res.ok;
   } catch {
     return false;
@@ -51,7 +69,7 @@ export async function assignGoalToOrchestrator(
   companyId: string,
   goal: string,
 ): Promise<AssignGoalResult> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/assign-goal`, {
+  const res = await orchFetch(`/api/assign-goal`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ companyId, goal }),
@@ -66,13 +84,13 @@ export async function assignGoalToOrchestrator(
 }
 
 export async function fetchTaskQueue(companyId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/tasks/${companyId}`);
+  const res = await orchFetch(`/api/tasks/${companyId}`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function fetchCosts(companyId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/costs/${companyId}`);
+  const res = await orchFetch(`/api/costs/${companyId}`);
   if (!res.ok) return { entries: [], totalCostUsd: 0 };
   return res.json();
 }
@@ -83,7 +101,7 @@ export async function processQueue(): Promise<{
   result?: any;
   error?: string;
 }> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/process-queue`, { method: 'POST' });
+  const res = await orchFetch(`/api/process-queue`, { method: 'POST' });
   if (!res.ok) return { processed: false, error: 'Request failed' };
   return res.json();
 }
@@ -98,7 +116,7 @@ export async function hireAgent(config: {
   monthlyCost?: number;
   model?: string;
 }): Promise<{ success: boolean; agent?: any; error?: string }> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/hire-agent`, {
+  const res = await orchFetch(`/api/hire-agent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -107,7 +125,7 @@ export async function hireAgent(config: {
 }
 
 export async function fireAgent(agentId: string): Promise<{ success: boolean }> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}`, { method: 'DELETE' });
+  const res = await orchFetch(`/api/agents/${agentId}`, { method: 'DELETE' });
   return res.json();
 }
 
@@ -118,7 +136,7 @@ export async function updateAgent(agentId: string, updates: {
   budget_limit?: number;
   skills?: string[];
 }): Promise<any> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}`, {
+  const res = await orchFetch(`/api/agents/${agentId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -127,7 +145,7 @@ export async function updateAgent(agentId: string, updates: {
 }
 
 export async function updateAgentLifecycle(agentId: string, status: 'active' | 'paused' | 'terminated'): Promise<any> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}/lifecycle`, {
+  const res = await orchFetch(`/api/agents/${agentId}/lifecycle`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -153,7 +171,7 @@ export async function connectRepo(companyId: string, config: {
   authMethod?: string;
   token?: string;
 }): Promise<{ success: boolean; repoPath?: string; error?: string }> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`, {
+  const res = await orchFetch(`/api/companies/${companyId}/repo`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -162,18 +180,18 @@ export async function connectRepo(companyId: string, config: {
 }
 
 export async function getRepoStatus(companyId: string): Promise<RepoStatus> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`);
+  const res = await orchFetch(`/api/companies/${companyId}/repo`);
   if (!res.ok) return { repo_url: null, repo_branch: 'main', repo_path: null, repo_status: 'not_connected', repo_error: null, repo_last_synced_at: null, git_auth_method: 'none' };
   return res.json();
 }
 
 export async function syncRepoApi(companyId: string): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo/sync`, { method: 'POST' });
+  const res = await orchFetch(`/api/companies/${companyId}/repo/sync`, { method: 'POST' });
   return res.json();
 }
 
 export async function disconnectRepo(companyId: string): Promise<boolean> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/repo`, { method: 'DELETE' });
+  const res = await orchFetch(`/api/companies/${companyId}/repo`, { method: 'DELETE' });
   return res.ok;
 }
 
@@ -198,13 +216,13 @@ export async function fetchConfigs(
   const params = new URLSearchParams({ scope });
   if (scopeId) params.set('scope_id', scopeId);
   if (type) params.set('type', type);
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/configs?${params}`);
+  const res = await orchFetch(`/api/configs?${params}`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function fetchEffectiveConfigs(agentId: string): Promise<ConfigRow[]> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/configs/effective/${agentId}`);
+  const res = await orchFetch(`/api/configs/effective/${agentId}`);
   if (!res.ok) return [];
   return res.json();
 }
@@ -217,7 +235,7 @@ export async function createConfig(config: {
   value: any;
   enabled?: boolean;
 }): Promise<ConfigRow | null> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/configs`, {
+  const res = await orchFetch(`/api/configs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -230,7 +248,7 @@ export async function updateConfig(
   id: string,
   updates: { value?: any; enabled?: boolean; key?: string },
 ): Promise<ConfigRow | null> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/configs/${id}`, {
+  const res = await orchFetch(`/api/configs/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -240,26 +258,26 @@ export async function updateConfig(
 }
 
 export async function deleteConfig(id: string): Promise<boolean> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/configs/${id}`, { method: 'DELETE' });
+  const res = await orchFetch(`/api/configs/${id}`, { method: 'DELETE' });
   return res.ok;
 }
 
 // ── Tickets & Approvals ──────────────────────────────────────────────────────
 
 export async function fetchTickets(companyId: string): Promise<any[]> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/tickets/${companyId}`);
+  const res = await orchFetch(`/api/tickets/${companyId}`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function fetchTicketStatus(companyId: string): Promise<Record<string, number>> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/ticket-status/${companyId}`);
+  const res = await orchFetch(`/api/ticket-status/${companyId}`);
   if (!res.ok) return {};
   return res.json();
 }
 
 export async function approveTicket(ticketId: string): Promise<boolean> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/approve/${ticketId}`, {
+  const res = await orchFetch(`/api/approve/${ticketId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ approvedBy: 'CEO (human)' }),
@@ -268,7 +286,7 @@ export async function approveTicket(ticketId: string): Promise<boolean> {
 }
 
 export async function rejectTicket(ticketId: string, reason?: string): Promise<boolean> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/reject/${ticketId}`, {
+  const res = await orchFetch(`/api/reject/${ticketId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
@@ -277,7 +295,7 @@ export async function rejectTicket(ticketId: string, reason?: string): Promise<b
 }
 
 export async function approveAllTickets(companyId: string): Promise<number> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/approve-all/${companyId}`, { method: 'POST' });
+  const res = await orchFetch(`/api/approve-all/${companyId}`, { method: 'POST' });
   if (!res.ok) return 0;
   const data = await res.json();
   return data.approved ?? 0;
@@ -286,7 +304,7 @@ export async function approveAllTickets(companyId: string): Promise<number> {
 // ── Agent Lifecycle ──────────────────────────────────────────────────────────
 
 export async function setAgentLifecycle(agentId: string, status: 'active' | 'paused' | 'throttled' | 'terminated') {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}/lifecycle`, {
+  const res = await orchFetch(`/api/agents/${agentId}/lifecycle`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -295,7 +313,7 @@ export async function setAgentLifecycle(agentId: string, status: 'active' | 'pau
 }
 
 export async function setAgentBudget(agentId: string, budgetLimit: number) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/agents/${agentId}/budget`, {
+  const res = await orchFetch(`/api/agents/${agentId}/budget`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ budget_limit: budgetLimit }),
@@ -306,13 +324,13 @@ export async function setAgentBudget(agentId: string, budgetLimit: number) {
 // ── Daemon Control ───────────────────────────────────────────────────────────
 
 export async function getDaemonStatus(): Promise<{ running: boolean }> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/daemon/status`);
+  const res = await orchFetch(`/api/daemon/status`);
   if (!res.ok) return { running: false };
   return res.json();
 }
 
 export async function toggleDaemon(start: boolean): Promise<boolean> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/daemon/${start ? 'start' : 'stop'}`, { method: 'POST' });
+  const res = await orchFetch(`/api/daemon/${start ? 'start' : 'stop'}`, { method: 'POST' });
   return res.ok;
 }
 
@@ -323,7 +341,7 @@ export async function fetchQueueStatus(companyId: string): Promise<{
   failed: number;
   isProcessing: boolean;
 }> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/queue-status/${companyId}`);
+  const res = await orchFetch(`/api/queue-status/${companyId}`);
   if (!res.ok) return { pending: 0, processing: 0, completed: 0, failed: 0, isProcessing: false };
   return res.json();
 }
@@ -331,23 +349,23 @@ export async function fetchQueueStatus(companyId: string): Promise<{
 // ── Merge Requests ──────────────────────────────────────────────────────────
 
 export async function fetchMergeRequests(companyId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/merge-requests`);
+  const res = await orchFetch(`/api/companies/${companyId}/merge-requests`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function mergeMR(mrId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/merge`, { method: 'POST' });
+  const res = await orchFetch(`/api/merge-requests/${mrId}/merge`, { method: 'POST' });
   return res.json();
 }
 
 export async function rejectMR(mrId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/reject`, { method: 'POST' });
+  const res = await orchFetch(`/api/merge-requests/${mrId}/reject`, { method: 'POST' });
   return res.json();
 }
 
 export async function getMRDiff(mrId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/merge-requests/${mrId}/diff`);
+  const res = await orchFetch(`/api/merge-requests/${mrId}/diff`);
   if (!res.ok) return { diff: '' };
   return res.json();
 }
@@ -355,18 +373,18 @@ export async function getMRDiff(mrId: string) {
 // ── Sprints ─────────────────────────────────────────────────────────────────
 
 export async function fetchSprints(companyId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/sprints`);
+  const res = await orchFetch(`/api/companies/${companyId}/sprints`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function completeSprint(sprintId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/sprints/${sprintId}/complete`, { method: 'POST' });
+  const res = await orchFetch(`/api/sprints/${sprintId}/complete`, { method: 'POST' });
   return res.json();
 }
 
 export async function createSprint(companyId: string, data: any) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/sprints`, {
+  const res = await orchFetch(`/api/companies/${companyId}/sprints`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -378,13 +396,13 @@ export async function createSprint(companyId: string, data: any) {
 
 export async function fetchPlans(companyId: string, type?: string) {
   const params = type ? `?type=${type}` : '';
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/plans${params}`);
+  const res = await orchFetch(`/api/companies/${companyId}/plans${params}`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function createPlan(companyId: string, data: any) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/plans`, {
+  const res = await orchFetch(`/api/companies/${companyId}/plans`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -393,7 +411,7 @@ export async function createPlan(companyId: string, data: any) {
 }
 
 export async function updatePlan(planId: string, content: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}`, {
+  const res = await orchFetch(`/api/plans/${planId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -402,12 +420,12 @@ export async function updatePlan(planId: string, content: string) {
 }
 
 export async function approvePlan(planId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/approve`, { method: 'POST' });
+  const res = await orchFetch(`/api/plans/${planId}/approve`, { method: 'POST' });
   return res.json();
 }
 
 export async function addPlanComment(planId: string, content: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/comments`, {
+  const res = await orchFetch(`/api/plans/${planId}/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -416,7 +434,7 @@ export async function addPlanComment(planId: string, content: string) {
 }
 
 export async function fetchPlanComments(planId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/plans/${planId}/comments`);
+  const res = await orchFetch(`/api/plans/${planId}/comments`);
   if (!res.ok) return [];
   return res.json();
 }
@@ -424,38 +442,38 @@ export async function fetchPlanComments(planId: string) {
 // ── Notifications ───────────────────────────────────────────────────────────
 
 export async function fetchNotifications() {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications`);
+  const res = await orchFetch(`/api/notifications`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function getUnreadCount(): Promise<number> {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/count`);
+  const res = await orchFetch(`/api/notifications/count`);
   if (!res.ok) return 0;
   const data = await res.json();
   return data.count ?? 0;
 }
 
 export async function markRead(notifId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/${notifId}/read`, { method: 'POST' });
+  const res = await orchFetch(`/api/notifications/${notifId}/read`, { method: 'POST' });
   return res.json();
 }
 
 export async function markAllRead() {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/notifications/read-all`, { method: 'POST' });
+  const res = await orchFetch(`/api/notifications/read-all`, { method: 'POST' });
   return res.json();
 }
 
 // ── Env Vars ────────────────────────────────────────────────────────────────
 
 export async function fetchEnvVars(companyId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/env-vars`);
+  const res = await orchFetch(`/api/companies/${companyId}/env-vars`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function createEnvVar(companyId: string, data: any) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/env-vars`, {
+  const res = await orchFetch(`/api/companies/${companyId}/env-vars`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -464,7 +482,7 @@ export async function createEnvVar(companyId: string, data: any) {
 }
 
 export async function updateEnvVar(envId: string, data: any) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/env-vars/${envId}`, {
+  const res = await orchFetch(`/api/env-vars/${envId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -475,24 +493,24 @@ export async function updateEnvVar(envId: string, data: any) {
 // ── Brain Management ───────────────────────────────────────────────────────
 
 export async function updateCompanyBrain(companyId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/brain/update-summary`, { method: 'POST' });
+  const res = await orchFetch(`/api/companies/${companyId}/brain/update-summary`, { method: 'POST' });
   return res.json();
 }
 
 export async function initAgentBrain(companyId: string, agentId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/companies/${companyId}/agents/${agentId}/brain/init`, { method: 'POST' });
+  const res = await orchFetch(`/api/companies/${companyId}/agents/${agentId}/brain/init`, { method: 'POST' });
   return res.json();
 }
 
 export async function deleteEnvVar(envId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/env-vars/${envId}`, { method: 'DELETE' });
+  const res = await orchFetch(`/api/env-vars/${envId}`, { method: 'DELETE' });
   return res.ok;
 }
 
 // ── Ticket Update ───────────────────────────────────────────────────────────
 
 export async function updateTicket(ticketId: string, updates: Record<string, any>) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/tickets/${ticketId}`, {
+  const res = await orchFetch(`/api/tickets/${ticketId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -503,7 +521,7 @@ export async function updateTicket(ticketId: string, updates: Record<string, any
 // ── Ticket Column ───────────────────────────────────────────────────────────
 
 export async function updateTicketColumn(ticketId: string, column: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/tickets/${ticketId}/column`, {
+  const res = await orchFetch(`/api/tickets/${ticketId}/column`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ board_column: column }),
@@ -514,79 +532,79 @@ export async function updateTicketColumn(ticketId: string, column: string) {
 // ── LLM Providers & Models ─────────────────────────────────────────────────
 
 export async function fetchLLMProviders() {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers`);
+  const res = await orchFetch(`/api/llm/providers`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function createLLMProvider(data: { slug: string; name: string; provider_type: string; config?: any }) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers`, {
+  const res = await orchFetch(`/api/llm/providers`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   });
   return res.json();
 }
 
 export async function updateLLMProvider(id: string, updates: any) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers/${id}`, {
+  const res = await orchFetch(`/api/llm/providers/${id}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
   });
   return res.json();
 }
 
 export async function deleteLLMProvider(id: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/providers/${id}`, { method: 'DELETE' });
+  const res = await orchFetch(`/api/llm/providers/${id}`, { method: 'DELETE' });
   return res.ok;
 }
 
 export async function fetchLLMModels(providerId?: string) {
   const params = providerId ? `?provider_id=${providerId}` : '';
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models${params}`);
+  const res = await orchFetch(`/api/llm/models${params}`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function createLLMModel(data: any) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models`, {
+  const res = await orchFetch(`/api/llm/models`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   });
   return res.json();
 }
 
 export async function updateLLMModel(id: string, updates: any) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models/${id}`, {
+  const res = await orchFetch(`/api/llm/models/${id}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
   });
   return res.json();
 }
 
 export async function deleteLLMModel(id: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/models/${id}`, { method: 'DELETE' });
+  const res = await orchFetch(`/api/llm/models/${id}`, { method: 'DELETE' });
   return res.ok;
 }
 
 // ── LLM Routing ────────────────────────────────────────────────────────────
 
 export async function fetchGlobalRouting() {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/global`);
+  const res = await orchFetch(`/api/llm/routing/global`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function setGlobalRouting(models: { model_id: string; priority: number }[]) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/global`, {
+  const res = await orchFetch(`/api/llm/routing/global`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ models }),
   });
   return res.json();
 }
 
 export async function fetchAgentRouting(agentId: string) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/agent/${agentId}`);
+  const res = await orchFetch(`/api/llm/routing/agent/${agentId}`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function setAgentRouting(agentId: string, models: { model_id: string; priority: number }[]) {
-  const res = await fetch(`${ORCHESTRATOR_URL}/api/llm/routing/agent/${agentId}`, {
+  const res = await orchFetch(`/api/llm/routing/agent/${agentId}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ models }),
   });
   return res.json();

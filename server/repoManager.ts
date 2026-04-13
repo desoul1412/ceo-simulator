@@ -1,9 +1,17 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { supabase } from './supabaseAdmin';
 
 const REPOS_BASE = path.resolve(process.cwd(), '.company-repos');
+
+/** Allowlist: branch names may only contain safe git ref characters. */
+const SAFE_BRANCH_RE = /^[a-zA-Z0-9._\-\/]+$/;
+function validateBranch(branch: string): void {
+  if (!SAFE_BRANCH_RE.test(branch)) {
+    throw new Error(`Invalid branch name "${branch}": only alphanumeric, dots, hyphens, underscores and slashes are allowed.`);
+  }
+}
 
 /**
  * Get the local filesystem path for a company's repo.
@@ -42,6 +50,7 @@ export async function ensureRepo(companyId: string): Promise<string> {
   }
 
   const branch = co.repo_branch || 'main';
+  validateBranch(branch); // reject shell-injectable values early
 
   // Ensure base directory exists
   if (!fs.existsSync(REPOS_BASE)) {
@@ -53,10 +62,9 @@ export async function ensureRepo(companyId: string): Promise<string> {
       // Repo already cloned — pull latest
       await updateRepoStatus(companyId, 'ready');
       try {
-        execSync(`git -C "${repoDir}" fetch origin && git -C "${repoDir}" reset --hard origin/${branch}`, {
-          stdio: 'pipe',
-          timeout: 60000,
-        });
+        // Use execFileSync (array args) — no shell, immune to injection
+        execFileSync('git', ['-C', repoDir, 'fetch', 'origin'], { stdio: 'pipe', timeout: 60000 });
+        execFileSync('git', ['-C', repoDir, 'reset', '--hard', `origin/${branch}`], { stdio: 'pipe', timeout: 60000 });
         await supabase.from('companies').update({
           repo_last_synced_at: new Date().toISOString(),
         }).eq('id', companyId);
@@ -69,7 +77,7 @@ export async function ensureRepo(companyId: string): Promise<string> {
       await updateRepoStatus(companyId, 'cloning');
       console.log(`[repo] Cloning ${co.repo_url} → ${repoDir}`);
 
-      execSync(`git clone --branch ${branch} --single-branch "${authUrl}" "${repoDir}"`, {
+      execFileSync('git', ['clone', '--branch', branch, '--single-branch', authUrl, repoDir], {
         stdio: 'pipe',
         timeout: 120000,
       });

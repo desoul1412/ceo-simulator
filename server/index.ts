@@ -526,6 +526,19 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// ── Auth middleware ──────────────────────────────────────────────────────────
+// When ORCHESTRATOR_SECRET is set, every /api/* request (except /api/health)
+// must include the header: X-Orchestrator-Secret: <value>
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  const expected = process.env.ORCHESTRATOR_SECRET;
+  if (!expected) return next(); // No secret configured — open mode
+  if (req.headers['x-orchestrator-secret'] !== expected) {
+    return res.status(401).json({ error: 'Unauthorized: missing or invalid X-Orchestrator-Secret header' });
+  }
+  next();
+});
+
 // ── Health Check ─────────────────────────────────────────────────────────────
 
 app.get('/api/health', (_req, res) => {
