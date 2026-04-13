@@ -1,73 +1,58 @@
 ---
 tags: [index, meta]
-date: 2026-04-08
-status: archived
+date: 2026-04-13
+status: active
 ---
 
-# CEO Simulator — Master Index
+# CEO Simulator — Brain Index
 
-> ⚠️ **ARCHIVED 2026-04-08** — See [[Offboarding-Handover-Report]] for full project handover.
+> The Obsidian vault for the Zero-Human Software Factory.
+> This is a **local mirror** of brain content stored in Supabase.
 
-## Architecture
-- [[Factory-Operations-Manual]] — **Zero-Human Software Factory** — SOPs, failure modes, token optimization, execution pipeline
-- [[Paperclip-Gap-Analysis]] — **Feature audit** — 14 Paperclip features vs current state, prioritized roadmap ✅ 14/14 COMPLETE
-- [[UI-Design-System]] — Pixel Art / HUD design tokens, color system, component rules
-- [[Office-Simulator-Architecture]] — **v3 Paperclip + Pixel Agents hybrid** — Canvas 2D office, BFS pathfinding, Paperclip management UI, goal hierarchy, agent CRUD
+## Structure
 
-## Offboarding
-- [[Offboarding-Handover-Report]] — **FINAL HANDOVER REPORT** — all projects, status, deliverables, risks, vendor contacts
-- [[Sprint-Backlog-Archive]] — All sprint backlogs, roadmap phases, icebox items, meeting notes
+```
+brain/
+├── 00-Index.md          ← you are here
+├── changelog.md         ← primary activity log (source of truth)
+├── wiki/                ← architecture specs, design docs
+│   ├── Factory-Operations-Manual.md
+│   ├── Office-Simulator-Architecture.md
+│   ├── UI-Design-System.md
+│   ├── Paperclip-Gap-Analysis.md
+│   └── ...
+├── raw/                 ← scratch notes, asset TODOs
+├── {company-slug}/      ← per-project content (auto-generated)
+│   ├── summary.md       ← project summary (updated on sprint end)
+│   ├── {agent-slug}/    ← per-agent brain
+│   │   ├── soul.md      ← role, system prompt, skills, config
+│   │   ├── context.md   ← current task, sprint, team
+│   │   └── memory.md    ← completed tasks, learned skills
+│   ├── plans/{id}/      ← CEO planning session outputs
+│   │   ├── 00-index.md
+│   │   ├── overview.md, architecture.md, hiring_plan.md, ...
+│   └── sprints/{name}/
+│       └── dependency-graph.md
+└── .obsidian/           ← vault config
+```
 
-## Navigation (React Router — 13 routes)
-- [x] `<MasterDashboard />` `/` — company grid with mini pixel canvases
-- [x] `<CompanyView />` `/company/:id` — pixel office + goal panel + feeds
-- [x] `<AgentsPage />` `/company/:id/agents` — agent card grid + hire button
-- [x] `<AgentDetail />` `/company/:id/agents/:id` — individual agent config (shell)
-- [x] `<GoalsPage />` `/company/:id/goals` — goal tree + delegation progress
-- [x] `<DocumentsPage />` `/company/:id/documents` — brain/ vault browser (shell)
-- [x] `<CostsPage />` `/company/:id/costs` — budget analytics
-- [x] `<OrgChartPage />` `/company/:id/org-chart` — CEO → reports hierarchy
-- [x] `<SettingsPage />` `/settings` — General, Skills, MCP, Rules tabs
-- [x] `<NavBar />` — top navigation with context-aware company tabs
+## Key Links
 
-## Canvas Engine (v3 — Pixel Agents-inspired) — OUTSTANDING
-- [ ] `<PixelOfficeCanvas />` — Canvas 2D game loop, tile renderer, sprite animator
-- [ ] `pathfinding.ts` — BFS on walkable tile grid
-- [ ] `canvasRenderer.ts` — tile/furniture/character/speech-bubble draw functions
-- [ ] `spriteAnimator.ts` — frame selection from sprite sheets
+- [[changelog]] — Full history of changes (890+ entries)
+- [[Factory-Operations-Manual]] — SOPs, execution pipeline, failure modes
+- [[Office-Simulator-Architecture]] — v3 Pixel Agents hybrid design
+- [[UI-Design-System]] — Pixel art / HUD design tokens
 
-## Backend (Supabase + Vercel)
-- [x] Supabase schema: `companies`, `agents`, `goals`, `delegations`, `activity_log`, `tickets`, `ticket_comments`, `audit_log`
-- [x] `src/lib/supabase.ts` — Client with offline fallback
-- [x] `src/lib/api.ts` — CRUD: fetchCompanies, createCompany, assignGoal, tickCompany, sendHeartbeat
-- [x] `src/hooks/useRealtimeSync.ts` — Realtime agent/company updates
-- [x] `vercel.json` — SPA deployment config
-- [x] Vercel deployment — **LIVE** at `https://ceo-simulator-iota.vercel.app`
-- [x] Agent heartbeat system (alive/stale/dead) + canvas pulse visuals
-- [x] `src/components/ActivityFeed.tsx` — Realtime activity log panel
-- [x] `server/heartbeatDaemon.ts` — 30s auto-processing daemon
-- [x] `server/ticketProcessor.ts` — ticket-based executor with budget checks
-- [x] `server/agents/` — agentRunner, claudeRunner, httpRunner, bashRunner
-- [ ] Auth (user accounts + per-user companies) — OUTSTANDING
+## Data Flow
 
-## State (v3)
-- [x] `src/store/dashboardStore.ts` — Zustand + Supabase sync (optimistic local + background persist)
-- [ ] `src/hooks/useCompanySimulation.ts` — Canvas game loop + business tick engine — OUTSTANDING
+- **Presets, skills, rules** → Supabase `department_roles` + `agent_skills` tables (source of truth)
+- **Agent memory** → Supabase `agents.memory` JSONB (primary), mirrored to `brain/{company}/{agent}/memory.md`
+- **Plans** → Supabase `project_plans` + persisted to `brain/{company}/plans/`
+- **Changelog** → Appended by circuit breaker on failures, updated by session summaries
+- **Wiki** → Manual specs, read by agents during pre-flight
 
-## Legacy v1 (archived on master @ `1bfff5e`)
-- [x] `<OfficeFloorPlan />` — 15×15 top-down CSS Grid
-- [x] `<AgentSprite />` — orthographic sprite, walk-cycle
-- [x] `<HudPanel />` — KPI sidebar
-- [x] `useAgentPolling()` — flat simulation hook
-- [x] 15/15 vitest tests passing
+## Notes
 
-## Assets
-- ISO tiles needed: `public/assets/iso-tiles/` — see [[asset-TODO]]
-- Role sprites needed: `public/assets/sprites/ceo.png`, `pm.png`, `devops.png`, `frontend.png`
-- v1 tiles (32×32 PNGs + SVGs): `public/assets/tiles/` — retained for reference
-
-## Research
-- Raw findings: `brain/raw/`
-
-## Meta
-- [[changelog]] — Full history of changes
+- `brain/library/` was removed (2026-04-13) — all presets, skills, rules, MCP configs are in Supabase
+- `brain/agents/` was removed (2026-04-13) — per-agent brains live under `brain/{company-slug}/` now
+- Local brain files are optional mirrors — the system works without them via Supabase

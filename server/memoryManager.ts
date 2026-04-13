@@ -132,7 +132,7 @@ export async function syncMemoryToObsidian(
 ): Promise<void> {
   const { data: agent } = await supabase
     .from('agents')
-    .select('name, role, memory, skills')
+    .select('name, role, memory, skills, company_id')
     .eq('id', agentId)
     .single();
 
@@ -141,7 +141,17 @@ export async function syncMemoryToObsidian(
   const memory: AgentMemory = { ...DEFAULT_MEMORY, ...(a.memory ?? {}) };
   const agentSlug = a.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-  const agentDir = path.join(cwd, 'brain', 'agents', agentSlug);
+  // Get company name for correct path: brain/{company-slug}/{agent-slug}/
+  let companySlug = 'unknown';
+  if (a.company_id) {
+    const { data: company } = await supabase
+      .from('companies').select('name').eq('id', a.company_id).single();
+    if (company) {
+      companySlug = (company as any).name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    }
+  }
+
+  const agentDir = path.join(cwd, 'brain', companySlug, agentSlug);
   await fs.mkdir(agentDir, { recursive: true });
 
   const content = `---

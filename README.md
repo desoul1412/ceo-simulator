@@ -14,14 +14,14 @@ CEO Simulator is the **control plane for a Zero-Human Software Factory**. You ma
 
 ```
 1. Create a project → connect a Git repo (public or private via PAT)
-2. CEO agent reviews the codebase → generates Project Overview
-3. CEO proposes: Summary, Master Plan, Hiring Plan, Required Env Vars
-4. You review, edit, comment → approve the plan
-5. Agents are hired per the approved plan
-6. CEO creates Sprint 1 → you approve the backlog
+2. Enter a CEO directive → select project size (S/M/L)
+3. CEO agent analyzes the codebase → generates architecture, hiring plan, implementation plan
+4. You review, edit → approve the plan
+5. Agents are auto-hired per the approved plan
+6. Sprint 1 is created with tickets assigned to agents by role
 7. Each agent works in their own branch → commits → pushes → creates a Merge Request
-8. You review MRs on the Scrum Board → approve → merge to main
-9. Scrum Master posts daily summaries → inbox notifications
+8. You review MRs on the Board → approve → merge to main
+9. When a sprint completes → next sprint auto-creates from the master plan
 ```
 
 ### Key Features
@@ -29,22 +29,28 @@ CEO Simulator is the **control plane for a Zero-Human Software Factory**. You ma
 | Feature | Description |
 |---------|-------------|
 | **Multi-Project** | One server manages unlimited projects, each connected to its own Git repo |
+| **Planning v2** | CEO generates structured plans (architecture, hiring, implementation) with interactive review |
 | **Agent-Agnostic** | Hire Claude, HTTP endpoints, or Bash scripts as agents |
+| **21 Department Roles** | Engineering, Marketing, Data, Design, Finance, Legal, and more — each with preset skills |
 | **Per-Agent Branches** | Every agent works in an isolated `agent/{role}-{task}` branch |
 | **Merge Requests** | Review diffs, approve, merge to main — or reject |
-| **Scrum Board** | 5-column Kanban (Backlog → Todo → In Progress → Review → Done) |
-| **Project Overview** | CEO-generated, human-editable plans (summary, execution, hiring) |
+| **Scrum Board** | 4-column Kanban (Todo → In Progress → Review → Done) with sprint selector |
+| **Sprint Auto-Transition** | When all tickets in a sprint are done, next sprint auto-creates from master plan phases |
 | **Approval Gates** | Nothing executes without your approval |
-| **Inbox Notifications** | New MRs, plan submissions, agent blockers, daily summaries |
+| **Inbox Notifications** | New MRs, plan submissions, agent blockers, sprint completions |
 | **Per-Agent Budgets** | USD caps with auto-throttle on exhaust |
 | **Heartbeat Daemon** | Auto-processes approved tickets every 30s |
-| **Ticket System** | Threaded work items with comments and goal ancestry |
-| **Agent Memory** | Short-term + long-term + skills → persisted to Obsidian |
+| **Ticket System** | Threaded work items with comments, role-based assignment, approval flow |
+| **Agent Memory** | Short-term + long-term + skills → persisted to Obsidian brain directories |
+| **Per-Agent Brain** | `brain/{project}/{agent}/soul.md`, `context.md`, `memory.md` — auto-created on hire |
 | **3-Level Config** | Global → Project → Agent cascade for skills, rules, MCP servers |
-| **Cost Tracking** | Real Claude API token usage per agent, daily/weekly % of plan limit |
-| **20 Agent Roles** | Engineering, Data & AI, Business — each with dedicated skills |
+| **Cost Tracking** | Real Claude API token usage per agent, daily/weekly %, merged into Org & Costs view |
+| **Circuit Breaker** | Auto-detects failing agents, prevents infinite retry loops |
+| **Dependency Manager** | Manages task dependencies and execution ordering |
+| **Agent Messaging** | Inter-agent communication for coordination |
 | **Env Var Management** | Per-project, encrypted, injected into agent execution |
 | **Pixel Office** | Canvas 2D animated office with BFS pathfinding and heartbeat visuals |
+| **E2E Test Suite** | 10 Playwright specs covering dashboard, agents, board, planning, API |
 
 ---
 
@@ -86,6 +92,9 @@ npm run dev          # → http://localhost:5173
 
 # Terminal 2: Orchestrator (real Claude agents)
 npm run server       # → http://localhost:3001 (heartbeat daemon auto-starts)
+
+# Or run both:
+npm run dev:all      # Concurrent frontend + server
 ```
 
 ### 4. Connect a Project
@@ -94,7 +103,7 @@ npm run server       # → http://localhost:3001 (heartbeat daemon auto-starts)
 2. Click **+ New Company** → enter project name
 3. Paste Git repo URL (e.g. `https://github.com/org/project.git`)
 4. Optionally add GitHub PAT for private repos
-5. CEO agent reviews the repo → generates Project Overview
+5. Enter a CEO directive in the Office view → agents start planning
 6. Review and approve the plan → agents start working
 
 ---
@@ -118,80 +127,74 @@ Each project gets:
 - Its own agents, sprints, tickets, merge requests
 - Its own environment variables (encrypted)
 - Its own brain directory at `brain/{project-name}/`
+- Per-agent brain directories with soul, context, and memory files
 - Complete data isolation
 
 ---
 
-## Navigation (16 Routes)
+## Navigation (12 Routes)
 
-| Route | Page | Description |
-|-------|------|-------------|
-| `/` | Master Dashboard | All projects with mini canvases, usage %, working/idle status |
-| `/company/:id/overview` | Project Overview | Editable plans, hiring, env vars, comments |
-| `/company/:id` | Office | Live pixel office + panels |
-| `/company/:id/agents` | Agents | Hire (20 roles), configure, fire |
+| Route | Tab | Description |
+|-------|-----|-------------|
+| `/` | Dashboard | All projects with usage %, working/idle status |
+| `/company/:id` | Office | Pixel office canvas + 3x3 agent card grid + CEO directive |
 | `/company/:id/agents/:id` | Agent Detail | Memory, skills, sessions, configs |
-| `/company/:id/goals` | Goals | Goal tree + delegation progress |
-| `/company/:id/board` | Scrum Board | 5-column Kanban, sprints, velocity |
-| `/company/:id/documents` | Documents | Obsidian vault browser |
-| `/company/:id/costs` | Costs | Token usage, daily/weekly %, per-agent |
-| `/company/:id/org-chart` | Org Chart | CEO → reports hierarchy |
-| `/company/:id/settings` | Project Config | Repo, skills, MCP, rules, env vars |
+| `/company/:id/goals` | Goals | Master plan progress, delegation tree, sprint history |
+| `/company/:id/board` | Board | 4-column Kanban (Todo/In Progress/Review/Done), sprints, velocity |
+| `/company/:id/merge-requests` | MRs | Agent PRs — review diffs, merge, reject |
+| `/company/:id/documents` | Docs | Obsidian vault browser |
+| `/company/:id/org-chart` | Org & Costs | Org chart + budget overview + per-agent cost cards + API call log |
+| `/company/:id/settings` | Config | Repo, skills, MCP, rules, env vars |
 | `/settings` | Global Settings | Connection status, config cascade |
-| `/settings/skills` | Global Skills | Skill definitions |
-| `/settings/mcp` | Global MCP | MCP server registry |
-| `/settings/rules` | Global Rules | CLAUDE.md-style directives |
+| `/settings/:tab` | Settings Tab | skills, mcp, rules sub-pages |
 
 Plus: **Inbox** (bell icon) for notifications across all projects.
 
 ---
 
-## Agent Roles (20)
+## Department Roles (21)
 
-### Engineering (7)
-| Role | Model | Budget | Focus |
-|------|-------|--------|-------|
-| CEO | opus | $25 | Strategic delegation, goal decomposition |
-| PM | sonnet | $15 | Requirements, specs, sprint planning |
-| Frontend | sonnet | $15 | React 19, Tailwind, pixel art UI |
-| Backend | sonnet | $15 | APIs, Supabase, database |
-| DevOps | sonnet | $10 | CI/CD, Vercel, infrastructure |
-| QA | haiku | $5 | Tests, validation, regressions |
-| Full-Stack | sonnet | $12 | End-to-end features, TDD-first |
+The preset system provides 21 department roles, each with default skills, system prompts, model tiers, and budget limits:
 
-### Data & AI (5)
-| Role | Model | Budget | Focus |
-|------|-------|--------|-------|
-| Data Architect | opus | $15 | Schemas, data modeling, migrations |
-| Data Scientist | opus | $15 | ML pipelines, experiments, statistics |
-| AI Engineer | opus | $20 | LLM integration, prompts, RAG, Agent SDK |
-| Automation | sonnet | $10 | n8n workflows, ETL, webhooks |
-| Scrum Master | haiku | $2 | Daily summaries, velocity, blockers |
+| # | Department | Model | Budget | Focus |
+|---|-----------|-------|--------|-------|
+| 1 | Engineering | sonnet | $15 | Frontend, backend, DevOps, QA, AI integration |
+| 2 | Paid Media | sonnet | $10 | Ad campaigns, ROAS, retargeting, media buying |
+| 3 | Analytics | sonnet | $10 | KPI dashboards, A/B testing, attribution, CLV |
+| 4 | Design | sonnet | $12 | UI/UX, pixel art, design systems, prototyping |
+| 5 | Consulting | opus | $20 | Strategy, competitive analysis, go-to-market |
+| 6 | Content | haiku | $5 | Copywriting, blog, email, technical writing |
+| 7 | Education | haiku | $5 | Tutorials, onboarding, knowledge base |
+| 8 | E-commerce | sonnet | $10 | Product catalog, checkout, inventory |
+| 9 | Email & CRM | sonnet | $10 | Drip campaigns, segmentation, deliverability |
+| 10 | Events | haiku | $5 | Webinars, conferences, community events |
+| 11 | Finance | sonnet | $5 | Financial models, P&L, forecasts |
+| 12 | People & HR | haiku | $5 | Hiring, culture, performance reviews |
+| 13 | Industry Ops | sonnet | $10 | Domain-specific operations |
+| 14 | Customer Success | sonnet | $10 | Onboarding, retention, support |
+| 15 | Legal | opus | $15 | Compliance, contracts, IP |
+| 16 | Community | haiku | $5 | Forums, Discord, user advocacy |
+| 17 | Operations | haiku | $5 | SOPs, compliance, budgets |
+| 18 | SEO | sonnet | $5 | Audits, keywords, link building |
+| 19 | Sales | sonnet | $10 | Pricing, funnels, retention |
+| 20 | Social Media | sonnet | $8 | Content calendar, engagement, analytics |
+| 21 | Strategy | opus | $20 | Vision, roadmap, market positioning |
 
-### Business (8)
-| Role | Model | Budget | Focus |
-|------|-------|--------|-------|
-| Marketer | sonnet | $10 | Growth, SEO, launches, ads |
-| Content Writer | haiku | $5 | Copy, docs, blog, email |
-| Sales | sonnet | $10 | Pricing, funnels, retention |
-| Operations | haiku | $5 | SOPs, compliance, budgets |
-| Data Analyst | sonnet | $10 | KPIs, cohort analysis, dashboards |
-| Finance | sonnet | $5 | Financial models, P&L, forecasts |
-| SEO | sonnet | $5 | Audits, keywords, link building |
-| Growth | sonnet | $8 | A/B tests, referrals, churn |
+Plus **20 legacy agent presets** in `brain/library/agent-presets/` for backward compatibility.
 
 ---
 
 ## Skills Library
 
-`brain/library/skills/` — 61 skill files across 15 role directories + shared:
+`brain/library/skills/` — 61 skill files across 18 role directories:
 
 ```
 _shared/ (5)          — quality-engineering, systematic-debugging, context7, tavily, git-worktree
-ceo/ (4)              — strategic-delegation, business-reasoning, budget, team-orchestration
+ceo/ (5)              — strategic-delegation, business-reasoning, budget, team-orchestration, ...
 planner/ (4)          — discovery, project-planning, writing-plans, risk-assessment
 frontend-designer/ (5)— ui-ux-pro-max, react, tailwind, canvas, tdd
 backend/ (2)          — api-design, database
+full-stack/ (2)       — end-to-end, rapid-prototyping
 devops/ (3)           — ci/cd, infrastructure, deployment-verification
 qa/ (3)               — test-strategy, automated-testing, data-validation
 designer/ (3)         — pixel-art-hud, responsive-design, design-tokens
@@ -204,7 +207,6 @@ data-architect/ (3)   — data-modeling, etl, migration-safety
 data-scientist/ (3)   — ml-pipelines, experiment-design, statistics
 ai-engineer/ (5)      — llm, prompts, orchestration, rag, sdk
 automation/ (3)       — n8n, pipelines, webhooks
-full-stack/ (2)       — end-to-end, rapid-prototyping
 ```
 
 ---
@@ -214,52 +216,78 @@ full-stack/ (2)       — end-to-end, rapid-prototyping
 ```
 ceo-simulator/
 ├── src/                          # React 19 frontend
-│   ├── components/               # 25+ React components
+│   ├── components/               # 39 React components
 │   │   ├── MasterDashboard.tsx   # Project grid with usage %, working/idle
-│   │   ├── ProjectOverview.tsx   # Editable plans, hiring, env vars
-│   │   ├── ScrumBoard.tsx        # 5-column Kanban with sprints
+│   │   ├── CompanyDetail.tsx     # Pixel office + 3x3 agent grid + CEO directive
+│   │   ├── AgentCard.tsx         # Compact card + detail modal (activity, tickets, config)
+│   │   ├── PixelOfficeCanvas.tsx # Canvas 2D game loop with BFS pathfinding
+│   │   ├── ScrumBoard.tsx        # 4-column Kanban with sprints
+│   │   ├── GoalsPage.tsx         # Master plan progress + delegation tree + sprints
+│   │   ├── OrgChartPage.tsx      # Org chart + budget + agent cost cards
 │   │   ├── MergeRequestsPanel.tsx# MR review with merge/reject
 │   │   ├── InboxPanel.tsx        # Notification bell + dropdown
-│   │   ├── CompanyDetail.tsx     # Pixel office + side panels
-│   │   ├── PixelOfficeCanvas.tsx # Canvas 2D game loop
-│   │   ├── CeoPlanFlow.tsx       # 4-step CEO goal workflow
-│   │   ├── HireAgentDialog.tsx   # 20 roles, auto/manual hire
+│   │   ├── PlanningPopup.tsx     # Interactive plan review overlay
+│   │   ├── PlanningProgress.tsx  # Live planning status indicator
+│   │   ├── HireAgentDialog.tsx   # Role browser, auto/manual hire
+│   │   ├── DeptRoleBrowser.tsx   # Browse 21 department presets
 │   │   ├── ConfigManager.tsx     # 3-level config CRUD
 │   │   └── ...
 │   ├── engine/                   # Canvas renderer + pathfinding
-│   ├── store/                    # Zustand state management
-│   ├── lib/                      # Supabase + orchestrator API clients
+│   ├── store/                    # Zustand (dashboard, planning, presets)
+│   ├── lib/                      # Supabase + orchestrator + planning API clients
 │   └── hooks/                    # Realtime sync + polling
-├── server/                       # Local orchestrator
-│   ├── index.ts                  # Express API (50+ endpoints)
+├── server/                       # Local orchestrator (Express, 78+ endpoints)
+│   ├── index.ts                  # Main API routes
+│   ├── routes/                   # Modular route files (agents, planning, presets)
 │   ├── ticketProcessor.ts        # Worktree → execute → commit → push → MR
 │   ├── repoManager.ts            # Per-company Git repo management
 │   ├── heartbeatDaemon.ts        # 30s auto-processor
 │   ├── worktreeManager.ts        # Git worktree isolation
 │   ├── memoryManager.ts          # Agent memory → Obsidian
+│   ├── circuitBreaker.ts         # Failure detection + auto-recovery
+│   ├── dependencyManager.ts      # Task dependency resolution
+│   ├── agentMessenger.ts         # Inter-agent communication
+│   ├── presets/                   # 21 department role presets + seeder
+│   │   ├── presetRegistry.ts     # Runtime preset lookup
+│   │   ├── presetSeeder.ts       # DB seeding (21 roles, 120+ skills)
+│   │   └── types.ts              # DepartmentRole, AgentSkill types
 │   └── agents/
 │       ├── agentRunner.ts        # Universal runtime dispatcher
 │       ├── claudeRunner.ts       # Claude Agent SDK
+│       ├── ceoPlannerV2.ts       # Structured planning engine
+│       ├── taskClassifier.ts     # Auto-classify task complexity
 │       ├── httpRunner.ts         # HTTP endpoint agents
 │       ├── bashRunner.ts         # Bash script agents
+│       ├── worker.ts             # Agent task execution loop
 │       └── ceo.ts                # CEO reasoning + delegation
+├── e2e/                          # Playwright E2E tests (10 specs)
+│   ├── 01-dashboard.spec.ts      # Master dashboard
+│   ├── 02-company-view.spec.ts   # Office view
+│   ├── 03-agent-card.spec.ts     # Agent cards + modals
+│   ├── 04-scrum-board.spec.ts    # Kanban board
+│   ├── 05-planning.spec.ts       # Planning flow
+│   ├── 07-api-health.spec.ts     # API health checks
+│   ├── 09-planning-execution-flow.spec.ts # Full pipeline
+│   └── ...
 ├── brain/                        # Obsidian vault
 │   ├── library/
-│   │   ├── skills/               # 61 skill files (15 role dirs + shared)
+│   │   ├── skills/               # 61 skill files (18 role dirs)
 │   │   ├── agent-presets/        # 20 agent preset configs
 │   │   ├── rules/                # 6 rule definitions
 │   │   └── mcp-servers/          # 3 MCP server configs
 │   ├── wiki/                     # Architecture specs
-│   └── {project-name}/           # Per-project plans + docs
+│   └── {project-name}/           # Per-project plans, agent brains, sprint docs
+├── supabase/                     # Database migrations
 ├── public/assets/                # Pixel art sprites, tiles, furniture
 ├── .company-repos/               # Cloned project repos (gitignored)
 ├── CLAUDE.md                     # Autonomy engine directives
+├── playwright.config.ts          # E2E test config
 └── vercel.json                   # SPA deployment config
 ```
 
 ---
 
-## API Reference (50+ Endpoints)
+## API Reference (100+ Endpoints)
 
 ### Core
 | Method | Endpoint | Description |
@@ -267,6 +295,15 @@ ceo-simulator/
 | `GET` | `/api/health` | Server status |
 | `POST` | `/api/assign-goal` | CEO reasons + delegates |
 | `POST` | `/api/process-queue` | Process next approved ticket |
+
+### Planning (v2)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/companies/:id/plan` | Start planning session |
+| `GET` | `/api/plan-sessions/:id` | Get session status + results |
+| `POST` | `/api/plan-sessions/:id/approve` | Approve plan |
+| `POST` | `/api/plan-sessions/:id/regenerate` | Regenerate with feedback |
+| `GET` | `/api/plan-sessions/:id/dependency-graph` | Task dependency graph |
 
 ### Merge Requests
 | Method | Endpoint | Description |
@@ -281,7 +318,36 @@ ceo-simulator/
 |--------|----------|-------------|
 | `GET` | `/api/companies/:id/sprints` | List sprints |
 | `POST` | `/api/companies/:id/sprints` | Create sprint |
+| `POST` | `/api/sprints/:id/complete` | Complete sprint (triggers auto-transition) |
 | `PATCH` | `/api/tickets/:id/column` | Move ticket on board |
+| `PATCH` | `/api/tickets/:id` | Update ticket |
+
+### Agents
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/hire-agent` | Create agent (21 dept roles) |
+| `PATCH` | `/api/agents/:id` | Update agent config |
+| `DELETE` | `/api/agents/:id` | Fire agent |
+| `PATCH` | `/api/agents/:id/lifecycle` | Pause/resume/terminate |
+| `PATCH` | `/api/agents/:id/budget` | Adjust budget |
+| `POST` | `/api/agents/:id/inject-skill` | Add skill at runtime |
+| `GET` | `/api/agents/:id/messages` | Agent message history |
+| `POST` | `/api/agents/:id/messages` | Send message to agent |
+
+### Presets
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/presets/departments` | List 21 department roles |
+| `GET` | `/api/presets/departments/:slug` | Get department details |
+| `GET` | `/api/presets/skills` | List all preset skills |
+| `POST` | `/api/presets/seed` | Seed presets to DB |
+
+### Brain (Agent Memory)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/companies/:id/brain/update-summary` | Update project brain summary |
+| `POST` | `/api/companies/:cid/agents/:aid/brain/init` | Init agent brain directory |
+| `POST` | `/api/companies/:cid/agents/:aid/brain/update-memory` | Append to agent memory |
 
 ### Project Plans
 | Method | Endpoint | Description |
@@ -289,7 +355,7 @@ ceo-simulator/
 | `GET` | `/api/companies/:id/plans` | List plans |
 | `POST` | `/api/companies/:id/plans` | Create plan |
 | `PATCH` | `/api/plans/:id` | Edit plan content |
-| `POST` | `/api/plans/:id/approve` | Approve plan |
+| `POST` | `/api/plans/:id/approve` | Approve plan (triggers sprint/hiring) |
 | `POST` | `/api/plans/:id/comments` | Add comment |
 
 ### Repository
@@ -298,15 +364,6 @@ ceo-simulator/
 | `POST` | `/api/companies/:id/repo` | Connect Git repo |
 | `POST` | `/api/companies/:id/repo/sync` | Pull latest |
 | `DELETE` | `/api/companies/:id/repo` | Disconnect repo |
-
-### Agents
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/hire-agent` | Create agent (20 roles) |
-| `DELETE` | `/api/agents/:id` | Fire agent |
-| `PATCH` | `/api/agents/:id/lifecycle` | Pause/resume/throttle |
-| `PATCH` | `/api/agents/:id/budget` | Adjust budget |
-| `POST` | `/api/agents/:id/inject-skill` | Add skill at runtime |
 
 ### Notifications
 | Method | Endpoint | Description |
@@ -336,10 +393,13 @@ ceo-simulator/
 ## Scripts
 
 ```bash
-npm run dev        # Frontend (Vite :5173)
-npm run server     # Orchestrator + heartbeat daemon (:3001)
-npm run build      # Production build
-npm run test       # 36 vitest tests
+npm run dev          # Frontend (Vite :5173)
+npm run server       # Orchestrator + heartbeat daemon (:3001)
+npm run dev:all      # Both concurrently
+npm run build        # Production build
+npm run test         # Vitest unit tests
+npm run test:e2e     # Playwright E2E tests (10 specs)
+npm run test:all     # Unit + E2E
 ```
 
 ---
@@ -350,8 +410,9 @@ npm run test       # 36 vitest tests
 - **Canvas:** 2D pixel-art office, BFS pathfinding, sprite animation
 - **Backend:** Supabase (PostgreSQL + Realtime + RLS)
 - **Orchestrator:** Express + @anthropic-ai/claude-agent-sdk
+- **Testing:** Vitest (unit) + Playwright (E2E, 10 specs)
 - **Deployment:** Vercel (frontend) + local server (orchestrator)
-- **Brain:** Obsidian vault for specs, plans, agent memory
+- **Brain:** Obsidian vault for specs, plans, agent memory, per-agent brain dirs
 
 ---
 

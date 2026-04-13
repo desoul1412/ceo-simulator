@@ -212,7 +212,16 @@ export async function executeWorkerTask(
 
   const remainingBudget = ((company as any)?.budget ?? 100000) - ((company as any)?.budget_spent ?? 0);
   const storyPoints = 3; // default for worker tasks (no SP context here)
-  const model = selectModel(role, storyPoints, task);
+
+  // Resolve department model tier if agent has a preset role
+  let deptModelTier: 'haiku' | 'sonnet' | 'opus' | undefined;
+  if (deptRoleId) {
+    const { data: deptRole } = await supabase
+      .from('department_roles').select('model_tier').eq('id', deptRoleId).single();
+    if (deptRole) deptModelTier = (deptRole as any).model_tier;
+  }
+
+  const model = selectModel(role, storyPoints, task, deptModelTier);
   const effort = selectEffort(role, storyPoints, task);
   const maxBudget = allocateBudget(role, storyPoints, remainingBudget);
 

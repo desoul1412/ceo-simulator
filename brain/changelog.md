@@ -6,6 +6,26 @@ status: active
 
 # Changelog
 
+## 2026-04-13 — Architecture Cleanup: Remove Dead Code, Fix Memory Sync, Wire Model Tiers
+
+### Duplication Elimination
+- Deleted `brain/library/` (90+ files: agent-presets, skills, rules, mcp-servers) — all dead code, never read at runtime
+- Supabase `department_roles` + `agent_skills` tables are the actual source of truth
+- Deleted `brain/agents/kai-mller/` and `brain/agents/mia-torres/` — legacy experiment dirs
+
+### Memory Sync Path Fix
+- Fixed `memoryManager.ts:syncMemoryToObsidian()` — was writing to `brain/agents/{slug}/` (wrong)
+- Now writes to `brain/{company-slug}/{agent-slug}/` (correct per-company path)
+- Queries company name from Supabase to resolve correct path
+
+### Model Tier Wiring
+- `worker.ts` now resolves `department_roles.model_tier` from Supabase when agent has `dept_role_id`
+- Passes tier to `selectModel()` as 4th param — previously defined but never wired
+
+### Brain Index Update
+- Rewrote `brain/00-Index.md` to reflect current structure
+- Documents data flow: presets in Supabase, brain as local mirror, plans persisted to both
+
 ## 2026-04-10 — Agent Framework Optimization: Smart Models, Prompt Caching, Parallel Execution
 
 ### Phase 1+2: Smart Model/Effort Selection + Prompt Caching
